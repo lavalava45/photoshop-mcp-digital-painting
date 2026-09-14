@@ -13,7 +13,7 @@ Community-maintained fork of [alisaitteke/photoshop-mcp](https://github.com/alis
 
 ## What this fork adds
 
-The upstream project already provides a broad Photoshop automation MCP. This edition keeps that toolset and adds a focused painting layer for brush-driven work:
+The upstream project already provides a broad Photoshop automation MCP. This edition keeps that toolset and adds a focused painting and visual-control layer for brush-driven work:
 
 - installed brush-preset discovery and exact preset selection;
 - brush size, hardness, opacity, flow, spacing, angle, roundness, flip, pressure, airbrush, and smoothing controls;
@@ -22,8 +22,11 @@ The upstream project already provides a broad Photoshop automation MCP. This edi
 - one-point dabs/stamps;
 - per-stroke color, size, opacity, and flow overrides;
 - Photoshop `simulatePressure` support;
-- explicit measurement and guide tools for reference/proportion work;
-- an agent visual-control workflow with semantic passes, previews, occlusion reasoning, cleanup, and a state-based Definition of Done.
+- explicit measurement, landmark, and guide tools for reference/proportion work;
+- reusable landmark-frame transforms and normalized landmark-set comparison;
+- a materialized preview pipeline for direct stdio/COS workflows without a second Photoshop export;
+- more reliable nested-layer targeting and ordering with recursive lookup and stable layer IDs;
+- an agent visual-control workflow with semantic passes, previews, measurement checkpoints, occlusion reasoning, cleanup, sticky Photoshop routing, and a state-based Definition of Done.
 
 The current build exposes **130 tools** (**114 atomic/non-recipe + 16 recipes**) and **24 prompts**.
 
