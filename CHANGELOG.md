@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `photoshop_select_brush_preset` for exact-name selection of installed Photoshop brush presets.
 - Add `photoshop_get_brush_settings` and `photoshop_set_brush` for size, hardness, opacity, flow, spacing, angle, roundness, tip flips, pressure overrides, airbrush, and smoothing.
 - Add `photoshop_set_foreground_color` for painting color control.
+- Add `photoshop_sample_color` for pinned composite point sampling and optional local-average sampling via a temporary merged duplicate; returns RGB/8-bit RGB/HEX without modifying the source document or its Color Sampler markers.
 - Add `photoshop_paint_strokes` for batched Brush/Pencil/Eraser/Smudge strokes, Bezier handles, closed paths, and Photoshop `simulatePressure`.
 - Add per-stroke `color`, `size`, `opacity`, and `flow` overrides to `photoshop_paint_strokes`.
 - Add interpolated `dynamics` profiles to `photoshop_paint_strokes` for size/opacity/flow changes along open strokes, with linear/ease-in/ease-out/ease-in-out interpolation and automatic segment-count selection.
@@ -28,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `scripts/test-measurement-tools.mjs` for live measurement/guide smoke testing.
 - Add `scripts/test-landmark-ergonomics.mjs` for Photoshop-independent landmark transform/compare regression coverage.
 - Add offline and two-document live regressions for document targeting in `scripts/test-document-targeting.mjs` and `scripts/test-document-targeting-live.mjs`.
+- Add offline and live color-sampling regressions in `scripts/test-color-sampling.mjs` and `scripts/test-color-sampling-live.mjs`.
 
 ### Changed
 
@@ -55,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verified a 24-stroke heterogeneous pass through `AUTO` batching (6 internal batches) and a 32-segment Bezier taper through dynamics (8 internal batches) on Photoshop 2026 without per-script timeout.
 - Verified RGB per-stroke overrides remain intact while descriptor caching is active.
 - Verified document targeting with two simultaneously open temporary documents: while document B was active, pinned layer creation and guide mutation affected only document A, and pinned close closed A while leaving B open (`DOCUMENT_TARGETING_LIVE_TEST_OK`).
+- Verified `photoshop_sample_color` on Photoshop 2026 with two temporary documents: pinned point samples returned the intended document's composite color, radius-based Average sampling returned the same known uniform color, source documents were unchanged, and out-of-bounds coordinates failed closed (`COLOR_SAMPLING_LIVE_TEST_OK`).
 - `npm run build:server` and `npm run lint` pass for the current painting branch.
 
 ### Pending

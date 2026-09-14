@@ -1,6 +1,6 @@
 # Available Tools
 
-**130 tools total** — 114 atomic/non-recipe `photoshop_*` tools plus 16 recipe `photoshop_recipe_*` workflows (single undo step each).
+**131 tools total** — 115 atomic/non-recipe `photoshop_*` tools plus 16 recipe `photoshop_recipe_*` workflows (single undo step each).
 
 Reference for all atomic `photoshop_*` MCP tools exposed by this server (parameters, examples, and return shapes).
 
@@ -1165,6 +1165,25 @@ the active Photoshop brush descriptor.
 
 #### `photoshop_set_foreground_color`
 Set the Photoshop foreground RGB color used by painting operations.
+
+#### `photoshop_sample_color`
+Sample the visible composite color at document-space coordinates without changing
+the source document's Color Sampler markers.
+
+**Parameters:**
+- `x` / `y` (number, required): document-space pixel coordinate
+- `radius` (integer 0–100, optional, default `0`): `0` = exact point sample; `>0` = Photoshop Average over the clipped square neighborhood
+- `document_id` (number, optional): pin sampling to a specific open document
+
+The implementation samples from a temporary merged duplicate. Average mode crops
+that duplicate to the requested neighborhood, applies Photoshop's Average filter,
+samples the result, then closes the duplicate without saving. Returns floating RGB,
+rounded 8-bit RGB, HEX, sample mode, bounds, point, and source-document metadata.
+
+```javascript
+photoshop_sample_color({ document_id: 42, x: 640, y: 865 })
+photoshop_sample_color({ document_id: 42, x: 640, y: 865, radius: 6 })
+```
 
 #### `photoshop_paint_strokes`
 Paint one or many raster Brush/Pencil/Eraser/Smudge strokes on the active layer.

@@ -115,7 +115,7 @@ Pass `PHOTOSHOP_PATH` in the stdio transport environment when automatic detectio
 
 ### Why not the shared Plugins connector
 
-Chat On Steroids may expose only a subset of a large MCP server's tools through the shared `Chat On Steroids Plugins` connector. This fork currently exposes 130 tools, so the project standard is to bypass that surface entirely and connect directly over stdio from Chat On Steroids Core.
+Chat On Steroids may expose only a subset of a large MCP server's tools through the shared `Chat On Steroids Plugins` connector. This fork currently exposes 131 tools, so the project standard is to bypass that surface entirely and connect directly over stdio from Chat On Steroids Core.
 
 For Photoshop work in Chat On Steroids, `PLUGIN_DISABLED`, plugin runtime status, or a truncated Plugins catalog are therefore not diagnostic signals for this fork. Verify the direct stdio connection instead with `tools/list`, `prompts/list`, and `photoshop_ping`.
 

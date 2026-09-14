@@ -41,6 +41,7 @@ import { createGenerativeTools } from '../tools/generative-tools.js';
 import { createNeuralTools } from '../tools/neural-tools.js';
 import { createStyleTools } from '../tools/style-tools.js';
 import { createColorAdjustmentTools } from '../tools/color-adjustment-tools.js';
+import { createColorSamplingTools } from '../tools/color-sampling-tools.js';
 import { createDataTools } from '../tools/data-tools.js';
 import { createStackTools } from '../tools/stack-tools.js';
 import { createExportTools } from '../tools/export-tools.js';
@@ -154,6 +155,7 @@ export class PhotoshopMCPServer {
     this.registerToolDefinitions(createNeuralTools(connection));
     this.registerToolDefinitions(createStyleTools(connection));
     this.registerToolDefinitions(createColorAdjustmentTools(connection));
+    this.registerToolDefinitions(createColorSamplingTools(connection));
     this.registerToolDefinitions(createDataTools(connection));
     this.registerToolDefinitions(createStackTools(connection));
     this.registerToolDefinitions(createExportTools(connection));

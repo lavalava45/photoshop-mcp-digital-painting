@@ -115,6 +115,8 @@ User intent glossary
 - paint.draw — "draw", "paint", "sketch", "digital painting", "illustrate with brushes"
   → use the painting tools together with guide prompt \`ps.digital_painting_control\` for
   semantic passes, checkpoints, occlusion-aware strokes, cleanup, and state-based completion.
+- paint.sample_color — "pick this color", "sample from reference", "eyedropper", "what color is here"
+  → \`photoshop_sample_color\`; use a small radius when a representative local average is preferable to one pixel.
 
 Degrade paths
 - Generative remove / distraction — prefer \`photoshop_generative_remove\`; degrade to

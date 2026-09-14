@@ -24,6 +24,7 @@ The upstream project already provides a broad Photoshop automation MCP. This edi
 - automatic cost-aware batching for large heterogeneous paint passes;
 - interpolated size/opacity/flow dynamics along open strokes;
 - Photoshop `simulatePressure` support;
+- point and local-average composite color sampling for reference-based painting;
 - explicit measurement, landmark, and guide tools for reference/proportion work;
 - reusable landmark-frame transforms and normalized landmark-set comparison;
 - a materialized preview pipeline for direct stdio/COS workflows without a second Photoshop export;
@@ -31,7 +32,7 @@ The upstream project already provides a broad Photoshop automation MCP. This edi
 - strict optional `document_id` pinning for document-bound tools, with fail-closed validation and returned target metadata;
 - an agent visual-control workflow with semantic passes, previews, measurement checkpoints, occlusion reasoning, cleanup, sticky Photoshop routing, and a state-based Definition of Done.
 
-The current build exposes **130 tools** (**114 atomic/non-recipe + 16 recipes**) and **24 prompts**.
+The current build exposes **131 tools** (**115 atomic/non-recipe + 16 recipes**) and **24 prompts**.
 
 ## Digital-painting tools
 
@@ -41,6 +42,7 @@ photoshop_select_brush_preset
 photoshop_get_brush_settings
 photoshop_set_brush
 photoshop_set_foreground_color
+photoshop_sample_color
 photoshop_paint_strokes
 photoshop_measure_points
 photoshop_add_guides
@@ -139,7 +141,7 @@ npm run test:document-targeting-live
 The current verified tool-count result is:
 
 ```text
-tool counts consistent: 130 = 114 atomic + 16 recipes
+tool counts consistent: 131 = 115 atomic + 16 recipes
 ```
 
 The fork has been live-tested primarily on **Photoshop 2026 for Windows**. During the current validation, 123 installed brush presets were enumerated and the painting smoke test completed with `PAINTING_TEST_OK`.

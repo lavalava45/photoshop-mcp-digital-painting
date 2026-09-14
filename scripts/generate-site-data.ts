@@ -52,6 +52,7 @@ const CATEGORY_BY_FILE: Record<string, { id: string; label: string }> = {
   'filter-tools.ts': { id: 'filters', label: 'Filters' },
   'adjustment-tools.ts': { id: 'adjustments', label: 'Color & tone' },
   'color-adjustment-tools.ts': { id: 'adjustments', label: 'Color & tone' },
+  'color-sampling-tools.ts': { id: 'painting', label: 'Painting & color sampling' },
   'text-tools.ts': { id: 'text', label: 'Text' },
   'selection-tools.ts': { id: 'selection', label: 'Selections & masks' },
   'mask-tools.ts': { id: 'selection', label: 'Selections & masks' },

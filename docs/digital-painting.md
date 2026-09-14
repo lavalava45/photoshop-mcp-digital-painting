@@ -46,6 +46,13 @@ Changes any subset of those brush settings while preserving unspecified values a
 ### `photoshop_set_foreground_color`
 Sets the foreground RGB color used by painting operations.
 
+### `photoshop_sample_color`
+Samples the visible composite color from a pinned document. `radius=0` returns a
+point sample; `radius>0` returns a local Photoshop Average color from a temporary
+merged duplicate, leaving the source document and its Color Sampler markers unchanged.
+This is intended for palette pickup from references: skin, hair, lips, local shadow,
+background, reflected light, or any other visible color region.
+
 ### `photoshop_paint_strokes`
 Paints one or many raster strokes on the active layer in a single MCP call. Supports:
 
@@ -61,7 +68,7 @@ Paints one or many raster strokes on the active layer in a single MCP call. Supp
 - optional per-stroke size / opacity / flow overrides
 - one-point strokes as brush dabs/stamps
 - up to 250 strokes per call
-- one grouped Photoshop history step per call
+- one or more Photoshop history steps depending on `batch_mode`; `AUTO` may split expensive calls
 
 The batch-oriented API is intentional: digital painting often needs tens or hundreds of strokes, and sending each stroke as a separate MCP request would be unnecessarily slow and fragile.
 
@@ -107,7 +114,7 @@ card, or other bounded region.
 - automatic cost-aware batching for heterogeneous passes — implemented
 - interpolated size / opacity / flow dynamics along open strokes — implemented
 - richer curve representation
-- sampled/eyedropper color helpers
+- sampled/eyedropper color helper — implemented (`photoshop_sample_color`)
 - Mixer Brush support if scripting behavior is reliable
 
 Live artistic tests confirmed `Square Charcoal` texture, pressure tapering, dabs, per-stroke overrides, automatic heterogeneous batching, and interpolated taper profiles. `photoshop_paint_strokes` now defaults to `batch_mode=AUTO`: expensive passes are split into several short Photoshop scripts before the per-script ExtendScript timeout is reached. Small/simple calls remain a single history step. `batch_mode=SINGLE_HISTORY` is available when one undo step matters more than timeout resilience.

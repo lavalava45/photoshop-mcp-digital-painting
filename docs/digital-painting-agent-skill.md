@@ -106,6 +106,20 @@ Prefer passes with clear visual purpose:
 
 Not every style needs every pass, but complex work should not be executed as one blind batch.
 
+## Reference color sampling
+
+For reference-driven painting, prefer measured palette pickup over guessing RGB values.
+Use `photoshop_sample_color` on the pinned reference document:
+
+- `radius=0` for a precise local pixel;
+- a small `radius` for skin, hair, fabric, shadow, or other noisy/textured areas where a representative local average is more useful than one pixel.
+
+The sampler reads the visible composite through a temporary merged duplicate and does not
+leave Color Sampler markers in the reference. Keep the reference `document_id` pinned so
+another open PSD cannot silently become the sampling source. Use sampled colors as evidence,
+not as a requirement to copy every local pixel literally; preserve the painting's intended
+value/color hierarchy.
+
 ## Occlusion and protected regions
 
 Before a stroke is added, ask what existing form should appear in front of it.
