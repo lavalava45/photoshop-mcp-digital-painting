@@ -39,27 +39,6 @@ window. No code, no scripts, no IDE required.
 Under the hood: 124 tools (108 atomic/non-recipe + 16 one-step recipes) — full list in
 [`docs/available-tools.md`](docs/available-tools.md).
 
-## Try saying
-
-```
-Remove the background from this portrait — keep it editable with a mask.
-```
-
-```
-Enhance this portrait — smooth the skin and fix the tones, medium intensity.
-```
-
-```
-Prepare this design for web, then export Instagram and X post variants.
-```
-
-```
-Split this wide banner into a 5-slide seamless Instagram carousel.
-```
-
-More recipes (batch watermark, passport photos, CSV-driven cards, mockups, …) and
-pre-engineered prompt templates: [`docs/prompt-layer.md`](docs/prompt-layer.md).
-
 ## Get started
 
 You need **Photoshop running** (Windows or macOS, any version 2012+) and **Node.js 18+**.
