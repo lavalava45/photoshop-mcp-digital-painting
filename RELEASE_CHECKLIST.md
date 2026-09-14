@@ -17,8 +17,12 @@ Use this checklist before publishing a tagged GitHub release.
 - [ ] `npm run build:server`
 - [ ] `npm run lint`
 - [ ] `npm run verify:photoshop-prompts`
+- [ ] `npm run verify:tool-counts`
 - [ ] `node scripts/test-painting-tools.mjs` with a supported Photoshop version running.
+- [ ] `npm run test:measurement-tools` with an open Photoshop document; confirm temporary guides are restored/removed by the test.
 - [ ] Confirm `photoshop_paint_strokes` is present in `tools/list`.
+- [ ] Confirm `photoshop_measure_points`, `photoshop_add_guides`, `photoshop_list_guides`, `photoshop_clear_guides`, `photoshop_transform_landmarks`, and `photoshop_compare_landmarks` are present in `tools/list`.
+- [ ] Run `node scripts/test-landmark-ergonomics.mjs` and confirm `LANDMARK_ERGONOMICS_TEST_OK`.
 - [ ] Confirm `ps.digital_painting_control` is present in `prompts/list`.
 - [ ] Run at least one fresh-composition artistic regression test without reusing prior demo geometry.
 

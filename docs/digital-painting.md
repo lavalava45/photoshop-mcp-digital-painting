@@ -6,10 +6,11 @@ This fork adds a focused digital-painting layer on top of the upstream Photoshop
 
 ## Architecture
 
-Painting support is isolated in `src/tools/painting-tools.ts`. Upstream integration is deliberately limited to:
+Painting support is isolated in `src/tools/painting-tools.ts`, with reference/proportion helpers isolated in `src/tools/measurement-tools.ts`. Upstream integration is deliberately limited to:
 
 1. one import in `src/core/server.ts`;
-2. one `registerToolDefinitions(createPaintingTools(connection))` call.
+2. one `registerToolDefinitions(createPaintingTools(connection))` call;
+3. one `registerToolDefinitions(createMeasurementTools(connection))` call.
 
 This keeps future upstream merges low-conflict.
 
@@ -63,6 +64,30 @@ Paints one or many raster strokes on the active layer in a single MCP call. Supp
 - one grouped Photoshop history step per call
 
 The batch-oriented API is intentional: digital painting often needs tens or hundreds of strokes, and sending each stroke as a separate MCP request would be unnecessarily slow and fragile.
+
+## Measurement and reference tools
+
+The fork also exposes six general-purpose geometry tools that are useful for
+portrait likeness, perspective, architecture, alignment, and reference-image
+work:
+
+- `photoshop_measure_points` — caller-supplied named landmarks → pixel and normalized distances/ratios;
+- `photoshop_add_guides` — add exact horizontal/vertical pixel guides;
+- `photoshop_list_guides` — inspect guide positions and normalized coordinates;
+- `photoshop_clear_guides` — remove selected guides or clear all guides;
+- `photoshop_transform_landmarks` — transfer caller-supplied named points from one semantic frame to another while preserving local `u/v` coordinates;
+- `photoshop_compare_landmarks` — compare same-named point sets in their own semantic frames and report normalized point errors plus mean/RMSE/max error.
+
+These tools deliberately separate **visual interpretation** from **measurement**.
+The agent/user decides where a landmark is; Photoshop then provides exact
+document-space geometry. No automatic anatomical/face landmark detector is
+claimed or implied.
+
+The landmark transform/compare tools are pure geometry helpers. A semantic
+frame is an axis-aligned `{left, top, right, bottom}` box chosen by the caller
+around the region whose internal proportions matter. This avoids document-size
+normalization when the useful comparison is local to a face, object, opening,
+card, or other bounded region.
 
 ## Planned development
 

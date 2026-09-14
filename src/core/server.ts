@@ -45,6 +45,7 @@ import { createDataTools } from '../tools/data-tools.js';
 import { createStackTools } from '../tools/stack-tools.js';
 import { createExportTools } from '../tools/export-tools.js';
 import { createPaintingTools } from '../tools/painting-tools.js';
+import { createMeasurementTools } from '../tools/measurement-tools.js';
 import { ensureUxpBridgeServer } from '../platform/uxp-bridge-server.js';
 
 export interface PhotoshopMCPServerOptions {
@@ -154,6 +155,7 @@ export class PhotoshopMCPServer {
     this.registerToolDefinitions(createStackTools(connection));
     this.registerToolDefinitions(createExportTools(connection));
     this.registerToolDefinitions(createPaintingTools(connection));
+    this.registerToolDefinitions(createMeasurementTools(connection));
     this.registerToolDefinitions(createRecipeTools(connection));
 
     this.logger.info(

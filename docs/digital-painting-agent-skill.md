@@ -10,6 +10,45 @@ ps.digital_painting_control
 
 Use it for drawings, paintings, sketches, brush-based illustration, line art and similar work where the result depends on relationships between many strokes.
 
+## HARD TOOL-ROUTING INVARIANT — Photoshop mode
+
+Once a task has entered Photoshop/COS/MCP mode, that execution mode is **sticky**. It remains active across subsequent turns until the user explicitly exits it.
+
+While Photoshop mode is active:
+
+1. Short continuation messages such as `да`, `давай`, `продолжай`, `сделай`, `рисуй`, `дальше`, `есть доступ`, `ок`, or `попробуй еще` **inherit the current Photoshop execution path**. They must not trigger a fresh tool-family decision.
+2. In Chat On Steroids, the first execution surface for a Photoshop continuation must be `Chat_On_Steroids_Core` for MCP/terminal work, or `Chat_On_Steroids_Desktop` only for read-only UI inspection when needed.
+3. `image_gen` or any other external image-generation path must **not** be called while Photoshop mode is active, even if the request contains words such as *draw*, *paint*, *image*, *portrait*, *render*, *create*, *edit*, or *repaint*.
+4. A short or ambiguous follow-up can never switch execution mode.
+5. Photoshop mode may be exited only by an explicit user instruction that clearly changes the execution path, for example: `используй ImageGen`, `сгенерируй через ImageGen`, `не в Photoshop`, or an equivalent explicit request.
+6. If routing logic would choose `image_gen` while Photoshop mode is active, treat that as a routing violation: stop that route and use the existing Photoshop/COS/MCP path instead.
+
+Operational latch:
+
+```text
+CURRENT_EXECUTION_MODE = PHOTOSHOP_MCP
+Do not reconsider the tool family unless the user explicitly changes mode.
+```
+
+Regression examples:
+
+```text
+Context: editing a portrait in Photoshop via MCP
+User: "давай"
+Correct: continue through Chat_On_Steroids_Core → direct stdio Photoshop MCP
+Wrong: image_gen
+
+User: "есть доступ"
+Correct: resume/check the Photoshop MCP path
+Wrong: image_gen
+
+User: "продолжай рисовать"
+Correct: continue the current Photoshop painting workflow
+Wrong: image_gen
+```
+
+This invariant is stronger than a preference. It is a tool-routing guard intended to prevent a short continuation turn from escaping an already-established Photoshop workflow.
+
 ## Why this skill exists
 
 A technically valid stroke can still be visually wrong. Common failures include:
@@ -88,6 +127,39 @@ At each checkpoint classify problems as:
 - **optional refinement** — improvement that is not required for completion.
 
 Do not add more detail while a must-fix problem remains underneath it.
+
+### Measurement checkpoints for proportion-sensitive work
+
+For portraits, architecture, perspective-heavy scenes, repeated motifs, or
+other work where proportion drift matters, a checkpoint may include explicit
+geometry measurement before structural repainting.
+
+Preferred loop:
+
+```text
+preview/reference inspection
+→ choose semantic landmarks
+→ optional photoshop_add_guides
+→ photoshop_measure_points
+→ for cross-document reuse: photoshop_transform_landmarks
+→ compare current/reference sets with photoshop_compare_landmarks when useful
+→ structural correction
+→ preview again
+```
+
+The measurement tools do not detect semantic landmarks. The agent must choose
+the points from the visible reference/current preview (or use points supplied by
+the user). Do not present visually estimated landmark coordinates as if they
+were automatically detected by Photoshop.
+
+For reusable landmark sets, define a semantic frame as axis-aligned bounds
+`{left, top, right, bottom}` around the region whose internal proportions matter
+(for example a face bounds box, product silhouette box, window opening, or card
+frame). `photoshop_transform_landmarks` converts each point to local `u/v`
+coordinates in the source frame and reconstructs it in the target frame.
+`photoshop_compare_landmarks` compares same-named points in their respective
+frames and reports normalized per-point error plus mean/RMSE/max error. This
+keeps the workflow general: the tools know geometry and names, not anatomy.
 
 ## Execution pacing and user-visible progress
 

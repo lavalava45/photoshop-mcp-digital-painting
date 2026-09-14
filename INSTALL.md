@@ -2,8 +2,8 @@
 
 This repository is a digital-painting-focused fork of Photoshop MCP. It keeps
 the upstream editing/automation toolset and adds brush presets, brush dynamics,
-raster stroke painting, dabs/stamps, per-stroke overrides, and the
-`ps.digital_painting_control` guide prompt.
+raster stroke painting, dabs/stamps, per-stroke overrides, explicit
+measurement/guide tools, and the `ps.digital_painting_control` guide prompt.
 
 This document describes a clean installation from a GitHub checkout. Do not
 install the upstream npm package if you want the painting extensions from this
@@ -115,7 +115,7 @@ Pass `PHOTOSHOP_PATH` in the stdio transport environment when automatic detectio
 
 ### Why not the shared Plugins connector
 
-Chat On Steroids may expose only a subset of a large MCP server's tools through the shared `Chat On Steroids Plugins` connector. This fork currently exposes 124 tools, so the project standard is to bypass that surface entirely and connect directly over stdio from Chat On Steroids Core.
+Chat On Steroids may expose only a subset of a large MCP server's tools through the shared `Chat On Steroids Plugins` connector. This fork currently exposes 130 tools, so the project standard is to bypass that surface entirely and connect directly over stdio from Chat On Steroids Core.
 
 For Photoshop work in Chat On Steroids, `PLUGIN_DISABLED`, plugin runtime status, or a truncated Plugins catalog are therefore not diagnostic signals for this fork. Verify the direct stdio connection instead with `tools/list`, `prompts/list`, and `photoshop_ping`.
 
@@ -150,10 +150,12 @@ npm run lint
 npm run verify:photoshop-prompts
 ```
 
-With Photoshop running, run the live painting smoke test:
+With Photoshop running, run the live painting and measurement smoke tests:
 
 ```bash
 node scripts/test-painting-tools.mjs
+npm run test:measurement-tools
+npm run test:landmark-ergonomics
 ```
 
 The MCP server should expose the digital-painting tools including:
@@ -165,6 +167,12 @@ photoshop_get_brush_settings
 photoshop_set_brush
 photoshop_set_foreground_color
 photoshop_paint_strokes
+photoshop_measure_points
+photoshop_add_guides
+photoshop_list_guides
+photoshop_clear_guides
+photoshop_transform_landmarks
+photoshop_compare_landmarks
 ```
 
 The guide prompt should include:

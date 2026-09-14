@@ -1,6 +1,6 @@
 # photoshop-mcp
 
-> Digital-painting fork of Photoshop MCP, based on 1.7.6 — 124 tools (painting + generative AI + 16 recipes), standalone web UI, and state-aware agent workflows. Unofficial; not affiliated with Adobe.
+> Digital-painting fork of Photoshop MCP, based on 1.7.6 — 130 tools (painting + measurement/guides + generative AI + 16 recipes), standalone web UI, and state-aware agent workflows. Unofficial; not affiliated with Adobe.
 
 **Website:** https://photoshop-mcp.com/
 **llms.txt (site):** https://photoshop-mcp.com/llms.txt
@@ -52,7 +52,8 @@ claude mcp add photoshop -- npx -y @alisaitteke/photoshop-mcp
 
 ## Tool surface
 
-- **124 tools** — 108 atomic/non-recipe + 16 recipe (`photoshop_recipe_*`)
+- **130 tools** — 114 atomic/non-recipe + 16 recipe (`photoshop_recipe_*`)
+- **Measurement/landmarks/guides** — `photoshop_measure_points`, `photoshop_add_guides`, `photoshop_list_guides`, `photoshop_clear_guides`, `photoshop_transform_landmarks`, `photoshop_compare_landmarks`
 - **24 MCP prompts** — including `ps.digital_painting_control`
 - **Generative AI** — fill, remove, expand, upscale, sky replacement, generate image (Adobe account)
 - **State** — `photoshop_get_state`, `photoshop_get_preview`, `photoshop_get_capabilities`

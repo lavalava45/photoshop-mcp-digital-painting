@@ -49,6 +49,8 @@ npm run build:server
 npm run spike:issue-2     # issue #2 targeted regression (10 checks)
 npm run test:mcp-local    # prompt-layer smoke
 npm run test:mcp-all      # full sequential tool sweep
+npm run test:measurement-tools # measurement/guides live smoke
+npm run test:landmark-ergonomics # pure geometry landmark regression; Photoshop not required
 npm run spike:photoshop-actions  # generative AI action probes → scripts/output/generative-probe-report.json
 npm run verify:photoshop-prompts
 ```
@@ -87,7 +89,7 @@ Local MCP integration tests run against a live Photoshop instance over stdio
 | Prompt-layer smoke | `npm run test:mcp-local` | 16 prompt templates + core recipes |
 | Prompt ↔ recipe parity | `npm run verify:photoshop-prompts` | 12↔12 strict match + 4 guides |
 
-**Tool coverage:** 124 total tools (108 atomic/non-recipe `photoshop_*` + 16 recipe
+**Tool coverage:** 130 total tools (114 atomic/non-recipe `photoshop_*` + 16 recipe
 `photoshop_recipe_*`) — re-run `npm run test:mcp-all` for a fresh pass count.
 
 **Intentional skips** (environment-dependent, not regressions):

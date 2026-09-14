@@ -1,6 +1,6 @@
 # Available Tools
 
-**124 tools total** — 108 atomic/non-recipe `photoshop_*` tools plus 16 recipe `photoshop_recipe_*` workflows (single undo step each).
+**130 tools total** — 114 atomic/non-recipe `photoshop_*` tools plus 16 recipe `photoshop_recipe_*` workflows (single undo step each).
 
 Reference for all atomic `photoshop_*` MCP tools exposed by this server (parameters, examples, and return shapes).
 
@@ -1170,6 +1170,91 @@ Supports straight/polyline and Bezier paths, closed paths,
 `simulatePressure`, per-stroke RGB/size/opacity/flow overrides, and one-point
 brush dabs/stamps. Large heterogeneous passes should be chunked into smaller
 batches when many strokes change brush settings.
+
+### Measurement & Guides
+
+These tools support proportion checks, reference-image analysis, alignment, and
+other geometry-heavy painting/design workflows. They do **not** perform face or
+object landmark detection: the caller supplies the semantic points to measure.
+
+#### `photoshop_measure_points`
+Measure named document-space points and return pixel plus normalized geometry.
+
+**Parameters:**
+- `points` (array, required): `{ name, x, y }` points in document pixels
+- `measurements` (array, optional): `{ name?, from, to }` distance requests between named points
+- `ratios` (array, optional): `{ name?, numerator, denominator }` ratios between named measurements
+- `document_id` (number, optional): pin the measurement to a specific open document
+
+**Returns:** named points with `x_norm`/`y_norm`; each requested measurement with
+`dx`, `dy`, Euclidean `distance`, `distance_over_width`, and
+`distance_over_height`; plus requested ratios. `landmark_detection` is always
+`false` to make the caller-supplied landmark contract explicit.
+
+```javascript
+photoshop_measure_points({
+  document_id: 42,
+  points: [
+    { name: "left_eye", x: 640, y: 865 },
+    { name: "right_eye", x: 1000, y: 825 },
+    { name: "mouth", x: 835, y: 1315 }
+  ],
+  measurements: [
+    { name: "eye_spacing", from: "left_eye", to: "right_eye" },
+    { name: "eye_to_mouth", from: "left_eye", to: "mouth" }
+  ]
+})
+```
+
+#### `photoshop_add_guides`
+Add horizontal/vertical Photoshop guides at exact pixel positions.
+
+**Parameters:**
+- `guides` (array, required): `{ orientation: "HORIZONTAL" | "VERTICAL", position }`
+- `document_id` (number, optional): target document
+
+Returns each added guide with pixel and normalized position plus the total guide
+count.
+
+#### `photoshop_list_guides`
+List all guides in the target document. Returns current list-order `index`,
+orientation, pixel position, and normalized position.
+
+#### `photoshop_clear_guides`
+Remove guides from the target document.
+
+**Parameters:**
+- `indices` (number[], optional): zero-based indices from `photoshop_list_guides`; omit to remove all guides
+- `document_id` (number, optional): target document
+
+#### `photoshop_transform_landmarks`
+Map a caller-supplied named landmark set from one semantic frame into another.
+This is a pure geometry helper and does not inspect Photoshop pixels or detect
+semantic/anatomical landmarks.
+
+**Parameters:**
+- `points` (array, required): `{ name, x, y }` source points
+- `source_frame` (object, required): `{ left, top, right, bottom }`
+- `target_frame` (object, required): `{ left, top, right, bottom }`
+
+Each point is converted to local `u/v` coordinates inside `source_frame` and
+reconstructed inside `target_frame`. The result includes both the full
+`transformed_points` records and a compact `{ name, x, y }` `points` array that
+can be passed directly to measurement/comparison tools.
+
+#### `photoshop_compare_landmarks`
+Compare two caller-supplied named landmark sets after normalizing each set to
+its own semantic frame.
+
+**Parameters:**
+- `reference_points` (array, required): reference `{ name, x, y }` points
+- `reference_frame` (object, required): reference `{ left, top, right, bottom }`
+- `candidate_points` (array, required): current/target `{ name, x, y }` points
+- `candidate_frame` (object, required): candidate `{ left, top, right, bottom }`
+
+Returns same-name point comparisons with normalized `du`, `dv`, and Euclidean
+error plus `mean_error`, `rmse`, `max_error`, and `max_error_point`. Missing and
+extra names are reported explicitly. `landmark_detection` is always `false`.
 
 ### Modern Export
 

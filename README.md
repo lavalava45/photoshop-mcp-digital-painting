@@ -22,9 +22,10 @@ The upstream project already provides a broad Photoshop automation MCP. This edi
 - one-point dabs/stamps;
 - per-stroke color, size, opacity, and flow overrides;
 - Photoshop `simulatePressure` support;
+- explicit measurement and guide tools for reference/proportion work;
 - an agent visual-control workflow with semantic passes, previews, occlusion reasoning, cleanup, and a state-based Definition of Done.
 
-The current build exposes **124 tools** (**108 atomic/non-recipe + 16 recipes**) and **24 prompts**.
+The current build exposes **130 tools** (**114 atomic/non-recipe + 16 recipes**) and **24 prompts**.
 
 ## Digital-painting tools
 
@@ -35,7 +36,15 @@ photoshop_get_brush_settings
 photoshop_set_brush
 photoshop_set_foreground_color
 photoshop_paint_strokes
+photoshop_measure_points
+photoshop_add_guides
+photoshop_list_guides
+photoshop_clear_guides
+photoshop_transform_landmarks
+photoshop_compare_landmarks
 ```
+
+For proportion-sensitive work, the landmark tools let an agent reuse the same named points across differently sized or framed references without hard-coding portrait-specific math. `photoshop_transform_landmarks` maps points between semantic frames while preserving local `u/v` position; `photoshop_compare_landmarks` reports per-point normalized error plus mean, RMSE, and maximum error. Both are pure geometry helpers and do not perform automatic landmark detection.
 
 The painting workflow is also exposed as the MCP guide prompt:
 
@@ -113,12 +122,14 @@ With Photoshop running, execute the live painting smoke test:
 
 ```bash
 node scripts/test-painting-tools.mjs
+node scripts/test-measurement-tools.mjs
+node scripts/test-landmark-ergonomics.mjs
 ```
 
 The current verified tool-count result is:
 
 ```text
-tool counts consistent: 124 = 108 atomic + 16 recipes
+tool counts consistent: 130 = 114 atomic + 16 recipes
 ```
 
 The fork has been live-tested primarily on **Photoshop 2026 for Windows**. During the current validation, 123 installed brush presets were enumerated and the painting smoke test completed with `PAINTING_TEST_OK`.

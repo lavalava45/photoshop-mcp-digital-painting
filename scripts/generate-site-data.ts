@@ -66,6 +66,7 @@ const CATEGORY_BY_FILE: Record<string, { id: string; label: string }> = {
   'style-tools.ts': { id: 'styles', label: 'Layer styles' },
   'data-tools.ts': { id: 'data', label: 'Data-driven graphics' },
   'export-tools.ts': { id: 'export', label: 'Export' },
+  'measurement-tools.ts': { id: 'measurement', label: 'Measurement & guides' },
 };
 
 function listToolFiles(): string[] {
