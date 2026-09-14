@@ -5,7 +5,7 @@
 set -euo pipefail
 
 TAG="${1:?tag required (e.g. v1.3.9)}"
-REPO="${GITHUB_REPOSITORY:-alisaitteke/photoshop-mcp}"
+REPO="${GITHUB_REPOSITORY:-lavalava45/photoshop-mcp-digital-painting}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/release-notes-lib.sh

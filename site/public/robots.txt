@@ -1,10 +1,9 @@
-# https://photoshop-mcp.com/
+# Fork repository: https://github.com/lavalava45/photoshop-mcp-digital-painting
 User-agent: *
 Allow: /
 
-# Agent index (llmstxt.org v2): https://photoshop-mcp.com/llms.txt
-# Full corpus digest: https://photoshop-mcp.com/llms-full.txt
-# AI policy signal: https://photoshop-mcp.com/ai.txt
+# This fork currently has no separately owned public website. These rules are
+# retained for an optional future fork-owned docs deployment.
 
 # Retrieval / search crawlers (allow for citations and AI answers)
 User-agent: ChatGPT-User
@@ -40,5 +39,3 @@ Allow: /
 
 User-agent: CCBot
 Allow: /
-
-Sitemap: https://photoshop-mcp.com/sitemap.xml

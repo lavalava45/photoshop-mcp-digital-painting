@@ -1,7 +1,7 @@
 {
-  "name": "@alisaitteke/photoshop-mcp",
+  "name": "photoshop-mcp-digital-painting-fork",
   "version": "1.7.6",
-  "description": "MCP server for Adobe Photoshop — 131 tools (digital painting + color sampling + measurement/landmarks/guides + generative AI + recipes), standalone web UI. Control Photoshop from Cursor, Claude, or natural language.",
+  "description": "Independent community fork of Photoshop MCP for AI-driven digital painting — 131 tools with painting, color sampling, landmarks/guides, previews, recipes, and hardened document targeting. Based on alisaitteke/photoshop-mcp; not an official upstream release.",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
@@ -73,21 +73,18 @@
     "vue",
     "hono"
   ],
-  "author": "Ali Sait Teke (https://alisait.com)",
+  "author": "Ali Sait Teke (original upstream project)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alisaitteke/photoshop-mcp.git"
+    "url": "git+https://github.com/lavalava45/photoshop-mcp-digital-painting.git"
   },
-  "homepage": "https://photoshop-mcp.com/",
+  "homepage": "https://github.com/lavalava45/photoshop-mcp-digital-painting",
   "bugs": {
-    "url": "https://github.com/alisaitteke/photoshop-mcp/issues"
+    "url": "https://github.com/lavalava45/photoshop-mcp-digital-painting/issues"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.75",
@@ -105,7 +102,6 @@
     "open": "^10.1.0",
     "zod": "^4.4.3"
   },
-  "mcpName": "io.github.alisaitteke/photoshop-mcp",
   "devDependencies": {
     "@eslint/js": "^9.18.0",
     "@types/better-sqlite3": "^7.6.13",
@@ -120,5 +116,9 @@
     "typescript": "^5.7.3",
     "vitest": "^4.1.10"
   },
-  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
+  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319",
+  "private": true,
+  "contributors": [
+    "lavalava45 (digital-painting fork maintainer)"
+  ]
 }

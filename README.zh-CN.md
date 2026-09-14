@@ -1,19 +1,19 @@
 # Photoshop MCP Server
 
+> **FORK NOTICE:** This is an inherited translation of the original/upstream project. **Do not use the npm badges, registry identifiers, website links, release instructions, or `@alisaitteke/photoshop-mcp` commands below to install this fork.** For this fork, use [README.md](README.md) and [INSTALL.md](INSTALL.md). Fork: https://github.com/lavalava45/photoshop-mcp-digital-painting. Original/upstream: https://github.com/alisaitteke/photoshop-mcp.
+
 <p align="center">
-  <a href="https://github.com/alisaitteke/photoshop-mcp">
+  <a href="https://github.com/lavalava45/photoshop-mcp-digital-painting">
     <img src="./images/readme-hero-v2.png" alt="Photoshop MCP — AI 驱动的 Photoshop 自动化" width="100%" />
   </a>
 </p>
 
-**语言：** [English](README.md) · 简体中文 · [Español](README.es.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · [Türkçe](README.tr.md) · **[网站](https://photoshop-mcp.com/)**
+**语言：** [English](README.md) · 简体中文 · [Español](README.es.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · [Türkçe](README.tr.md) · **[Upstream website](https://photoshop-mcp.com/)**
 
 *v1.1+ — 配方工作流、更少的往返调用、更流畅的会话。独立 UI 附带 **Action Plan（测试版）**，支持先规划后执行的运行模式。*
 
 > **注意：** 这是一个非官方的社区维护项目，与 Adobe Inc. 无任何关联，亦未获其背书。
 
-[![npm version](https://img.shields.io/npm/v/@alisaitteke/photoshop-mcp.svg)](https://www.npmjs.com/package/@alisaitteke/photoshop-mcp)
-[![GitHub release](https://img.shields.io/github/v/release/alisaitteke/photoshop-mcp?include_prereleases)](https://github.com/alisaitteke/photoshop-mcp/releases)
 [![Action Plan](https://img.shields.io/badge/Action%20Plan-beta-amber.svg)](#action-plan-beta)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
@@ -702,7 +702,7 @@ npx @alisaitteke/photoshop-mcp
 
 ## 关于维护者
 
-**[Ali Sait Teke](https://alisait.com)** — 全栈工程师及 AI 时代软件架构师（Python、Go、Node.js、React、Next.js、Vue）。
+**Upstream/original author: [Ali Sait Teke](https://alisait.com)** — 全栈工程师及 AI 时代软件架构师（Python、Go、Node.js、React、Next.js、Vue）。
 
 这个项目起源于一个实际问题：*如何在不依赖脆弱的一次性脚本的情况下，让 Photoshop 被 LLM 可靠地控制？* 它逐渐演变为一个拥有 80 个工具的 MCP 服务器、用于可靠多步骤工作流的配方/提示词层，以及一个无需 IDE 即可进行创意工作的本地 Web UI。
 

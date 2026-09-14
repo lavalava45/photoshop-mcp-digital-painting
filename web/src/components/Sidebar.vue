@@ -206,12 +206,12 @@ function formatDate(ts: number): string {
       <div class="my-2 border-t border-border" />
       <p class="text-center text-[11px] text-muted-foreground">
         <a
-          href="https://alisait.com"
+          href="https://github.com/lavalava45/photoshop-mcp-digital-painting"
           target="_blank"
           rel="noopener noreferrer"
           class="transition-colors hover:text-foreground"
         >
-          Ali Sait Teke
+          Fork GitHub
         </a>
         ·
         <a
@@ -220,16 +220,7 @@ function formatDate(ts: number): string {
           rel="noopener noreferrer"
           class="transition-colors hover:text-foreground"
         >
-          GitHub
-        </a>
-        ·
-        <a
-          href="https://www.linkedin.com/in/alisait/"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="transition-colors hover:text-foreground"
-        >
-          LinkedIn
+          Upstream
         </a>
       </p>
     </div>

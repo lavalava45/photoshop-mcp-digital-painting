@@ -1,19 +1,19 @@
 # Photoshop MCP Server
 
+> **FORK NOTICE:** This is an inherited translation of the original/upstream project. **Do not use the npm badges, registry identifiers, website links, release instructions, or `@alisaitteke/photoshop-mcp` commands below to install this fork.** For this fork, use [README.md](README.md) and [INSTALL.md](INSTALL.md). Fork: https://github.com/lavalava45/photoshop-mcp-digital-painting. Original/upstream: https://github.com/alisaitteke/photoshop-mcp.
+
 <p align="center">
-  <a href="https://github.com/alisaitteke/photoshop-mcp">
+  <a href="https://github.com/lavalava45/photoshop-mcp-digital-painting">
     <img src="./images/readme-hero-v2.png" alt="Photoshop MCP — Yapay zeka destekli Photoshop otomasyonu" width="100%" />
   </a>
 </p>
 
-**Diller:** [English](README.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · Türkçe · **[Website](https://photoshop-mcp.com/)**
+**Diller:** [English](README.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · Türkçe · **[Upstream website](https://photoshop-mcp.com/)**
 
 *v1.1+ — tarif iş akışları, daha az gidiş-dönüş, daha hızlı oturumlar. Bağımsız UI, plan-sonra-uygula çalıştırmaları için **Action Plan (beta)** sunar.*
 
 > **Not:** Bu, resmi olmayan, topluluk tarafından sürdürülen bir projedir; Adobe Inc. ile bağlantılı değildir ve Adobe Inc. tarafından desteklenmemektedir.
 
-[![npm version](https://img.shields.io/npm/v/@alisaitteke/photoshop-mcp.svg)](https://www.npmjs.com/package/@alisaitteke/photoshop-mcp)
-[![GitHub release](https://img.shields.io/github/v/release/alisaitteke/photoshop-mcp?include_prereleases)](https://github.com/alisaitteke/photoshop-mcp/releases)
 [![Action Plan](https://img.shields.io/badge/Action%20Plan-beta-amber.svg)](#action-plan-beta)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
@@ -808,7 +808,7 @@ dosyasını okuyun.
 
 ## Geliştirici Hakkında
 
-**[Ali Sait Teke](https://alisait.com)** — Full-Stack mühendis & yapay zeka çağı yazılım mimarı
+**Upstream/original author: [Ali Sait Teke](https://alisait.com)** — Full-Stack mühendis & yapay zeka çağı yazılım mimarı
 (Python, Go, Node.js, React, Next.js, Vue).
 
 Bu proje pratik bir sorudan doğdu: *Photoshop'u kırılgan tek seferlik betikler olmadan LLM'lerle

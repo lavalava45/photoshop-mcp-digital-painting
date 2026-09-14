@@ -104,7 +104,7 @@ const html = `<!doctype html>
     <p>Claude, Cursor and any MCP client, connected to Adobe Photoshop.</p>
     <div class="foot">
       <span><b>${meta.toolsTotal}</b> tools · <b>${meta.toolsRecipes}</b> one-step recipes</span>
-      <span>photoshop-mcp.com</span>
+      <span>github.com/lavalava45/photoshop-mcp-digital-painting</span>
     </div>
   </div>
 </body>`;

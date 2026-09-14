@@ -53,11 +53,11 @@ Git is recommended if you want easy updates later.
 From the repository root:
 
 ```bash
-npm ci
+npm install
 ```
 
-`npm ci` uses the committed `package-lock.json` and is the preferred
-reproducible installation method for a release checkout.
+This fork currently does not commit a root npm lockfile, so use `npm install`
+for a clean checkout.
 
 ## 3. Build the MCP server
 

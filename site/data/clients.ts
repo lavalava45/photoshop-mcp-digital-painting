@@ -6,18 +6,17 @@
  * from `SERVER` below at runtime; never hand-edit encoded URLs.
  */
 
-export const PACKAGE = '@alisaitteke/photoshop-mcp';
 export const SERVER_ID = 'photoshop';
-export const GITHUB = 'https://github.com/alisaitteke/photoshop-mcp';
+export const GITHUB = 'https://github.com/lavalava45/photoshop-mcp-digital-painting';
 export const MCPB_URL = `${GITHUB}/releases/latest/download/photoshop-mcp.mcpb`;
 
 export const SERVER = {
-  command: 'npx',
-  args: ['-y', PACKAGE],
+  command: 'node',
+  args: ['/absolute/path/to/photoshop-mcp-digital-painting/dist/index.js'],
 } as const;
 
-export const STDIO_COMMAND = `npx -y ${PACKAGE}`;
-export const UI_COMMAND = `npx -p ${PACKAGE} photoshop-mcp-ui`;
+export const STDIO_COMMAND = 'node /absolute/path/to/photoshop-mcp-digital-painting/dist/index.js';
+export const UI_COMMAND = 'node /absolute/path/to/photoshop-mcp-digital-painting/dist/ui/cli.js';
 
 export type Os = 'mac' | 'windows' | 'linux';
 export type Tier = 1 | 2 | 3;

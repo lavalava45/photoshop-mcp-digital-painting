@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "photoshop": {
-      "command": "npx",
-      "args": ["-y", "@alisaitteke/photoshop-mcp"],
+      "command": "node",
+      "args": ["/absolute/path/to/photoshop-mcp-digital-painting/dist/index.js"],
       "env": {
         "LOG_LEVEL": "1",
         "PHOTOSHOP_PATH": ""

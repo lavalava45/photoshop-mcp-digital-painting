@@ -15,16 +15,15 @@ const en = JSON.parse(readFileSync(join(SITE_DIR, 'i18n', 'en.json'), 'utf8')) a
   faq: { items: Array<{ q: string; a: string }> };
 };
 
-const SITE_URL = 'https://photoshop-mcp.com';
+const SITE_URL = 'https://github.com/lavalava45/photoshop-mcp-digital-painting';
 const OG_IMAGE = `${SITE_URL}/images/og-social.png`;
 const LLMS_URL = `${SITE_URL}/llms.txt`;
 const LLMS_FULL_URL = `${SITE_URL}/llms-full.txt`;
-const REPO = 'https://github.com/alisaitteke/photoshop-mcp';
-const NPM = 'https://www.npmjs.com/package/@alisaitteke/photoshop-mcp';
+const REPO = 'https://github.com/lavalava45/photoshop-mcp-digital-painting';
 
-const SITE_NAME = 'Photoshop MCP';
-const DEFAULT_TITLE = 'Photoshop MCP — Tell Photoshop what you want';
-const DEFAULT_DESCRIPTION = `Connect Claude, Cursor and any MCP client to Adobe Photoshop. ${meta.toolsTotal} tools and ${meta.toolsRecipes} one-step recipes for background removal, retouching, color grading and batch export. macOS and Windows.`;
+const SITE_NAME = 'Photoshop MCP — Digital Painting Fork';
+const DEFAULT_TITLE = 'Photoshop MCP — Digital Painting Fork';
+const DEFAULT_DESCRIPTION = `Independent community fork of Photoshop MCP with ${meta.toolsTotal} tools, digital-painting primitives, color sampling, landmarks/guides, previews, and ${meta.toolsRecipes} recipe workflows. Source-distributed from GitHub; not the upstream npm package or website.`;
 const KEYWORDS =
   'photoshop mcp, cursor photoshop, claude photoshop, adobe photoshop automation, model context protocol, mcp server, ai photoshop, remove background, generative fill';
 
@@ -63,13 +62,13 @@ const softwareJsonLd = {
   operatingSystem: 'Windows, macOS',
   description: DEFAULT_DESCRIPTION,
   url: SITE_URL,
-  downloadUrl: NPM,
+  downloadUrl: REPO,
   codeRepository: REPO,
   softwareHelp: `${SITE_URL}/docs/troubleshooting/`,
   screenshot: OG_IMAGE,
   softwareVersion: pkg.version,
   license: 'https://opensource.org/licenses/MIT',
-  author: { '@type': 'Person', name: 'Ali Sait Teke', url: 'https://alisait.com' },
+  author: { '@type': 'Person', name: 'lavalava45 (fork maintainer)', url: REPO },
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
 };
 
@@ -93,8 +92,8 @@ const howToJsonLd = {
     {
       '@type': 'HowToStep',
       name: 'Install the server',
-      text: 'Use the one-click install link for your client, or run: npx -y @alisaitteke/photoshop-mcp',
-      url: `${SITE_URL}/docs/getting-started/`,
+      text: 'Clone the fork from GitHub, run npm install and npm run build:server, then configure your MCP client to run dist/index.js with Node.',
+      url: `${REPO}/blob/digital-painting/INSTALL.md`,
     },
     {
       '@type': 'HowToStep',
@@ -110,6 +109,7 @@ const howToJsonLd = {
 };
 
 const googleVerification = process.env.GOOGLE_SITE_VERIFICATION;
+const forkRybbitSiteId = process.env.RYBBIT_SITE_ID?.trim();
 
 function breadcrumbJsonLd(pageData: {
   relativePath: string;
@@ -146,7 +146,7 @@ const sharedHead: Array<[string, Record<string, string> | string]> = [
   ['link', { rel: 'alternate', href: LLMS_URL, type: 'text/plain', title: 'llms.txt' }],
   ['link', { rel: 'alternate', href: LLMS_FULL_URL, type: 'text/plain', title: 'llms-full.txt' }],
   ['meta', { name: 'keywords', content: KEYWORDS }],
-  ['meta', { name: 'author', content: 'Ali Sait Teke' }],
+  ['meta', { name: 'author', content: 'lavalava45 (digital-painting fork maintainer)' }],
   ['meta', { name: 'robots', content: 'index, follow, max-image-preview:large' }],
   ['meta', { name: 'theme-color', content: '#0a1020' }],
   ['meta', { property: 'og:site_name', content: SITE_NAME }],
@@ -160,15 +160,19 @@ const sharedHead: Array<[string, Record<string, string> | string]> = [
   ['meta', { name: 'twitter:image:alt', content: 'Photoshop MCP — tell Photoshop what you want' }],
   ['script', { type: 'application/ld+json' }, JSON.stringify(softwareJsonLd)],
   ['script', { type: 'application/ld+json' }, JSON.stringify(howToJsonLd)],
-  ['script', {}, RYBBIT_LOCALHOST_GUARD],
-  [
-    'script',
-    {
-      src: 'https://hey.sideguard.io/api/script.js',
-      'data-site-id': '5e488c650441',
-      defer: '',
-    },
-  ],
+  ...(forkRybbitSiteId
+    ? ([
+        ['script', {}, RYBBIT_LOCALHOST_GUARD],
+        [
+          'script',
+          {
+            src: 'https://hey.sideguard.io/api/script.js',
+            'data-site-id': forkRybbitSiteId,
+            defer: '',
+          },
+        ],
+      ] as Array<[string, Record<string, string> | string]> )
+    : []),
   ...(googleVerification
     ? ([['meta', { name: 'google-site-verification', content: googleVerification }]] as const)
     : []),

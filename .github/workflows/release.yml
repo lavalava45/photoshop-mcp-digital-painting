@@ -1,5 +1,9 @@
 # Creates a GitHub Release when a version tag (v*) is pushed, then publishes to
 # npm and the Official MCP Registry. See CONTRIBUTING.md § Releasing.
+#
+# FORK SAFETY: this inherited upstream workflow is disabled outside the original
+# alisaitteke/photoshop-mcp repository so the fork cannot publish under upstream
+# npm / MCP Registry identities by accident.
 name: Release
 
 on:
@@ -11,6 +15,7 @@ permissions:
 
 jobs:
   github-release:
+    if: github.repository == 'alisaitteke/photoshop-mcp'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +57,7 @@ jobs:
             release/photoshop-mcp.mcpb
 
   publish:
+    if: github.repository == 'alisaitteke/photoshop-mcp'
     needs: github-release
     runs-on: ubuntu-latest
     permissions:

@@ -7,7 +7,7 @@ import type { AnalyticsEvent, AnalyticsProvider, AnalyticsPropertyValue } from '
 
 const PROPERTIES_MAX_CHARS = 2048;
 const TRAITS_MAX_CHARS = 2048;
-const HOSTNAME = 'photoshop-mcp.com';
+const HOSTNAME = 'photoshop-mcp-digital-painting-fork';
 const FLUSH_AT = 10;
 const FLUSH_INTERVAL_MS = 5000;
 

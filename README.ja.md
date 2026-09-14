@@ -1,19 +1,19 @@
 # Photoshop MCP Server
 
+> **FORK NOTICE:** This is an inherited translation of the original/upstream project. **Do not use the npm badges, registry identifiers, website links, release instructions, or `@alisaitteke/photoshop-mcp` commands below to install this fork.** For this fork, use [README.md](README.md) and [INSTALL.md](INSTALL.md). Fork: https://github.com/lavalava45/photoshop-mcp-digital-painting. Original/upstream: https://github.com/alisaitteke/photoshop-mcp.
+
 <p align="center">
-  <a href="https://github.com/alisaitteke/photoshop-mcp">
+  <a href="https://github.com/lavalava45/photoshop-mcp-digital-painting">
     <img src="./images/readme-hero-v2.png" alt="Photoshop MCP — AIによるPhotoshop自動化" width="100%" />
   </a>
 </p>
 
-**言語：** [English](README.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · [Türkçe](README.tr.md) · **[ウェブサイト](https://photoshop-mcp.com/)**
+**言語：** [English](README.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · [Türkçe](README.tr.md) · **[Upstream website](https://photoshop-mcp.com/)**
 
 *v1.1+ — レシピワークフロー、ラウンドトリップ削減、軽快なセッション。スタンドアロンUIには計画→実行を担う **Action Plan（ベータ）** が付属しています。*
 
 > **注意：** これは非公式のコミュニティ管理プロジェクトであり、Adobe Inc.との提携・承認関係はありません。
 
-[![npm version](https://img.shields.io/npm/v/@alisaitteke/photoshop-mcp.svg)](https://www.npmjs.com/package/@alisaitteke/photoshop-mcp)
-[![GitHub release](https://img.shields.io/github/v/release/alisaitteke/photoshop-mcp?include_prereleases)](https://github.com/alisaitteke/photoshop-mcp/releases)
 [![Action Plan](https://img.shields.io/badge/Action%20Plan-beta-amber.svg)](#action-plan-beta)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
@@ -706,7 +706,7 @@ LinkedInやソーシャルメディアでシェアする際は、[`images/og-soc
 
 ## メンテナーについて
 
-**[Ali Sait Teke](https://alisait.com)** — フルスタックエンジニア＆AI時代のソフトウェアアーキテクト
+**Upstream/original author: [Ali Sait Teke](https://alisait.com)** — フルスタックエンジニア＆AI時代のソフトウェアアーキテクト
 （Python、Go、Node.js、React、Next.js、Vue）
 
 このプロジェクトは実践的な問いから始まりました：*脆弱な一発スクリプトなしに、LLMがPhotoshopを確実に操作できるようにするにはどうすればいいか？* それは80のツール、信頼性の高いマルチステップワークフロー向けのレシピ/プロンプトレイヤー、そしてクリエイティブな作業にIDEが不要なローカルWebUIを備えたMCPサーバーへと成長しました。

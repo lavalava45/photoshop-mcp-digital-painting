@@ -156,7 +156,7 @@ function toggle(name: string): void {
           </table>
           <div class="tr-foot">
             <CopyButton :text="tool.name" small />
-            <a :href="`https://github.com/alisaitteke/photoshop-mcp/blob/master/${tool.source}`" target="_blank" rel="noopener" class="tr-src">
+            <a :href="`https://github.com/lavalava45/photoshop-mcp-digital-painting/blob/digital-painting/${tool.source}`" target="_blank" rel="noopener" class="tr-src">
               {{ tool.source }} <Icon name="external" :size="13" />
             </a>
           </div>

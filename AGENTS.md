@@ -1,20 +1,26 @@
-# AGENTS.md — photoshop-mcp
+# AGENTS.md — Photoshop MCP Digital Painting Fork
 
 > **Navigation map, not a reference manual.**
-> Start with [llms.txt](llms.txt) or the site index [llms.txt](https://photoshop-mcp.com/llms.txt), then follow links as needed.
+> Start with [README.md](README.md), [INSTALL.md](INSTALL.md), or [llms.txt](llms.txt).
+>
+> **Fork notice:** this repository is the independent community fork
+> [lavalava45/photoshop-mcp-digital-painting](https://github.com/lavalava45/photoshop-mcp-digital-painting),
+> based on the original [alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp).
+> `photoshop-mcp.com`, `@alisaitteke/photoshop-mcp`, and `io.github.alisaitteke/photoshop-mcp`
+> belong to the upstream project and do **not** distribute the fork-specific painting extensions.
 
 ## Entry strategy
 
 | Scenario | Path |
 | -------- | ---- |
-| Cursor / Claude Desktop / VS Code | Configure `mcpServers` → `npx -y @alisaitteke/photoshop-mcp` (stdio) |
-| Claude Code | `claude mcp add photoshop -- npx -y @alisaitteke/photoshop-mcp` |
-| Standalone chat UI (no IDE) | `npx -p @alisaitteke/photoshop-mcp photoshop-mcp-ui` |
-| Local development | `npm install && npm run build && node dist/index.js` — see [docs/development.md](docs/development.md) |
+| Cursor / Claude Desktop / VS Code | Clone this fork, build it, and configure stdio to `node <fork>/dist/index.js` |
+| Claude Code | Add a local stdio server pointing to this fork's built `dist/index.js` |
+| Chat On Steroids | Core → direct stdio → this fork's `dist/index.js` |
+| Local development | `npm install && npm run build:server && node dist/index.js` — see [docs/development.md](docs/development.md) |
 
 **Prerequisites:** Photoshop running on Windows or macOS, Node.js 18+. This is unofficial and not affiliated with Adobe.
 
-**Tool surface:** 118 MCP tools — 102 atomic `photoshop_*` + 16 recipe `photoshop_recipe_*`; 23 MCP prompt templates (`ps.*`).
+**Tool surface:** 131 MCP tools — 115 atomic/non-recipe `photoshop_*` + 16 recipe `photoshop_recipe_*`; 24 MCP prompt templates (`ps.*`).
 
 ## Architecture (agent view)
 
@@ -62,8 +68,8 @@ Full catalog: [docs/available-tools.md](docs/available-tools.md). Prompt layer: 
 {
   "mcpServers": {
     "photoshop": {
-      "command": "npx",
-      "args": ["-y", "@alisaitteke/photoshop-mcp"],
+      "command": "node",
+      "args": ["/absolute/path/to/photoshop-mcp-digital-painting/dist/index.js"],
       "env": { "LOG_LEVEL": "1" }
     }
   }
@@ -96,9 +102,10 @@ More: [docs/troubleshooting.md](docs/troubleshooting.md).
 
 | Channel | Identifier |
 | ------- | ---------- |
-| npm | `@alisaitteke/photoshop-mcp` |
-| MCP Registry | `io.github.alisaitteke/photoshop-mcp` |
-| GitHub | https://github.com/alisaitteke/photoshop-mcp |
+| This fork | https://github.com/lavalava45/photoshop-mcp-digital-painting |
+| Fork npm package | **None** — build from this repository |
+| Fork MCP Registry entry | **None** — use local stdio |
+| Original/upstream project | https://github.com/alisaitteke/photoshop-mcp |
 
 ## Key files
 

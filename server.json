@@ -1,21 +1,11 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.alisaitteke/photoshop-mcp",
-  "description": "MCP server for Adobe Photoshop — 131 tools (digital painting + color sampling + measurement/landmarks/guides + generative AI + recipes), standalone web UI. Control Ph…",
+  "name": "io.github.lavalava45/photoshop-mcp-digital-painting",
+  "description": "Independent Photoshop MCP digital-painting fork; source-distributed from GitHub.",
   "repository": {
-    "url": "https://github.com/alisaitteke/photoshop-mcp",
+    "url": "https://github.com/lavalava45/photoshop-mcp-digital-painting",
     "source": "github"
   },
   "version": "1.7.6",
-  "mcpName": "io.github.alisaitteke/photoshop-mcp",
-  "packages": [
-    {
-      "registryType": "npm",
-      "identifier": "@alisaitteke/photoshop-mcp",
-      "version": "1.7.6",
-      "transport": {
-        "type": "stdio"
-      }
-    }
-  ]
+  "websiteUrl": "https://github.com/lavalava45/photoshop-mcp-digital-painting"
 }

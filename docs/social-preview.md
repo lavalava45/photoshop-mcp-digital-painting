@@ -9,21 +9,21 @@ Assets and copy for sharing this project on LinkedIn, GitHub, and other channels
 | Social preview | [`images/og-social.png`](../images/og-social.png) | 1200×630 (LinkedIn / GitHub recommended) |
 | README hero | [`images/readme-hero-v2.png`](../images/readme-hero-v2.png) | 1600×800 (GitHub README banner) |
 
-Branding matches [alisait.com](https://alisait.com): cyan logo gradient (`#06b6d4` → `#67e8f9`), Photoshop icon (`#001E36` / `#31A8FF`), and **Ali** + *said* footer text.
+The fork social preview must identify this repository, not the upstream author's personal site or product website. Do not use `photoshop-mcp.com` or `alisait.com` as the fork homepage.
 
 ### GitHub repository social preview
 
-1. Open **Settings → General → Social preview** on [github.com/alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp).
+1. Open **Settings → General → Social preview** on [lavalava45/photoshop-mcp-digital-painting](https://github.com/lavalava45/photoshop-mcp-digital-painting).
 2. Upload `images/og-social.png`.
 3. Save — link previews on LinkedIn, Slack, and X will use this image when sharing the repo URL.
 
-### Personal site (alisait.com)
+### Fork homepage
 
-If you add a project page, set Open Graph tags to the same image and point `og:url` at the GitHub repo or a dedicated `/projects/photoshop-mcp` URL.
+This fork currently has no separate public website. Use the GitHub repository URL as the canonical public identity.
 
 ---
 
-## Suggested LinkedIn post
+## Suggested fork announcement
 
 Copy, adjust, and attach `images/og-social.png` or a short screen recording of the standalone UI.
 
@@ -31,13 +31,13 @@ Copy, adjust, and attach `images/og-social.png` or a short screen recording of t
 
 **Hook**
 
-I spent the last months making Photoshop controllable by AI agents — not with fragile one-off scripts, but with an MCP server that understands document state and ships real pixels.
+I have been extending the open-source Photoshop MCP project with a dedicated digital-painting fork focused on brush-driven agent workflows.
 
 **Problem**
 
 When LLMs call Photoshop one command at a time, they burn tokens, guess layer types, and break on the first ExtendScript error. Real creative workflows need undoable multi-step runs and a way for the agent to recover.
 
-**What I built (open source)**
+**What this fork adds**
 
 - **Photoshop MCP** — 131 tools incl. 16 recipe workflows, digital-painting primitives, color sampling, and measurement/landmarks/guides
 
@@ -54,9 +54,10 @@ External automation can't invoke UXP plugins — only ExtendScript via AppleScri
 
 **Links**
 
-- GitHub: https://github.com/alisaitteke/photoshop-mcp
-- `npx @alisaitteke/photoshop-mcp` (MCP) · `npx -p @alisaitteke/photoshop-mcp photoshop-mcp-ui` (UI)
-- Architecture write-up: https://github.com/alisaitteke/photoshop-mcp/blob/main/docs/architecture.md
+- Fork: https://github.com/lavalava45/photoshop-mcp-digital-painting
+- Install: clone/build the fork and run `dist/index.js` over stdio; there is currently no fork npm package or MCP Registry entry
+- Architecture: https://github.com/lavalava45/photoshop-mcp-digital-painting/blob/digital-painting/docs/architecture.md
+- Original/upstream project: https://github.com/alisaitteke/photoshop-mcp
 
 Feedback and contributors welcome. If your team builds agent tooling or creative automation, happy to connect.
 
@@ -66,6 +67,6 @@ Feedback and contributors welcome. If your team builds agent tooling or creative
 
 Set in repository **About** sidebar:
 
-- **Description:** `MCP server + local UI for AI-driven Photoshop automation. 131 tools, painting/color-sampling primitives, measurement/landmarks/guides, recipe workflows, cross-platform.`
-- **Website:** `https://alisait.com`
+- **Description:** `Independent Photoshop MCP fork for AI-driven digital painting — 131 tools with brush dynamics, color sampling, previews, landmarks/guides, hardened document targeting, and recipes.`
+- **Website:** leave blank unless a fork-owned site is created
 - **Topics:** `mcp`, `model-context-protocol`, `typescript`, `ai-agents`, `photoshop`, `automation`, `vue`, `hono`, `developer-tools`, `cursor`, `claude`, `extendscript`

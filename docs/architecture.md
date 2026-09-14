@@ -4,7 +4,8 @@ Engineering overview of **Photoshop MCP** — how AI assistants reach Adobe Phot
 
 ← Back to [README](../README.md)
 
-**Maintainer:** [Ali Sait Teke](https://alisait.com) · [GitHub](https://github.com/alisaitteke) · [LinkedIn](https://www.linkedin.com/in/alisait/)
+**Fork maintainer:** [lavalava45](https://github.com/lavalava45)
+**Original/upstream project:** [alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp), created by Ali Sait Teke
 
 ---
 
@@ -171,12 +172,10 @@ photoshop-mcp/
 
 ---
 
-## About the maintainer
+## Fork and upstream attribution
 
-**Ali Sait Teke** — Full-Stack engineer and AI-era software architect (Python, Go, Node.js, React, Next.js, Vue).
-
-This project demonstrates end-to-end systems work: MCP protocol integration, cross-platform desktop automation, structured error design for LLM agents, and a production-minded local UI — built as open source for the creative-automation and developer-tools community.
-
-- **Portfolio:** [alisait.com](https://alisait.com)
-- **GitHub:** [github.com/alisaitteke](https://github.com/alisaitteke)
-- **LinkedIn:** [linkedin.com/in/alisait](https://www.linkedin.com/in/alisait/)
+This repository is the independent digital-painting fork maintained at
+[lavalava45/photoshop-mcp-digital-painting](https://github.com/lavalava45/photoshop-mcp-digital-painting).
+It is based on the original
+[alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp) project by Ali Sait Teke.
+The upstream website, npm package, registry identity, and author branding are not distribution or ownership claims for this fork.

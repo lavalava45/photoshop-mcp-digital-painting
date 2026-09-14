@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import meta from '../../../data/meta.json';
-import { GITHUB, PACKAGE } from '../../../data/clients';
+import { GITHUB } from '../../../data/clients';
 import { useSiteI18n } from '../composables/useSiteI18n';
 
 const { t, link } = useSiteI18n();
@@ -25,9 +25,7 @@ const LOCALES = [
           <span>Photoshop MCP</span>
         </a>
         <p class="ft-disclaimer">{{ t.footer.disclaimer }}</p>
-        <p class="ft-meta">
-          <code>{{ PACKAGE }}</code> · v{{ meta.version }} · {{ t.footer.license }}
-        </p>
+        <p class="ft-meta">Digital-painting fork · v{{ meta.version }} · {{ t.footer.license }}</p>
       </div>
       <nav class="ft-col" :aria-label="t.footer.product">
         <h4>{{ t.footer.product }}</h4>
@@ -48,16 +46,16 @@ const LOCALES = [
       <nav class="ft-col" :aria-label="t.footer.community">
         <h4>{{ t.footer.community }}</h4>
         <a :href="GITHUB" target="_blank" rel="noopener">GitHub</a>
-        <a :href="`https://www.npmjs.com/package/${PACKAGE}`" target="_blank" rel="noopener">npm</a>
-        <a href="https://registry.modelcontextprotocol.io" target="_blank" rel="noopener">MCP Registry</a>
+        <a href="https://github.com/alisaitteke/photoshop-mcp" target="_blank" rel="noopener">Original / upstream</a>
         <a :href="`${GITHUB}/issues`" target="_blank" rel="noopener">{{ t.footer.issues }}</a>
       </nav>
     </div>
     <div class="ps-container ft-bottom">
       <p>
-        {{ t.footer.builtBy }}
-        <a href="https://alisait.com" target="_blank" rel="noopener">Ali Sait Teke</a>
-        · <a href="https://www.linkedin.com/in/alisait/" target="_blank" rel="noopener">LinkedIn</a>
+        Fork maintained at
+        <a :href="GITHUB" target="_blank" rel="noopener">lavalava45/photoshop-mcp-digital-painting</a>.
+        Original project by
+        <a href="https://github.com/alisaitteke/photoshop-mcp" target="_blank" rel="noopener">Ali Sait Teke</a>.
       </p>
       <ul class="ft-locales">
         <li v-for="l in LOCALES" :key="l.key"><a :href="l.path" :lang="l.key">{{ l.label }}</a></li>

@@ -21,7 +21,7 @@ for arg in "$@"; do
   esac
 done
 
-REPO="${GITHUB_REPOSITORY:-alisaitteke/photoshop-mcp}"
+REPO="${GITHUB_REPOSITORY:-lavalava45/photoshop-mcp-digital-painting}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 

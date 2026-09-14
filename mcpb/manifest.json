@@ -1,22 +1,22 @@
 {
   "$schema": "https://raw.githubusercontent.com/anthropics/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
   "manifest_version": "0.4",
-  "name": "photoshop-mcp",
-  "display_name": "Photoshop MCP",
+  "name": "photoshop-mcp-digital-painting",
+  "display_name": "Photoshop MCP — Digital Painting Fork",
   "version": "0.0.0",
-  "description": "Control Adobe Photoshop from chat — atomic tools plus one-step recipes.",
-  "long_description": "Connect Claude Desktop to Adobe Photoshop. Remove backgrounds, retouch portraits, color grade, and batch export by asking in plain language. Requires Photoshop running on macOS or Windows. Unofficial community project, not affiliated with Adobe Inc.",
+  "description": "Independent digital-painting fork of Photoshop MCP with painting, color sampling, landmarks, previews, and recipes.",
+  "long_description": "Independent community fork of alisaitteke/photoshop-mcp focused on AI-driven digital painting. Requires Photoshop on macOS or Windows. This is not an official upstream release, is not distributed by photoshop-mcp.com or @alisaitteke/photoshop-mcp, and is not affiliated with Adobe Inc.",
   "author": {
-    "name": "Ali Sait Teke",
-    "url": "https://alisait.com"
+    "name": "lavalava45 (fork maintainer)",
+    "url": "https://github.com/lavalava45/photoshop-mcp-digital-painting"
   },
-  "homepage": "https://photoshop-mcp.com",
+  "homepage": "https://github.com/lavalava45/photoshop-mcp-digital-painting",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alisaitteke/photoshop-mcp"
+    "url": "https://github.com/lavalava45/photoshop-mcp-digital-painting"
   },
-  "documentation": "https://photoshop-mcp.com/docs/getting-started",
-  "support": "https://github.com/alisaitteke/photoshop-mcp/issues",
+  "documentation": "https://github.com/lavalava45/photoshop-mcp-digital-painting/blob/digital-painting/INSTALL.md",
+  "support": "https://github.com/lavalava45/photoshop-mcp-digital-painting/issues",
   "license": "MIT",
   "keywords": [
     "mcp",

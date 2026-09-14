@@ -2,6 +2,11 @@
 
 Thank you for your interest in contributing! This is a community-maintained project and is not affiliated with or endorsed by Adobe Inc.
 
+> **Fork notice:** this checkout is the independent digital-painting fork at
+> `lavalava45/photoshop-mcp-digital-painting`. The original project is
+> `alisaitteke/photoshop-mcp`. Do not publish fork builds under the upstream npm scope
+> `@alisaitteke`, the upstream MCP Registry id, or the upstream website/domain.
+
 ## Language policy
 
 This project uses **English** as its canonical language for all project artifacts:
@@ -14,7 +19,7 @@ Issues and review comments may be written in any language, but English is prefer
 
 ## Before you start
 
-1. Search [existing issues](https://github.com/alisaitteke/photoshop-mcp/issues) and [pull requests](https://github.com/alisaitteke/photoshop-mcp/pulls) to avoid duplicate work.
+1. Search [fork issues](https://github.com/lavalava45/photoshop-mcp-digital-painting/issues) and [pull requests](https://github.com/lavalava45/photoshop-mcp-digital-painting/pulls) to avoid duplicate work. Check upstream separately when the issue may originate there.
 2. For large or architectural changes, open an issue first to discuss the approach.
 3. For bug fixes and small improvements, a PR without a prior issue is fine.
 
@@ -29,8 +34,8 @@ Issues and review comments may be written in any language, but English is prefer
 ### Getting started
 
 ```bash
-git clone https://github.com/alisaitteke/photoshop-mcp.git
-cd photoshop-mcp
+git clone https://github.com/lavalava45/photoshop-mcp-digital-painting.git
+cd photoshop-mcp-digital-painting
 npm install
 npm run build
 ```
@@ -45,7 +50,16 @@ npm run dev:ui
 
 This starts the server on port 5174 (with hot reload) and the web dev server concurrently.
 
-## Releasing
+## Releasing this fork
+
+This fork is currently distributed from GitHub source and local stdio builds. The inherited
+upstream npm/MCP Registry publishing workflow is **not** a fork release target. Never configure
+this repository with credentials that can publish `@alisaitteke/photoshop-mcp`.
+
+The material below this point documents the inherited upstream release machinery for reference
+when rebasing/merging upstream changes; it must not be used to publish this fork under upstream identifiers.
+
+### Upstream release machinery (reference only)
 
 Version bumps ship from **`master`**. Pushing a version tag triggers the
 [Release workflow](.github/workflows/release.yml), which creates a GitHub Release,
@@ -250,7 +264,7 @@ A [pull request template](.github/pull_request_template.md) is provided automati
 
 ## Reporting bugs
 
-Open a [GitHub Issue](https://github.com/alisaitteke/photoshop-mcp/issues) and include:
+Open a [fork GitHub Issue](https://github.com/lavalava45/photoshop-mcp-digital-painting/issues) and include:
 
 - Operating system (Windows / macOS) and version
 - Photoshop version

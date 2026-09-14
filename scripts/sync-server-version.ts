@@ -1,7 +1,7 @@
 /**
- * Sync server.json with package.json before npm publish.
- * Copies version + description so the MCP registry listing never goes stale.
- * Run: npx tsx scripts/sync-server-version.ts   (wired into prepublishOnly)
+ * Sync fork server.json metadata with package.json.
+ * The fork is source-distributed and has no npm/MCP Registry publication target;
+ * this helper only keeps version/description metadata consistent for local bundles.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

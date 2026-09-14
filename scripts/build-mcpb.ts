@@ -91,7 +91,7 @@ function main(): void {
 
   rmSync(STAGING, { recursive: true, force: true });
   console.log(`MCPB ready: ${outFile} (+ ${stableFile})`);
-  console.log('Publish: smithery mcp publish "./release/photoshop-mcp-' + pkg.version + '.mcpb" -n alisaitteke/photoshop-mcp');
+  console.log('Fork bundle built for local/source distribution. Do not publish it under the upstream alisaitteke/photoshop-mcp identity.');
 }
 
 main();

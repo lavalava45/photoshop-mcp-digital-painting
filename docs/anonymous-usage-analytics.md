@@ -1,8 +1,8 @@
 # Anonymous Usage Analytics
 
-This project collects **anonymous, aggregated usage events** to understand how the
-MCP server and standalone UI are used and to improve the product. Analytics are
-**enabled by default** and can be turned off at any time.
+The upstream project includes anonymous usage analytics. This fork does **not**
+ship the upstream analytics site ID: analytics are **off by default** and only
+activate when a fork operator explicitly supplies `RYBBIT_SITE_ID`.
 
 ← Back to [README](../README.md)
 
@@ -51,11 +51,11 @@ Rybbit custom-event properties are capped at **2KB**. Long fields such as
 | `POSTHOG_DISABLED` | — | Legacy alias for `ANALYTICS_DISABLED` |
 | `RYBBIT_API_KEY` | unset | Optional Bearer token with `ingest:write` — skips bot detection on server events |
 | `RYBBIT_HOST` | `https://hey.sideguard.io` | Self-hosted Rybbit origin (forks/staging) |
-| `RYBBIT_SITE_ID` | embedded in `config.ts` | Rybbit site ID |
+| `RYBBIT_SITE_ID` | unset | Required to enable Rybbit analytics in this fork |
 
-A default site ID and host are embedded so MCP and UI analytics work on every
-`npx` install without user configuration. Forks or staging environments can
-override `RYBBIT_HOST` / `RYBBIT_SITE_ID` (see `.env.example`).
+No analytics site ID is embedded in this fork. Set `RYBBIT_SITE_ID` explicitly
+only if you operate your own analytics destination. `RYBBIT_HOST` can also be
+overridden for a self-hosted Rybbit instance.
 
 If MCP/UI server events do not appear in the dashboard, create an organization
 API key in Rybbit (**Settings → Organization**) and set `RYBBIT_API_KEY`, or
@@ -77,10 +77,10 @@ also sets `localStorage.disable-rybbit`.
 
 ## MCP events
 
-When you run `photoshop-mcp` directly (e.g. via Cursor MCP config), these events
-are sent via `POST https://hey.sideguard.io/api/track` using the embedded site ID.
-Server events use `hostname: photoshop-mcp.com` and `pathname: /mcp` so they can
-be filtered apart from marketing-site traffic.
+When a fork operator explicitly configures `RYBBIT_SITE_ID`, MCP events are sent
+to the configured Rybbit host. Server events use
+`hostname: photoshop-mcp-digital-painting-fork` and `pathname: /mcp` so they are
+not mislabeled as traffic from the upstream product website.
 
 | Event | When | Key properties |
 | --- | --- | --- |
@@ -163,8 +163,8 @@ Analytics are processed by a self-hosted [Rybbit](https://rybbit.com/) instance
 at [hey.sideguard.io](https://hey.sideguard.io).
 
 - **Browser UI:** Rybbit tracking script (`/api/script.js`) with the embedded site ID
-- **Marketing / docs site** ([photoshop-mcp.com](https://photoshop-mcp.com/)): the
-  same script in the VitePress `<head>`
+- **Fork docs/site builds:** no tracking script is injected unless a fork operator
+  explicitly configures a site ID
 - **MCP stdio and UI server:** `POST /api/track` and `POST /api/identify` — works on
   every `npx` install without user env configuration
 - **Dashboard:** [hey.sideguard.io](https://hey.sideguard.io)
@@ -174,12 +174,11 @@ Install-cohort fields are stored locally and sent as Rybbit identify traits.
 See the [Rybbit privacy policy](https://rybbit.com/privacy) for how Rybbit
 handles data on their side.
 
-### Marketing / documentation site
+### Fork documentation site
 
-The website ([photoshop-mcp.com](https://photoshop-mcp.com/))
-loads the Rybbit script in production (localhost is opted out). Pageviews are
-automatic (enable **SPA Navigation** in the Rybbit site settings). Custom events
-carry `event_source: site`, `usage_surface: site`, and `site_locale`.
+This fork currently has no separately owned public website. If a fork-specific
+site is deployed later, analytics should use a fork-owned `RYBBIT_SITE_ID` and
+must not reuse the upstream project's website identity.
 
 - Visitors are **not** identified — site traffic does not merge with MCP install IDs
 - Session replay is **not** enabled from this repo

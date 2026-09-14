@@ -19,8 +19,9 @@ const SITE = join(ROOT, 'site');
 const CONTENT = join(SITE, 'content');
 const PUBLIC_IMAGES = join(SITE, 'public', 'images');
 
-const SITE_URL = 'https://photoshop-mcp.com';
-const GITHUB_REPO = 'https://github.com/alisaitteke/photoshop-mcp';
+const SITE_URL = 'https://github.com/lavalava45/photoshop-mcp-digital-painting';
+const GITHUB_REPO = 'https://github.com/lavalava45/photoshop-mcp-digital-painting';
+const GITHUB_BRANCH = 'digital-painting';
 
 const LOCALES = [
   { key: 'en', contentDir: CONTENT },
@@ -34,17 +35,19 @@ const LOCALES = [
 /** README lives on GitHub only; the site links out rather than mirroring it. */
 const README_LINK_MAP: Record<string, string> = {
   'README.md': `${GITHUB_REPO}#readme`,
-  'README.tr.md': `${GITHUB_REPO}/blob/master/README.tr.md`,
-  'README.zh-CN.md': `${GITHUB_REPO}/blob/master/README.zh-CN.md`,
-  'README.es.md': `${GITHUB_REPO}/blob/master/README.es.md`,
-  'README.de.md': `${GITHUB_REPO}/blob/master/README.de.md`,
-  'README.ja.md': `${GITHUB_REPO}/blob/master/README.ja.md`,
+  'README.tr.md': `${GITHUB_REPO}/blob/${GITHUB_BRANCH}/README.tr.md`,
+  'README.zh-CN.md': `${GITHUB_REPO}/blob/${GITHUB_BRANCH}/README.zh-CN.md`,
+  'README.es.md': `${GITHUB_REPO}/blob/${GITHUB_BRANCH}/README.es.md`,
+  'README.de.md': `${GITHUB_REPO}/blob/${GITHUB_BRANCH}/README.de.md`,
+  'README.ja.md': `${GITHUB_REPO}/blob/${GITHUB_BRANCH}/README.ja.md`,
 };
 
 /** repo docs/<source> → site /docs/<slug> (slug renames keep marketing-facing URLs readable). */
 const DOC_FILES: Array<{ source: string; slug: string; title?: string }> = [
   { source: 'architecture.md', slug: 'architecture' },
   { source: 'available-tools.md', slug: 'available-tools' },
+  { source: 'digital-painting.md', slug: 'digital-painting' },
+  { source: 'digital-painting-agent-skill.md', slug: 'digital-painting-agent-skill' },
   { source: 'prompt-layer.md', slug: 'prompt-layer' },
   { source: 'standalone-ui.md', slug: 'web-ui' },
   { source: 'generative-ai.md', slug: 'generative-ai' },
@@ -114,23 +117,23 @@ function rewriteMarkdown(text: string, localeKey: string): string {
   // Source file references → GitHub blob
   out = out.replace(
     /\]\((src\/[^)]+)\)/g,
-    (_match, path: string) => `](${GITHUB_REPO}/blob/master/${path})`,
+    (_match, path: string) => `](${GITHUB_REPO}/blob/${GITHUB_BRANCH}/${path})`,
   );
   out = out.replace(
     /\[`(src\/[^`]+)`\]/g,
-    (_match, path: string) => `[\`${path}\`](${GITHUB_REPO}/blob/master/${path})`,
+    (_match, path: string) => `[\`${path}\`](${GITHUB_REPO}/blob/${GITHUB_BRANCH}/${path})`,
   );
 
   // examples/ paths
   out = out.replace(
     /\]\(examples\/([^)]+)\)/g,
-    (_match, path: string) => `](${GITHUB_REPO}/blob/master/examples/${path})`,
+    (_match, path: string) => `](${GITHUB_REPO}/blob/${GITHUB_BRANCH}/examples/${path})`,
   );
 
   // uxp-plugin/
   out = out.replace(
     /\]\(uxp-plugin\/([^)]*)\)/g,
-    (_match, path: string) => `](${GITHUB_REPO}/blob/master/uxp-plugin/${path})`,
+    (_match, path: string) => `](${GITHUB_REPO}/blob/${GITHUB_BRANCH}/uxp-plugin/${path})`,
   );
 
   // Strip duplicate H1 when synced readme is not the homepage
@@ -141,7 +144,11 @@ function rewriteMarkdown(text: string, localeKey: string): string {
   // Repo root markdown files
   out = out.replace(
     /\]\(CONTRIBUTING\.md\)/g,
-    `](${GITHUB_REPO}/blob/master/CONTRIBUTING.md)`,
+    `](${GITHUB_REPO}/blob/${GITHUB_BRANCH}/CONTRIBUTING.md)`,
+  );
+  out = out.replace(
+    /\]\(\.\.\/INSTALL\.md\)/g,
+    `](${GITHUB_REPO}/blob/${GITHUB_BRANCH}/INSTALL.md)`,
   );
   out = out.replace(/\]\(\.\.\/README\.md\)/g, `](${GITHUB_REPO}#readme)`);
   out = out.replace(/\]\(\.\/README\.md\)/g, `](${GITHUB_REPO}#readme)`);

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const SITE_ROOT = join(fileURLToPath(import.meta.url), '..', '..');
 const DIST = join(SITE_ROOT, '.vitepress', 'dist');
 const PUBLIC = join(SITE_ROOT, 'public');
-const BASE_URL = 'https://photoshop-mcp.com';
+const BASE_URL = process.env.FORK_SITE_URL?.replace(/\/$/, '');
 
 function copyPublicAssets() {
   for (const name of readdirSync(PUBLIC)) {
@@ -46,6 +46,11 @@ function toUrl(htmlPath) {
 }
 
 copyPublicAssets();
+
+if (!BASE_URL) {
+  console.log('FORK_SITE_URL is not set; skipping sitemap generation for source-only fork');
+  process.exit(0);
+}
 
 const staticUrls = [`${BASE_URL}/llms.txt`, `${BASE_URL}/llms-full.txt`, `${BASE_URL}/ai.txt`];
 

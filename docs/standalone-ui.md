@@ -8,10 +8,16 @@ API key **or**, for Anthropic and Google, reuse the OAuth session from
 ← Back to [README](../README.md)
 
 ```bash
-npx -p @alisaitteke/photoshop-mcp photoshop-mcp-ui
+git clone https://github.com/lavalava45/photoshop-mcp-digital-painting.git
+cd photoshop-mcp-digital-painting
+npm install
+npm run build
+node dist/ui/cli.js
 ```
 
-That's it. A local server starts on `127.0.0.1` (random free port) and your
+The fork is currently source-distributed; the upstream npm package does not
+contain the fork-specific painting extensions. A local server starts on
+`127.0.0.1` (random free port) and your
 default browser opens the chat UI automatically.
 
 ## Supported providers
@@ -122,7 +128,7 @@ the server. Requests without a valid token get `401 unauthorized`.
 - `POSTHOG_DISABLED`: Legacy alias for `ANALYTICS_DISABLED`
 - `RYBBIT_API_KEY`: (Optional) Rybbit ingest API key — skips bot detection for server events
 - `RYBBIT_HOST`: (Optional) Rybbit origin (default: `https://hey.sideguard.io`)
-- `RYBBIT_SITE_ID`: (Optional) Rybbit site ID — a default is embedded; override for forks or staging
+- `RYBBIT_SITE_ID`: Optional Rybbit site ID. This fork ships with no default site ID, so analytics stay off unless one is explicitly configured.
 
 ## Troubleshooting — CLI account auth
 

@@ -1,19 +1,19 @@
 # Photoshop MCP Server
 
+> **FORK NOTICE:** This is an inherited translation of the original/upstream project. **Do not use the npm badges, registry identifiers, website links, release instructions, or `@alisaitteke/photoshop-mcp` commands below to install this fork.** For this fork, use [README.md](README.md) and [INSTALL.md](INSTALL.md). Fork: https://github.com/lavalava45/photoshop-mcp-digital-painting. Original/upstream: https://github.com/alisaitteke/photoshop-mcp.
+
 <p align="center">
-  <a href="https://github.com/alisaitteke/photoshop-mcp">
+  <a href="https://github.com/lavalava45/photoshop-mcp-digital-painting">
     <img src="./images/readme-hero-v2.png" alt="Photoshop MCP — Automatización de Photoshop impulsada por IA" width="100%" />
   </a>
 </p>
 
-**Idiomas:** [English](README.md) · [简体中文](README.zh-CN.md) · Español · [Deutsch](README.de.md) · [日本語](README.ja.md) · [Türkçe](README.tr.md) · **[Sitio web](https://photoshop-mcp.com/)**
+**Idiomas:** [English](README.md) · [简体中文](README.zh-CN.md) · Español · [Deutsch](README.de.md) · [日本語](README.ja.md) · [Türkçe](README.tr.md) · **[Upstream website](https://photoshop-mcp.com/)**
 
 *v1.1+ — flujos de trabajo con recetas, menos intercambios, sesiones más ágiles. La UI independiente incluye **Action Plan (beta)** para ejecuciones de planificar-y-ejecutar.*
 
 > **Nota:** Este es un proyecto no oficial mantenido por la comunidad y no está afiliado ni respaldado por Adobe Inc.
 
-[![npm version](https://img.shields.io/npm/v/@alisaitteke/photoshop-mcp.svg)](https://www.npmjs.com/package/@alisaitteke/photoshop-mcp)
-[![GitHub release](https://img.shields.io/github/v/release/alisaitteke/photoshop-mcp?include_prereleases)](https://github.com/alisaitteke/photoshop-mcp/releases)
 [![Action Plan](https://img.shields.io/badge/Action%20Plan-beta-amber.svg)](#action-plan-beta)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
@@ -710,7 +710,7 @@ Diseño del sistema, flujo de datos, abstracción de plataforma y modos de agent
 
 ## Acerca del mantenedor
 
-**[Ali Sait Teke](https://alisait.com)** — Ingeniero Full-Stack y arquitecto de software para la era de la IA
+**Upstream/original author: [Ali Sait Teke](https://alisait.com)** — Ingeniero Full-Stack y arquitecto de software para la era de la IA
 (Python, Go, Node.js, React, Next.js, Vue).
 
 Este proyecto surgió de una pregunta práctica: *¿cómo se hace que Photoshop sea controlable de forma confiable por LLMs sin scripts individuales frágiles?* Se convirtió en un servidor MCP con 80 herramientas, una capa de recetas/prompts para flujos de trabajo de varios pasos confiables y una UI web local para que el trabajo creativo no requiera un IDE.

@@ -2,7 +2,7 @@
 # Shared helpers for release note and CHANGELOG generation.
 # Sourced by scripts/build-release-notes.sh and scripts/backfill-changelog.sh.
 
-release_notes_repo="${GITHUB_REPOSITORY:-alisaitteke/photoshop-mcp}"
+release_notes_repo="${GITHUB_REPOSITORY:-lavalava45/photoshop-mcp-digital-painting}"
 
 # previous_version_tag TAG → semver predecessor tag (e.g. v1.3.8 → v1.3.7), or empty.
 previous_version_tag() {

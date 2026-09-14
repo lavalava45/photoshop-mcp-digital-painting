@@ -1,5 +1,5 @@
 const DEFAULT_RYBBIT_HOST = 'https://hey.sideguard.io';
-const DEFAULT_RYBBIT_SITE_ID = '5e488c650441';
+const DEFAULT_RYBBIT_SITE_ID = '';
 
 function envTruthy(name: string): boolean {
   const value = process.env[name]?.trim().toLowerCase();

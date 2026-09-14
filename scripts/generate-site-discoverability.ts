@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SITE_PUBLIC = join(ROOT, 'site', 'public');
-const SITE_URL = 'https://photoshop-mcp.com';
+const REPO_URL = 'https://github.com/lavalava45/photoshop-mcp-digital-painting';
+const BRANCH = 'digital-painting';
 
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 /** Counts come from generate-site-data.ts so every surface reports the same numbers. */
@@ -32,64 +33,41 @@ function readOptional(path: string, maxChars?: number): string {
 
 function llmsTxt(): string {
   const v = pkg.version;
-  return `# Photoshop MCP
+  return `# Photoshop MCP — Digital Painting Fork
 
-> MCP server for Adobe Photoshop — ${v} — ${meta.toolsTotal} tools (generative AI + ${meta.toolsRecipes} recipe workflows), standalone web UI, and state-aware agent workflows. Control Photoshop from Cursor, Claude Desktop, Claude Code, or natural language. Unofficial; not affiliated with Adobe.
+> Independent community fork of Photoshop MCP — based on upstream ${v} — ${meta.toolsTotal} tools including digital painting, color sampling, landmarks/guides, previews, generative AI and ${meta.toolsRecipes} recipe workflows. Not an official upstream release and not affiliated with Adobe.
 
 Important notes:
 
+- Fork repository: ${REPO_URL}
+- Original/upstream project: https://github.com/alisaitteke/photoshop-mcp
+- The upstream website, npm package, and MCP Registry identity do not distribute this fork.
 - Prefer \`photoshop_recipe_*\` for multi-step outcomes (single Photoshop undo step); use atomic \`photoshop_*\` tools for precise edits.
 - Agent workflow: \`get_capabilities\` → \`get_state\` → act → \`get_preview\` to verify.
 - Prerequisites: Adobe Photoshop running on Windows or macOS, Node.js 18+.
-- MCP stdio: \`npx -y @alisaitteke/photoshop-mcp\` · Standalone UI: \`npx -p @alisaitteke/photoshop-mcp photoshop-mcp-ui\`
+- Install this fork by cloning the GitHub repository, running \`npm install\` and \`npm run build:server\`, then pointing the MCP client at \`dist/index.js\` with Node.
 
 ## Docs
 
-- [Home](${SITE_URL}/): What it does, install targets, recipe gallery, FAQ
-- [Getting started](${SITE_URL}/docs/getting-started/): Install per client, config snippets, verification prompt
-- [Recipes](${SITE_URL}/recipes/): ${meta.toolsRecipes} one-step workflows with copyable prompts
-- [Tool catalog](${SITE_URL}/tools/): Searchable list of all ${meta.toolsTotal} tools and parameters
-- [Web UI](${SITE_URL}/docs/web-ui/): Standalone local chat — providers, auth modes, Action Plan
-- [Generative AI](${SITE_URL}/docs/generative-ai/): Firefly tools, Neural Filters, credit use
-- [Architecture](${SITE_URL}/docs/architecture/): System design, data flow, platform abstraction
-- [Available tools](${SITE_URL}/docs/available-tools/): Complete \`photoshop_*\` tool reference
-- [Prompt layer](${SITE_URL}/docs/prompt-layer/): MCP prompts, recipes, server instructions
-- [Development](${SITE_URL}/docs/development/): Local build, testing, UXP bridge plugin
-- [Troubleshooting](${SITE_URL}/docs/troubleshooting/): Common connection and script errors
-- [Changelog](${SITE_URL}/changelog/): Release notes by version
-
-## Client setup
-
-- [Cursor](${SITE_URL}/docs/clients/cursor/): One-click install link plus mcp.json fallback
-- [Claude Desktop](${SITE_URL}/docs/clients/claude-desktop/): .mcpb bundle download, no Node.js needed
-- [Claude Code](${SITE_URL}/docs/clients/claude-code/): \`claude mcp add\` command
-- [VS Code](${SITE_URL}/docs/clients/vscode/): Install link, \`code --add-mcp\`, Copilot Agent mode
-- [Windsurf](${SITE_URL}/docs/clients/windsurf/): mcp_config.json paths
-- [Zed](${SITE_URL}/docs/clients/zed/): \`context_servers\` settings entry
-- [Codex CLI](${SITE_URL}/docs/clients/codex/): \`codex mcp add\` and TOML config
-- [Antigravity](${SITE_URL}/docs/clients/antigravity/): IDE and agy CLI config paths
-- [Other clients](${SITE_URL}/docs/clients/other/): Generic stdio config, Cline, Kiro, JetBrains, Warp, Goose, LM Studio, Raycast
-
-## Translations
-
-- [Türkçe](${SITE_URL}/tr/): Turkish landing and setup guide
-- [简体中文](${SITE_URL}/zh/): Chinese landing and setup guide
-- [Español](${SITE_URL}/es/): Spanish landing and setup guide
-- [Deutsch](${SITE_URL}/de/): German landing and setup guide
-- [日本語](${SITE_URL}/ja/): Japanese landing and setup guide
+- [README](${REPO_URL}/blob/${BRANCH}/README.md)
+- [Install](${REPO_URL}/blob/${BRANCH}/INSTALL.md)
+- [Architecture](${REPO_URL}/blob/${BRANCH}/docs/architecture.md)
+- [Available tools](${REPO_URL}/blob/${BRANCH}/docs/available-tools.md)
+- [Digital painting](${REPO_URL}/blob/${BRANCH}/docs/digital-painting.md)
+- [Digital painting agent skill](${REPO_URL}/blob/${BRANCH}/docs/digital-painting-agent-skill.md)
+- [Development](${REPO_URL}/blob/${BRANCH}/docs/development.md)
+- [Troubleshooting](${REPO_URL}/blob/${BRANCH}/docs/troubleshooting.md)
 
 ## Distribution
 
-- [npm package](https://www.npmjs.com/package/@alisaitteke/photoshop-mcp): \`@alisaitteke/photoshop-mcp\`
-- [MCP Registry](https://registry.modelcontextprotocol.io): \`io.github.alisaitteke/photoshop-mcp\`
-- [GitHub repository](https://github.com/alisaitteke/photoshop-mcp): Source, issues, releases
-- [Agent map (AGENTS.md)](https://github.com/alisaitteke/photoshop-mcp/blob/master/AGENTS.md): Navigation for coding agents
+- Fork source/docs/issues: ${REPO_URL}
+- Fork npm package: none; build from source
+- Fork MCP Registry entry: none; use local stdio
+- Original/upstream project: https://github.com/alisaitteke/photoshop-mcp
 
 ## Optional
 
-- [Privacy and analytics](${SITE_URL}/docs/privacy/): Opt-out anonymous telemetry
-- [Sitemap](${SITE_URL}/sitemap.xml): All canonical site URLs
-- [llms-full.txt](${SITE_URL}/llms-full.txt): This index plus condensed architecture and quick-start text
+- [Privacy and analytics](${REPO_URL}/blob/${BRANCH}/docs/anonymous-usage-analytics.md)
 `;
 }
 
@@ -104,7 +82,7 @@ function llmsFullTxt(): string {
     '',
     '# Repository llms.txt (canonical npm/GitHub summary)',
     '',
-    llmsRoot.replace(/\*\*Website:\*\*.*\n/, `**Website:** ${SITE_URL}/\n`),
+    llmsRoot,
     '',
     '---',
     '',
@@ -116,22 +94,21 @@ function llmsFullTxt(): string {
 
 function rootLlmsTxt(): string {
   const v = pkg.version;
-  return `# photoshop-mcp
+  return `# Photoshop MCP — Digital Painting Fork
 
-> MCP server for Adobe Photoshop — ${v} — ${meta.toolsTotal} tools (generative AI + ${meta.toolsRecipes} recipes), standalone web UI, and state-aware agent workflows. Unofficial; not affiliated with Adobe.
+> Independent digital-painting fork of Photoshop MCP, based on upstream ${v} — ${meta.toolsTotal} tools including painting, color sampling, landmarks/guides, previews, generative AI and ${meta.toolsRecipes} recipes. Unofficial; not affiliated with Adobe.
 
-**Website:** ${SITE_URL}/
-**llms.txt (site):** ${SITE_URL}/llms.txt
-**llms-full.txt:** ${SITE_URL}/llms-full.txt
+**This fork:** ${REPO_URL}
+**Original/upstream:** https://github.com/alisaitteke/photoshop-mcp
 
 ## Quick start
 
 \`\`\`bash
-# MCP server (stdio) — use with Cursor, Claude Desktop, Claude Code, VS Code
-npx -y @alisaitteke/photoshop-mcp
-
-# Standalone web UI (local chat + Photoshop, no IDE required)
-npx -p @alisaitteke/photoshop-mcp photoshop-mcp-ui
+git clone ${REPO_URL}.git
+cd photoshop-mcp-digital-painting
+npm install
+npm run build:server
+node dist/index.js
 \`\`\`
 
 **Prerequisites:** Adobe Photoshop (Windows or macOS), Node.js 18+. Photoshop must be running. Optional UXP bridge plugin in \`uxp-plugin/\` for Neural Filters.
@@ -150,46 +127,36 @@ Prefer \`photoshop_recipe_*\` for multi-step outcomes (single undo step). Use at
 {
   "mcpServers": {
     "photoshop": {
-      "command": "npx",
-      "args": ["-y", "@alisaitteke/photoshop-mcp"],
+      "command": "node",
+      "args": ["/absolute/path/to/photoshop-mcp-digital-painting/dist/index.js"],
       "env": { "LOG_LEVEL": "1" }
     }
   }
 }
 \`\`\`
 
-Claude Code one-liner:
-
-\`\`\`bash
-claude mcp add photoshop -- npx -y @alisaitteke/photoshop-mcp
-\`\`\`
-
 ## Tool surface
 
 - **${meta.toolsTotal} tools** — ${meta.toolsAtomic} atomic + ${meta.toolsRecipes} recipe (\`photoshop_recipe_*\`)
-- **23 MCP prompts** — \`ps.remove_background\`, \`ps.enhance_portrait\`, \`ps.generative_fill\`, …
+- **24 MCP prompts** — including \`ps.digital_painting_control\`
 - **Generative AI** — fill, remove, expand, upscale, sky replacement, generate image (Adobe account)
 - **State** — \`photoshop_get_state\`, \`photoshop_get_preview\`, \`photoshop_get_capabilities\`
 - **Standalone UI** — Action Plan (beta): plan all steps in one LLM call, then execute
 
 ## Distribution
 
-- npm: \`@alisaitteke/photoshop-mcp\` (https://www.npmjs.com/package/@alisaitteke/photoshop-mcp)
-- MCP Registry: \`io.github.alisaitteke/photoshop-mcp\` (https://registry.modelcontextprotocol.io)
-- GitHub: https://github.com/alisaitteke/photoshop-mcp
+- Fork source/docs/issues: ${REPO_URL}
+- Fork npm package: none
+- Fork MCP Registry entry: none
+- Original/upstream: https://github.com/alisaitteke/photoshop-mcp
 
-## Documentation (web)
+## Documentation
 
-- [Home](${SITE_URL}/)
-- [Getting started](${SITE_URL}/docs/getting-started/)
-- [Architecture](${SITE_URL}/docs/architecture/)
-- [Available tools](${SITE_URL}/docs/available-tools/)
-- [Prompt layer](${SITE_URL}/docs/prompt-layer/)
-- [Web UI](${SITE_URL}/docs/web-ui/)
-- [Generative AI](${SITE_URL}/docs/generative-ai/)
-- [Development](${SITE_URL}/docs/development/)
-- [Troubleshooting](${SITE_URL}/docs/troubleshooting/)
-- [AGENTS.md](https://github.com/alisaitteke/photoshop-mcp/blob/master/AGENTS.md)
+- [README](${REPO_URL}/blob/${BRANCH}/README.md)
+- [Install](${REPO_URL}/blob/${BRANCH}/INSTALL.md)
+- [Architecture](${REPO_URL}/blob/${BRANCH}/docs/architecture.md)
+- [Available tools](${REPO_URL}/blob/${BRANCH}/docs/available-tools.md)
+- [Agent map](${REPO_URL}/blob/${BRANCH}/AGENTS.md)
 `;
 }
 

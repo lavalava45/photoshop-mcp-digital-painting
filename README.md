@@ -83,7 +83,7 @@ Clone and build:
 ```bash
 git clone https://github.com/lavalava45/photoshop-mcp-digital-painting.git
 cd photoshop-mcp-digital-painting
-npm ci
+npm install
 npm run build:server
 ```
 
@@ -180,7 +180,7 @@ The live test creates its own temporary Photoshop document, exercises grouped/ne
 
 ## Upstream and attribution
 
-This fork is based on [Photoshop MCP](https://github.com/alisaitteke/photoshop-mcp), originally created by Ali Sait Teke.
+This fork is based on [Photoshop MCP](https://github.com/alisaitteke/photoshop-mcp), originally created by Ali Sait Teke. The upstream project, its website (`photoshop-mcp.com`), npm package (`@alisaitteke/photoshop-mcp`), and MCP Registry identity are separate from this fork.
 
 The upstream source, documentation, and assets retain their original copyright and license notices. This fork is maintained independently; references to the upstream project do not imply that its original author maintains or endorses this fork.
 
