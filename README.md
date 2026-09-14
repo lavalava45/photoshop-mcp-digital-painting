@@ -1,12 +1,24 @@
 # Photoshop MCP — Digital Painting Edition
 
-> Community fork of [alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp), focused on native digital-painting control in Photoshop. This edition adds brush preset control, brush dynamics, batched raster strokes, per-stroke overrides, and an agent-oriented visual-control workflow while keeping the upstream editing toolset intact.
+> **Community fork.** Based on [alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp) by Ali Sait Teke, with a focused extension for native digital-painting workflows in Photoshop.
+>
+> **Original project / Upstream:** [alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp)<br>
+> **This fork:** [lavalava45/photoshop-mcp-digital-painting](https://github.com/lavalava45/photoshop-mcp-digital-painting)
+
+### What this edition adds
+
+- brush preset discovery and exact preset selection;
+- brush dynamics control, including pressure, opacity, flow, spacing, angle, roundness, airbrush, and smoothing;
+- batched raster painting with Brush, Pencil, Eraser, and Smudge strokes, including Bezier paths, dabs, and per-stroke overrides;
+- an agent-oriented visual-control workflow with semantic passes, checkpoints, cleanup, occlusion handling, and a fresh-composition rule for evaluation.
 
 <p align="center">
   <a href="https://github.com/alisaitteke/photoshop-mcp">
     <img src="./images/readme-hero-v2.png" alt="Photoshop MCP — tell Photoshop what you want, AI does the clicking" width="100%" />
   </a>
 </p>
+
+_The hero artwork and upstream package/release/website badges below are retained from the original project. Links that point to `alisaitteke/photoshop-mcp` or `@alisaitteke/photoshop-mcp` refer to upstream unless explicitly marked otherwise._
 
 **Languages:** English · [简体中文](README.zh-CN.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · [Türkçe](README.tr.md) · **[Website](https://photoshop-mcp.com/)**
 
