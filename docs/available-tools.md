@@ -1167,9 +1167,24 @@ Set the Photoshop foreground RGB color used by painting operations.
 #### `photoshop_paint_strokes`
 Paint one or many raster Brush/Pencil/Eraser/Smudge strokes on the active layer.
 Supports straight/polyline and Bezier paths, closed paths,
-`simulatePressure`, per-stroke RGB/size/opacity/flow overrides, and one-point
-brush dabs/stamps. Large heterogeneous passes should be chunked into smaller
-batches when many strokes change brush settings.
+`simulatePressure`, per-stroke RGB/size/opacity/flow overrides, one-point brush
+dabs/stamps, automatic batching, and interpolated dynamics on open strokes.
+
+**Batching:**
+- `batch_mode: "AUTO"` (default) estimates the cost of rendered strokes and proactively splits expensive heterogeneous passes into short Photoshop scripts. Results include `batch_count`, `history_steps`, and `auto_chunked`.
+- `batch_mode: "SINGLE_HISTORY"` preserves the legacy one-history-step behavior, but a sufficiently expensive mixed batch can still hit the Photoshop/ExtendScript timeout.
+
+**Dynamics:** each open stroke may include a `dynamics` object with optional
+`size`, `opacity`, and/or `flow` ranges written as `[start, end]`, optional
+`steps` (2–64), and `easing` (`LINEAR`, `EASE_IN`, `EASE_OUT`,
+`EASE_IN_OUT`). When `steps` is omitted, the tool chooses an automatic 12–64
+segment count from the magnitude of the requested profile. Dynamic Beziers are
+sampled by path length before rendering so the progression follows the visible
+curve rather than raw control-point spacing.
+
+Dynamic rendering is segmented, not native continuous tablet pressure. A strong
+taper with a hard round brush can show slight segment texture; higher step
+counts reduce it. Dynamics is intentionally rejected for closed strokes.
 
 ### Measurement & Guides
 

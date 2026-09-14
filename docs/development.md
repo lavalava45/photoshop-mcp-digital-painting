@@ -51,6 +51,8 @@ npm run test:mcp-local    # prompt-layer smoke
 npm run test:mcp-all      # full sequential tool sweep
 npm run test:measurement-tools # measurement/guides live smoke
 npm run test:landmark-ergonomics # pure geometry landmark regression; Photoshop not required
+npm run test:painting-batching # offline batching/dynamics regression
+npm run test:painting-batching-live # live AUTO batching + taper regression
 npm run spike:photoshop-actions  # generative AI action probes → scripts/output/generative-probe-report.json
 npm run verify:photoshop-prompts
 ```

@@ -104,11 +104,15 @@ card, or other bounded region.
 
 - per-stroke color / size / opacity / flow overrides — implemented
 - brush dabs/stamps via one-point strokes — implemented
+- automatic cost-aware batching for heterogeneous passes — implemented
+- interpolated size / opacity / flow dynamics along open strokes — implemented
 - richer curve representation
 - sampled/eyedropper color helpers
 - Mixer Brush support if scripting behavior is reliable
 
-Live artistic tests confirmed `Square Charcoal` texture, pressure tapering, dabs, and per-stroke overrides. One practical limitation emerged: large heterogeneous batches with many brush-setting overrides can exceed the 30-second ExtendScript timeout, so painting clients should currently chunk such passes into smaller batches.
+Live artistic tests confirmed `Square Charcoal` texture, pressure tapering, dabs, per-stroke overrides, automatic heterogeneous batching, and interpolated taper profiles. `photoshop_paint_strokes` now defaults to `batch_mode=AUTO`: expensive passes are split into several short Photoshop scripts before the per-script ExtendScript timeout is reached. Small/simple calls remain a single history step. `batch_mode=SINGLE_HISTORY` is available when one undo step matters more than timeout resilience.
+
+Dynamic profiles are rendered as multiple short path strokes with changing brush settings. This gives controllable directional tapering that Photoshop's binary `simulatePressure` cannot express, but it is still a segmented approximation rather than native continuous stylus pressure. Hard round brushes can show slight segment texture on aggressive tapers; omitting `steps` lets the tool choose a higher 12–64 segment count from the requested profile magnitude.
 
 Mixer Brush remains experimental. A direct Action Manager path-stroke attempt using `wetBrushTool` failed with invalid parameters, so Mixer Brush is intentionally not exposed yet.
 

@@ -21,6 +21,8 @@ The upstream project already provides a broad Photoshop automation MCP. This edi
 - straight, polyline, and Bezier strokes;
 - one-point dabs/stamps;
 - per-stroke color, size, opacity, and flow overrides;
+- automatic cost-aware batching for large heterogeneous paint passes;
+- interpolated size/opacity/flow dynamics along open strokes;
 - Photoshop `simulatePressure` support;
 - explicit measurement, landmark, and guide tools for reference/proportion work;
 - reusable landmark-frame transforms and normalized landmark-set comparison;
@@ -127,6 +129,8 @@ With Photoshop running, execute the live painting smoke test:
 node scripts/test-painting-tools.mjs
 node scripts/test-measurement-tools.mjs
 node scripts/test-landmark-ergonomics.mjs
+npm run test:painting-batching
+npm run test:painting-batching-live
 ```
 
 The current verified tool-count result is:

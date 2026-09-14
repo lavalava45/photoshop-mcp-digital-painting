@@ -27,6 +27,17 @@ interface PaintStroke {
   size?: number;
   opacity?: number;
   flow?: number;
+  dynamics?: StrokeDynamics;
+}
+
+type DynamicsEasing = 'LINEAR' | 'EASE_IN' | 'EASE_OUT' | 'EASE_IN_OUT';
+
+interface StrokeDynamics {
+  size?: [number, number];
+  opacity?: [number, number];
+  flow?: [number, number];
+  steps: number;
+  easing: DynamicsEasing;
 }
 
 function finiteNumber(value: unknown, name: string): number {
@@ -54,6 +65,65 @@ function parsePair(value: unknown, name: string): [number, number] | undefined {
     throw new Error(`${name} must be [x, y]`);
   }
   return [finiteNumber(value[0], `${name}[0]`), finiteNumber(value[1], `${name}[1]`)];
+}
+
+function parseRange(
+  value: unknown,
+  name: string,
+  min: number,
+  max: number
+): [number, number] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length !== 2) {
+    throw new Error(`${name} must be [start, end]`);
+  }
+  const start = finiteNumber(value[0], `${name}[0]`);
+  const end = finiteNumber(value[1], `${name}[1]`);
+  if (start < min || start > max || end < min || end > max) {
+    throw new Error(`${name} values must be between ${min} and ${max}`);
+  }
+  return [start, end];
+}
+
+function parseDynamics(value: unknown, strokeIndex: number): StrokeDynamics | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`strokes[${strokeIndex}].dynamics must be an object`);
+  }
+  const rec = value as Record<string, unknown>;
+  const size = parseRange(rec.size, `strokes[${strokeIndex}].dynamics.size`, 1, 5000);
+  const opacity = parseRange(rec.opacity, `strokes[${strokeIndex}].dynamics.opacity`, 0, 100);
+  const flow = parseRange(rec.flow, `strokes[${strokeIndex}].dynamics.flow`, 0, 100);
+  if (!size && !opacity && !flow) {
+    throw new Error(`strokes[${strokeIndex}].dynamics requires size, opacity, or flow`);
+  }
+  const autoSteps = Math.min(
+    64,
+    Math.max(
+      12,
+      size ? Math.ceil(Math.abs(size[1] - size[0]) / 1.5) : 0,
+      opacity ? Math.ceil(Math.abs(opacity[1] - opacity[0]) / 4) : 0,
+      flow ? Math.ceil(Math.abs(flow[1] - flow[0]) / 4) : 0
+    )
+  );
+  const stepsRaw = rec.steps === undefined
+    ? autoSteps
+    : finiteNumber(rec.steps, `strokes[${strokeIndex}].dynamics.steps`);
+  if (!Number.isInteger(stepsRaw) || stepsRaw < 2 || stepsRaw > 64) {
+    throw new Error(`strokes[${strokeIndex}].dynamics.steps must be an integer between 2 and 64`);
+  }
+  const easingRaw = typeof rec.easing === 'string' ? rec.easing.toUpperCase() : 'LINEAR';
+  const allowed: DynamicsEasing[] = ['LINEAR', 'EASE_IN', 'EASE_OUT', 'EASE_IN_OUT'];
+  if (!allowed.includes(easingRaw as DynamicsEasing)) {
+    throw new Error(`strokes[${strokeIndex}].dynamics.easing must be one of ${allowed.join(', ')}`);
+  }
+  return {
+    size,
+    opacity,
+    flow,
+    steps: stepsRaw,
+    easing: easingRaw as DynamicsEasing,
+  };
 }
 
 function parsePoint(value: unknown, strokeIndex: number, pointIndex: number): PaintPoint {
@@ -107,7 +177,109 @@ function parseStroke(value: unknown, index: number): PaintStroke {
     size: optionalNumber(rec.size, `strokes[${index}].size`, 1, 5000),
     opacity: optionalNumber(rec.opacity, `strokes[${index}].opacity`, 0, 100),
     flow: optionalNumber(rec.flow, `strokes[${index}].flow`, 0, 100),
+    dynamics: parseDynamics(rec.dynamics, index),
   };
+}
+
+function ease(t: number, mode: DynamicsEasing): number {
+  if (mode === 'EASE_IN') return t * t;
+  if (mode === 'EASE_OUT') return 1 - (1 - t) * (1 - t);
+  if (mode === 'EASE_IN_OUT') return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  return t;
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function cubicPoint(
+  p0: [number, number],
+  p1: [number, number],
+  p2: [number, number],
+  p3: [number, number],
+  t: number
+): [number, number] {
+  const u = 1 - t;
+  const uu = u * u;
+  const tt = t * t;
+  const uuu = uu * u;
+  const ttt = tt * t;
+  return [
+    uuu * p0[0] + 3 * uu * t * p1[0] + 3 * u * tt * p2[0] + ttt * p3[0],
+    uuu * p0[1] + 3 * uu * t * p1[1] + 3 * u * tt * p2[1] + ttt * p3[1],
+  ];
+}
+
+function sampleStrokePath(stroke: PaintStroke, targetSamples: number): [number, number][] {
+  if (stroke.points.length === 1) return [[stroke.points[0].x, stroke.points[0].y]];
+
+  const dense: [number, number][] = [];
+  const segmentSamples = Math.max(8, Math.ceil(targetSamples / Math.max(1, stroke.points.length - 1)) * 4);
+  for (let i = 0; i < stroke.points.length - 1; i++) {
+    const a = stroke.points[i];
+    const b = stroke.points[i + 1];
+    const p0: [number, number] = [a.x, a.y];
+    const p1: [number, number] = a.right ?? p0;
+    const p3: [number, number] = [b.x, b.y];
+    const p2: [number, number] = b.left ?? p3;
+    for (let j = 0; j <= segmentSamples; j++) {
+      if (i > 0 && j === 0) continue;
+      dense.push(cubicPoint(p0, p1, p2, p3, j / segmentSamples));
+    }
+  }
+
+  const cumulative = [0];
+  for (let i = 1; i < dense.length; i++) {
+    const dx = dense[i][0] - dense[i - 1][0];
+    const dy = dense[i][1] - dense[i - 1][1];
+    cumulative.push(cumulative[i - 1] + Math.sqrt(dx * dx + dy * dy));
+  }
+  const total = cumulative[cumulative.length - 1];
+  if (total <= 1e-9) return Array.from({ length: targetSamples + 1 }, () => dense[0]);
+
+  const out: [number, number][] = [];
+  let cursor = 1;
+  for (let s = 0; s <= targetSamples; s++) {
+    const target = (total * s) / targetSamples;
+    while (cursor < cumulative.length - 1 && cumulative[cursor] < target) cursor++;
+    const lo = Math.max(0, cursor - 1);
+    const hi = cursor;
+    const span = cumulative[hi] - cumulative[lo];
+    const localT = span <= 1e-9 ? 0 : (target - cumulative[lo]) / span;
+    out.push([
+      lerp(dense[lo][0], dense[hi][0], localT),
+      lerp(dense[lo][1], dense[hi][1], localT),
+    ]);
+  }
+  return out;
+}
+
+function expandDynamicStroke(stroke: PaintStroke): PaintStroke[] {
+  if (!stroke.dynamics) return [{ ...stroke, dynamics: undefined }];
+  if (stroke.closed) throw new Error('dynamics is not supported for closed strokes');
+  if (stroke.points.length < 2) throw new Error('dynamics requires at least 2 stroke points');
+
+  const { dynamics } = stroke;
+  const sampled = sampleStrokePath(stroke, dynamics.steps);
+  const segments: PaintStroke[] = [];
+  for (let i = 0; i < dynamics.steps; i++) {
+    const midpoint = (i + 0.5) / dynamics.steps;
+    const t = ease(midpoint, dynamics.easing);
+    segments.push({
+      points: [
+        { x: sampled[i][0], y: sampled[i][1] },
+        { x: sampled[i + 1][0], y: sampled[i + 1][1] },
+      ],
+      tool: stroke.tool,
+      simulatePressure: false,
+      closed: false,
+      color: stroke.color,
+      size: dynamics.size ? lerp(dynamics.size[0], dynamics.size[1], t) : stroke.size,
+      opacity: dynamics.opacity ? lerp(dynamics.opacity[0], dynamics.opacity[1], t) : stroke.opacity,
+      flow: dynamics.flow ? lerp(dynamics.flow[0], dynamics.flow[1], t) : stroke.flow,
+    });
+  }
+  return segments;
 }
 
 function paintRuntime(): string {
@@ -158,6 +330,41 @@ function __paint_readBrush() {
     smoothing_enabled: optBool(opts, 'smoothing', false),
     smoothing: optDouble(opts, 'smooth', 10)
   };
+}
+function __paint_createBrushCache() {
+  __paint_selectBrushTool();
+  var ref = new ActionReference();
+  ref.putEnumerated(__paint_cTID('capp'), __paint_cTID('Ordn'), __paint_cTID('Trgt'));
+  var appDesc = executeActionGet(ref);
+  var opts = appDesc.getObjectValue(__paint_sTID('currentToolOptions'));
+  var brush = opts.getObjectValue(__paint_sTID('brush'));
+  function optUnit(obj, key, fallback) {
+    try { return obj.getUnitDoubleValue(__paint_sTID(key)); } catch (e) {}
+    try { return obj.getDouble(__paint_sTID(key)); } catch (e2) {}
+    try { return obj.getInteger(__paint_sTID(key)); } catch (e3) {}
+    return fallback;
+  }
+  return {
+    opts: opts,
+    brush: brush,
+    state: {
+      size: optUnit(brush, 'diameter', 1),
+      opacity: optUnit(opts, 'opacity', 100),
+      flow: optUnit(opts, 'flow', 100)
+    }
+  };
+}
+function __paint_applyBrushCache(cache) {
+  cache.brush.putDouble(__paint_sTID('diameter'), cache.state.size);
+  cache.opts.putObject(__paint_sTID('brush'), __paint_sTID('brush'), cache.brush);
+  cache.opts.putInteger(__paint_sTID('opacity'), Math.round(cache.state.opacity));
+  cache.opts.putInteger(__paint_sTID('flow'), Math.round(cache.state.flow));
+  var toolDesc = new ActionDescriptor();
+  var toolRef = new ActionReference();
+  toolRef.putClass(__paint_sTID('paintbrushTool'));
+  toolDesc.putReference(__paint_sTID('null'), toolRef);
+  toolDesc.putObject(__paint_sTID('to'), __paint_sTID('null'), cache.opts);
+  executeAction(__paint_sTID('set'), toolDesc, DialogModes.NO);
 }
 function __paint_setBrush(v) {
   __paint_selectBrushTool();
@@ -281,16 +488,41 @@ function __paint_setForeground(c) {
   color.rgb.blue = c.blue;
   app.foregroundColor = color;
 }
+function __paint_sameColor(a, b) {
+  return a && b && a.red === b.red && a.green === b.green && a.blue === b.blue;
+}
+function __paint_differs(a, b) {
+  return Math.abs(Number(a) - Number(b)) > 0.0001;
+}
 function __paint_applyStrokes() {
+  var brushCache = __paint_createBrushCache();
+  var brushState = brushCache.state;
+  var fg = app.foregroundColor.rgb;
+  var cachedColor = { red: Number(fg.red), green: Number(fg.green), blue: Number(fg.blue) };
   for (var s = 0; s < strokes.length; s++) {
     var stroke = strokes[s];
-    if (stroke.color) __paint_setForeground(stroke.color);
+    var brushChanged = false;
     if (stroke.size !== undefined || stroke.opacity !== undefined || stroke.flow !== undefined) {
-      var brushState = __paint_readBrush();
-      if (stroke.size !== undefined) brushState.size = stroke.size;
-      if (stroke.opacity !== undefined) brushState.opacity = stroke.opacity;
-      if (stroke.flow !== undefined) brushState.flow = stroke.flow;
-      __paint_setBrush(brushState);
+      if (stroke.size !== undefined && __paint_differs(brushState.size, stroke.size)) {
+        brushState.size = stroke.size;
+        brushChanged = true;
+      }
+      if (stroke.opacity !== undefined && __paint_differs(brushState.opacity, stroke.opacity)) {
+        brushState.opacity = stroke.opacity;
+        brushChanged = true;
+      }
+      if (stroke.flow !== undefined && __paint_differs(brushState.flow, stroke.flow)) {
+        brushState.flow = stroke.flow;
+        brushChanged = true;
+      }
+      if (brushChanged) __paint_applyBrushCache(brushCache);
+    }
+    var desiredColor = stroke.color ? stroke.color : cachedColor;
+    if (desiredColor && (brushChanged || !__paint_sameColor(cachedColor, desiredColor))) {
+      __paint_setForeground(desiredColor);
+    }
+    if (stroke.color) {
+      cachedColor = { red: stroke.color.red, green: stroke.color.green, blue: stroke.color.blue };
     }
     var pts = [];
     for (var i = 0; i < stroke.points.length; i++) {
@@ -326,6 +558,32 @@ function __paint_applyStrokes() {
 doc.suspendHistory('MCP Digital Painting', '__paint_applyStrokes()');
 return { ok: true, stroke_count: strokes.length, layer_name: doc.activeLayer.name };
 `;
+}
+
+function paintStrokeCost(stroke: PaintStroke): number {
+  let cost = 1;
+  if (stroke.color) cost += 0.5;
+  if (stroke.size !== undefined || stroke.opacity !== undefined || stroke.flow !== undefined) cost += 4;
+  if (stroke.points.length > 8) cost += Math.min(4, stroke.points.length / 16);
+  return cost;
+}
+
+function chunkPaintStrokes(strokes: PaintStroke[], maxCost = 24): PaintStroke[][] {
+  const batches: PaintStroke[][] = [];
+  let current: PaintStroke[] = [];
+  let cost = 0;
+  for (const stroke of strokes) {
+    const nextCost = paintStrokeCost(stroke);
+    if (current.length > 0 && cost + nextCost > maxCost) {
+      batches.push(current);
+      current = [];
+      cost = 0;
+    }
+    current.push(stroke);
+    cost += nextCost;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
 }
 
 export function createPaintingTools(connection: PhotoshopConnection): ToolDefinition[] {
@@ -469,7 +727,7 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
       tool: {
         name: 'photoshop_paint_strokes',
         description:
-          'Paint one or many raster strokes on the active layer using Photoshop path stroking. Supports Brush, Pencil, Eraser and Smudge, optional Bezier handles, closed paths, simulated pressure, one-point dabs, and per-stroke color/size/opacity/flow overrides. Multiple strokes are grouped into one Photoshop history step.',
+          'Paint one or many raster strokes on the active layer using Photoshop path stroking. Supports Brush, Pencil, Eraser and Smudge, optional Bezier handles, closed paths, simulated pressure, one-point dabs, per-stroke color/size/opacity/flow overrides, and interpolated dynamics. AUTO batching proactively splits expensive mixed batches into short Photoshop scripts to avoid ExtendScript timeouts; small batches remain one history step.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -495,6 +753,43 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
                   size: { type: 'number', minimum: 1, maximum: 5000 },
                   opacity: { type: 'number', minimum: 0, maximum: 100 },
                   flow: { type: 'number', minimum: 0, maximum: 100 },
+                  dynamics: {
+                    type: 'object',
+                    description:
+                      'Optional interpolated profile along an open stroke. Ranges are [start, end]. The path is sampled into short segments and rendered with changing brush settings.',
+                    properties: {
+                      size: {
+                        type: 'array',
+                        minItems: 2,
+                        maxItems: 2,
+                        items: { type: 'number', minimum: 1, maximum: 5000 },
+                      },
+                      opacity: {
+                        type: 'array',
+                        minItems: 2,
+                        maxItems: 2,
+                        items: { type: 'number', minimum: 0, maximum: 100 },
+                      },
+                      flow: {
+                        type: 'array',
+                        minItems: 2,
+                        maxItems: 2,
+                        items: { type: 'number', minimum: 0, maximum: 100 },
+                      },
+                      steps: {
+                        type: 'number',
+                        minimum: 2,
+                        maximum: 64,
+                        description:
+                          'Optional rendered segment count. When omitted, an automatic 12–64 step count is chosen from the size/opacity/flow change magnitude.',
+                      },
+                      easing: {
+                        type: 'string',
+                        enum: ['LINEAR', 'EASE_IN', 'EASE_OUT', 'EASE_IN_OUT'],
+                        default: 'LINEAR',
+                      },
+                    },
+                  },
                   points: {
                     type: 'array',
                     minItems: 1,
@@ -524,6 +819,13 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
                 },
                 required: ['points'],
               },
+            },
+            batch_mode: {
+              type: 'string',
+              enum: ['AUTO', 'SINGLE_HISTORY'],
+              default: 'AUTO',
+              description:
+                'AUTO proactively chunks expensive batches for reliability. SINGLE_HISTORY preserves the legacy one-history-step behavior but can time out on large heterogeneous batches.',
             },
           },
           required: ['strokes'],
@@ -649,13 +951,43 @@ async function paintStrokes(
       throw new Error('strokes must be a non-empty array');
     if (args.strokes.length > 250)
       throw new Error('strokes may contain at most 250 strokes per call');
-    const strokes = args.strokes.map((stroke, index) => parseStroke(stroke, index));
-    const raw = await runSnippet(connection, paintStrokesScript(strokes));
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) throw new Error(`Unparseable paint result: ${String(raw)}`);
-    return atomicSuccess(`Painted ${strokes.length} stroke${strokes.length === 1 ? '' : 's'}`, {
-      stroke_count: strokes.length,
-      layer_name: parsed.layer_name,
+    const inputStrokes = args.strokes.map((stroke, index) => parseStroke(stroke, index));
+    const renderStrokes = inputStrokes.flatMap((stroke) => expandDynamicStroke(stroke));
+    if (renderStrokes.length > 1000) {
+      throw new Error(`Dynamics expansion produced ${renderStrokes.length} render strokes; maximum is 1000 per call`);
+    }
+
+    const rawMode = typeof args.batch_mode === 'string' ? args.batch_mode.toUpperCase() : 'AUTO';
+    if (rawMode !== 'AUTO' && rawMode !== 'SINGLE_HISTORY') {
+      throw new Error('batch_mode must be AUTO or SINGLE_HISTORY');
+    }
+    const batches = rawMode === 'SINGLE_HISTORY' ? [renderStrokes] : chunkPaintStrokes(renderStrokes);
+    let layerName: unknown;
+    let completed = 0;
+    for (let i = 0; i < batches.length; i++) {
+      try {
+        const raw = await runSnippet(connection, paintStrokesScript(batches[i]));
+        const parsed = parseSnippetResult(raw);
+        if (!parsed) throw new Error(`Unparseable paint result: ${String(raw)}`);
+        layerName = parsed.layer_name;
+        completed += batches[i].length;
+      } catch (error) {
+        throw new Error(
+          `Painting batch ${i + 1}/${batches.length} failed after ${completed}/${renderStrokes.length} render strokes completed. ` +
+            `Earlier AUTO batches remain applied as separate history steps. ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    return atomicSuccess(`Painted ${inputStrokes.length} stroke${inputStrokes.length === 1 ? '' : 's'}`, {
+      stroke_count: inputStrokes.length,
+      render_stroke_count: renderStrokes.length,
+      dynamic_stroke_count: inputStrokes.filter((stroke) => stroke.dynamics !== undefined).length,
+      batch_mode: rawMode,
+      batch_count: batches.length,
+      history_steps: batches.length,
+      auto_chunked: rawMode === 'AUTO' && batches.length > 1,
+      layer_name: layerName,
     });
   } catch (error) {
     return atomicFailureFromError(error);

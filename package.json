@@ -41,6 +41,8 @@
     "test:mcp-all": "tsx scripts/test-all-mcp-tools.ts",
     "test:measurement-tools": "node scripts/test-measurement-tools.mjs",
     "test:landmark-ergonomics": "node scripts/test-landmark-ergonomics.mjs",
+    "test:painting-batching": "node scripts/test-painting-batching.mjs",
+    "test:painting-batching-live": "node scripts/test-painting-batching-live.mjs",
     "test:intent-expansion": "tsx scripts/test-intent-expansion-local.ts",
     "prepare": "npm run build",
     "sync:server-version": "tsx scripts/sync-server-version.ts",

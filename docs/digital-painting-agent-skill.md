@@ -290,4 +290,8 @@ The returned guide should be treated as the execution contract for that painting
 
 ## Current implementation note
 
-Large batches with frequent per-stroke brush/color changes can exceed the current ExtendScript timeout. Until batching is optimized, heterogeneous passes should be chunked into small groups; live tests found roughly 6–8 mixed strokes reliable. Even when a batch is technically within timeout, prefer short semantic passes that can finish, preview, and be reported to the user before the next pass begins.
+`photoshop_paint_strokes` now defaults to cost-aware `AUTO` batching. Large heterogeneous passes are proactively split into multiple short Photoshop scripts instead of relying on the agent to manually keep batches near the old 6–8-stroke limit. The tool reports `batch_count`, `history_steps`, and `auto_chunked`; when AUTO creates multiple batches, each batch is a separate Photoshop history step. Use `SINGLE_HISTORY` only when preserving one undo step is worth the higher timeout risk.
+
+For directional tapering, a stroke may use `dynamics` ranges for size, opacity, and flow. These profiles are rendered as multiple short path strokes, so they are an approximation rather than true continuous pen-pressure data. Strong tapers with hard brushes may retain slight segment texture; prefer the automatic segment count or increase `steps` when visual smoothness matters.
+
+AUTO batching improves transport reliability but does **not** change the semantic-pacing rule: still paint one meaningful pass, wait for completion, preview it, report what changed, and only then start the next pass.

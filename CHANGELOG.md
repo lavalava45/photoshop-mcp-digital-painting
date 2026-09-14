@@ -16,8 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `photoshop_set_foreground_color` for painting color control.
 - Add `photoshop_paint_strokes` for batched Brush/Pencil/Eraser/Smudge strokes, Bezier handles, closed paths, and Photoshop `simulatePressure`.
 - Add per-stroke `color`, `size`, `opacity`, and `flow` overrides to `photoshop_paint_strokes`.
+- Add interpolated `dynamics` profiles to `photoshop_paint_strokes` for size/opacity/flow changes along open strokes, with linear/ease-in/ease-out/ease-in-out interpolation and automatic segment-count selection.
+- Add `AUTO`/`SINGLE_HISTORY` paint batching modes. `AUTO` proactively chunks expensive mixed batches before they hit the ExtendScript timeout; `SINGLE_HISTORY` keeps the legacy one-history-step behavior when that tradeoff is explicitly preferred.
 - Allow one-point strokes as brush dabs/stamps; internally they are converted to a zero-length path stroke.
 - Add `scripts/test-painting-tools.mjs` for live Photoshop validation.
+- Add offline and live paint batching/dynamics regressions in `scripts/test-painting-batching.mjs` and `scripts/test-painting-batching-live.mjs`.
 - Add `docs/digital-painting.md` for painting architecture and API documentation.
 - Add `docs/digital-painting-agent-skill.md` and MCP guide prompt `ps.digital_painting_control` for iterative visual control, semantic passes, occlusion-aware drawing, cleanup, and state-based completion.
 - Add `photoshop_measure_points`, `photoshop_add_guides`, `photoshop_list_guides`, and `photoshop_clear_guides` for explicit reference/proportion measurement and Photoshop guide control.
@@ -28,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Brush-setting updates now preserve the full active Photoshop Brush Tool descriptor and modify only requested fields, avoiding accidental loss of complex preset dynamics/settings.
+- Painting batches cache the active Brush Tool descriptors and avoid redundant descriptor reads/writes for unchanged per-stroke overrides.
 - Painting completion guidance now treats stroke counts as soft planning budgets by default; visual Definition of Done is the normal stopping criterion unless the user explicitly requests a hard cap.
 - Painting-skill evaluation now has a fresh-composition rule: prior demo coordinates, stroke lists, object proportions and precomputed object-specific occlusion geometry must not be reused unless the user explicitly asks for a variation/refinement.
 - Add release-oriented installation documentation for clean GitHub clone/ZIP installs, Chat On Steroids Core/direct-stdio and generic MCP host configuration, verification, updating, and a release checklist.
@@ -46,12 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verified per-stroke color/size/opacity/flow overrides and one-point dabs.
 - Validated the painting primitives with iterative artistic tests in Photoshop.
 - Mixer Brush path stroking is not yet considered supported: a direct Action Manager `stroke` attempt using `wetBrushTool` returned an invalid-parameters Photoshop error.
-- Large heterogeneous batches with many per-stroke brush changes can exceed the 30-second script timeout; chunking into smaller batches is currently the safe workaround.
+- Verified a 24-stroke heterogeneous pass through `AUTO` batching (6 internal batches) and a 32-segment Bezier taper through dynamics (8 internal batches) on Photoshop 2026 without per-script timeout.
+- Verified RGB per-stroke overrides remain intact while descriptor caching is active.
 - `npm run build:server` and `npm run lint` pass for the current painting branch.
 
 ### Pending
 
-- Optimize or automatically chunk heterogeneous per-stroke batches to avoid script timeouts.
 - Investigate richer pressure representation beyond Photoshop's binary `simulatePressure` flag.
 
 ## [1.7.6] - 2026-09-09

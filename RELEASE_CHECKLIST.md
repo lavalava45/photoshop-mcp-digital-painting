@@ -32,7 +32,7 @@ Use this checklist before publishing a tagged GitHub release.
 - [ ] Chat On Steroids instructions use Core + direct stdio to the fork's `dist/index.js` and do not depend on the shared Plugins connector.
 - [ ] `PHOTOSHOP_PATH` guidance covers current Photoshop versions.
 - [ ] Upstream-vs-fork distinction is explicit so users do not accidentally install the upstream npm package.
-- [ ] Known limitations are listed (for example Mixer Brush status and heterogeneous-batch timeout behavior).
+- [ ] Known limitations are listed (for example Mixer Brush status, `SINGLE_HISTORY` timeout tradeoffs, and segmented-dynamics rendering).
 
 ## Version / release notes
 
