@@ -114,7 +114,7 @@ User intent glossary
   → \`photoshop_recipe_csv_to_cards\`; prompt \`ps.csv_to_cards\`
 - paint.draw — "draw", "paint", "sketch", "digital painting", "illustrate with brushes"
   → use the painting tools together with guide prompt \`ps.digital_painting_control\` for
-  semantic passes, checkpoints, occlusion-aware strokes, cleanup, and state-based completion.
+  shape → value → form → edge → material → detail hierarchy, checkpoints, controlled brush scale, cleanup, and state-based completion.
 - paint.sample_color — "pick this color", "sample from reference", "eyedropper", "what color is here"
   → \`photoshop_sample_color\`; use a small radius when a representative local average is preferable to one pixel.
 
@@ -153,8 +153,7 @@ Guide prompts (MCP prompts/get)
   \`ps.color_correct\` — tone / contrast fix chain; \`ps.dodge_burn_guide\` — 50% gray
   overlay setup; \`ps.composite_blend\` — place asset + mask + blend mode;
   \`ps.generative_fill\`, \`ps.generative_remove\`, \`ps.generative_expand\` — Firefly workflows;
-  \`ps.digital_painting_control\` — iterative brush-painting workflow with visual checkpoints,
-  occlusion control, cleanup and Definition of Done.
+  \`ps.digital_painting_control\` — subject-agnostic brush-painting workflow built around shape → value → form → edge → material → detail, visual checkpoints, cleanup and Definition of Done.
 `.trim();
 
 export function buildPhotoshopInstructions(): string {

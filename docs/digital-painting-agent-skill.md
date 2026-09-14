@@ -93,18 +93,73 @@ to:
 perceive → plan → paint a semantic pass → inspect → correct → continue
 ```
 
+## Universal painting hierarchy
+
+The core discipline is subject-agnostic:
+
+```text
+SHAPE → VALUE → FORM → EDGE → MATERIAL → DETAIL
+```
+
+This hierarchy applies whether the subject is an apple, building, machine, landscape, animal, figure, prop, or invented form. It is not a portrait recipe.
+
+- **Shape** — composition, silhouette, negative space and large masses.
+- **Value** — the major light/shadow families and value-group design.
+- **Form** — plane turns and transitions that make flat masses read as volume.
+- **Edge** — deliberate hard/firm/soft/lost edge hierarchy.
+- **Material** — surface response to light: roughness, gloss, reflection, translucency, texture and highlight behavior.
+- **Detail** — selected small information and accents after the larger painting problems are solved.
+
+A stage is not considered solved merely because pixels exist. The image should visually read at that level before advancing. If a later checkpoint exposes an earlier-stage failure, return to the earlier stage and correct it.
+
+### Brush-scale discipline
+
+Brush size is relational, not a fixed habit. Use a brush appropriate to the size of the form being described:
+
+- broad brushes for initial masses and coverage;
+- medium brushes for planes, value transitions and form modeling;
+- smaller brushes for selected edges, texture and focal detail.
+
+Large opaque primitive-like strokes are normal during block-in. They should not remain the dominant descriptive language throughout the whole painting unless the requested style explicitly calls for flat/vector/cel-like construction. After the large masses are established, reduce brush scale and increase control.
+
+### Painterly transitions and blending
+
+Blending does not mean indiscriminate blur. Prefer:
+
+- overlapping lower-opacity/lower-flow strokes;
+- intermediate values and temperatures;
+- strokes following the turning form;
+- scumbling, hatching or textured brushes where appropriate;
+- selective Smudge only when it improves a specific transition.
+
+Preserve useful edge structure. A convincing transition may contain both a soft gradient and a crisp accent; globally smoothing everything usually weakens form and material.
+
+### Anti-vector check
+
+Unless a flat graphic style is requested, watch for these failure modes:
+
+- final forms still built mostly from oversized opaque blobs;
+- every contour equally hard and equally dark;
+- identical-width curves used as a substitute for observed edges;
+- color regions separated like cut paper with little value transition;
+- no directional brushwork or surface texture;
+- highlights/shadows added as symbols rather than consequences of form and material.
+
+Correct them by returning to value/form/edge/material stages rather than merely adding more detail.
+
 ## Semantic passes
 
-Prefer passes with clear visual purpose:
+Prefer passes with clear visual purpose, following the hierarchy above:
 
-1. **Block-in** — silhouette and large masses.
-2. **Construction** — major internal forms and depth relationships.
-3. **Values / color masses** — broad light, shadow and palette organization.
-4. **Line / detail** — contours and focal features.
-5. **Accents** — highlights, texture, expressive marks.
-6. **Cleanup** — erasing/repainting accidental crossings, tangencies and inconsistent edges.
+1. **Shape / block-in** — silhouette, negative space and large masses.
+2. **Value** — broad light/shadow families and value-group organization.
+3. **Form** — plane changes, halftones, shadow structure and volume cues.
+4. **Edge** — hard/firm/soft/lost edge decisions.
+5. **Material / color** — surface response, palette refinement, temperature, reflection and texture.
+6. **Detail / accents** — selected focal marks and small information.
+7. **Cleanup** — repainting/erasing accidental crossings, primitive artifacts, muddy transitions and inconsistent edges.
 
-Not every style needs every pass, but complex work should not be executed as one blind batch.
+Not every style exposes each pass separately, but the visual logic still applies. Complex work should not be executed as one blind batch, and detail should not be used to compensate for unsolved shape/value/form problems.
 
 ## Reference color sampling
 
@@ -149,10 +204,11 @@ If a long path crosses complex geometry, split it into shorter intentional strok
 Use a preview after every major semantic pass. A useful cycle is:
 
 ```text
-block-in → preview
-construction → preview
-values/color → preview
-line/detail → preview
+shape/block-in → preview
+value → preview
+form → preview
+edge + material/color → preview
+detail/accents → preview
 cleanup → final preview
 ```
 

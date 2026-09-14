@@ -63,8 +63,8 @@ ps.digital_painting_control
 That guide is intended for iterative drawing rather than one-shot stroke dumping:
 
 ```text
-plan → block-in → preview → construction → preview
-→ values/color → preview → detail → preview → cleanup → final preview
+plan → shape/block-in → preview → value → preview → form → preview
+→ edge/material → preview → detail → preview → cleanup → final preview
 ```
 
 ## Install this fork

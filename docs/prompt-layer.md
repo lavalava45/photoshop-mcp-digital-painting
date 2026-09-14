@@ -51,7 +51,7 @@ Twenty-four templates in [`src/prompts/templates/`](../src/prompts/templates/), 
 | `ps.generative_fill` | Firefly generative fill workflow |
 | `ps.generative_remove` | AI Remove workflow |
 | `ps.generative_expand` | Generative Expand workflow |
-| `ps.digital_painting_control` | Iterative digital-painting discipline: semantic passes, checkpoints, occlusion control, cleanup, and state-based completion |
+| `ps.digital_painting_control` | Subject-agnostic digital-painting discipline: shape → value → form → edge → material → detail, with checkpoints, cleanup, and state-based completion |
 
 Each template uses arg coercion helpers from [`src/prompts/_shared.ts`](../src/prompts/_shared.ts)
 and returns a `GetPromptResult` with `description` + structured Goal/Plan/End state text
