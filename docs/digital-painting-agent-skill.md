@@ -49,6 +49,28 @@ Wrong: image_gen
 
 This invariant is stronger than a preference. It is a tool-routing guard intended to prevent a short continuation turn from escaping an already-established Photoshop workflow.
 
+## HARD DOCUMENT-TARGETING INVARIANT
+
+When a workflow is attached to an existing Photoshop document, capture its numeric `document.id` from `photoshop_get_state` or `photoshop_list_documents` and treat that id as the document latch for the workflow.
+
+Rules:
+
+1. If more than one document is open, or another user/agent/UI action could change the active tab, pass the latched `document_id` on every document-bound read and mutation that accepts it.
+2. Do not trust the visually active Photoshop tab as targeting state. Another MCP client, agent, action, Smart Object workflow, or user click may change it between calls.
+3. A supplied `document_id` must be a positive integer. Invalid values fail closed; never remove the id and retry against the active document as a fallback.
+4. Unknown/closed ids must be recovered by calling `photoshop_list_documents` and deliberately choosing the current target again.
+5. Successful pinned calls report `document_target: { id, pinned: true }`. Check this metadata when deterministic cross-document execution matters.
+6. Global/pure operations such as brush configuration, opening/creating a document, or pure landmark transforms do not need a document latch.
+
+The intended invariant is:
+
+```text
+capture document.id once
+→ pass document_id on document-bound operations
+→ verify returned document_target when needed
+→ never silently fall back to whichever tab happens to be active
+```
+
 ## Why this skill exists
 
 A technically valid stroke can still be visually wrong. Common failures include:

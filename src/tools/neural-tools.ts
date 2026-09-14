@@ -101,6 +101,7 @@ async function runNeuralFilter(
   const params = {
     smoothness: clampPct(args.smoothness, 50),
     blur: clampPct(args.blur, 50),
+    ...(typeof args.document_id === 'number' ? { document_id: args.document_id } : {}),
     ...(typeof args.reference_layer_id === 'number'
       ? { reference_layer_id: args.reference_layer_id }
       : {}),

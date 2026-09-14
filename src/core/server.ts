@@ -88,7 +88,10 @@ export class PhotoshopMCPServer {
     const tool = withOptionalDocumentId(definition.tool);
     this.toolRegistry.register(tool.name, {
       tool,
-      handler: wrapToolHandler(tool.name, wrapDocumentIdHandler(definition.handler)),
+      handler: wrapToolHandler(
+        tool.name,
+        wrapDocumentIdHandler(tool.name, definition.handler, this.session.getConnection())
+      ),
     });
   }
 

@@ -28,6 +28,7 @@ The upstream project already provides a broad Photoshop automation MCP. This edi
 - reusable landmark-frame transforms and normalized landmark-set comparison;
 - a materialized preview pipeline for direct stdio/COS workflows without a second Photoshop export;
 - more reliable nested-layer targeting and ordering with recursive lookup and stable layer IDs;
+- strict optional `document_id` pinning for document-bound tools, with fail-closed validation and returned target metadata;
 - an agent visual-control workflow with semantic passes, previews, measurement checkpoints, occlusion reasoning, cleanup, sticky Photoshop routing, and a state-based Definition of Done.
 
 The current build exposes **130 tools** (**114 atomic/non-recipe + 16 recipes**) and **24 prompts**.
@@ -131,6 +132,8 @@ node scripts/test-measurement-tools.mjs
 node scripts/test-landmark-ergonomics.mjs
 npm run test:painting-batching
 npm run test:painting-batching-live
+npm run test:document-targeting
+npm run test:document-targeting-live
 ```
 
 The current verified tool-count result is:

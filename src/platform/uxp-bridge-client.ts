@@ -29,6 +29,7 @@ export interface NeuralFilterParams {
   smoothness?: number;
   blur?: number;
   reference_layer_id?: number;
+  document_id?: number;
 }
 
 export async function invokeNeuralFilter(

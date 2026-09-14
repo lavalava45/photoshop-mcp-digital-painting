@@ -79,7 +79,9 @@ photoshop_set_active_document({ document_id: 42 })
 photoshop_set_active_document({ index: 0 })
 ```
 
-Mutating tools (and most document-scoped reads) also accept optional `document_id`. Pass the id from `photoshop_get_state` / `photoshop_list_documents` so a Photoshop UI tab switch cannot retarget the edit. Omitted = current active document (previous behavior). Unknown ids fail with `document_not_found`.
+Document-bound mutating tools (and most document-scoped reads) accept optional `document_id`. Pass the positive integer id from `photoshop_get_state` / `photoshop_list_documents` so a Photoshop UI tab switch cannot retarget the operation. When supplied, ExtendScript tools resolve and activate that exact id inside the same script invocation immediately before the operation. The UXP Neural Filter lane is pre-activated by the server and also selects the exact document id inside the same `batchPlay` request before the filter descriptor. Unknown ids fail closed with `document_not_found`; malformed/non-positive ids fail with `invalid_arguments`. Successful pinned calls add `document_target: { id, pinned: true }` to their result metadata. Omitted = current active document (legacy behavior).
+
+Global/pure tools that do not operate on an existing document (for example brush-setting helpers, `photoshop_create_document`, `photoshop_open_image`, and pure landmark transforms/comparisons) intentionally do not expose the injected `document_id` parameter.
 
 #### `photoshop_save_document`
 Save the active document.

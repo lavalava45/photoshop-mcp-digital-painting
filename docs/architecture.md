@@ -60,6 +60,7 @@ flowchart TB
 - **24 prompts** via `PromptRegistry` (`prompts/list`, `prompts/get`).
 - **Server instructions** on `initialize` — workflow contract for host LLMs (state-before-action, prefer recipes, error recovery). See [`src/prompts/instructions.ts`](../src/prompts/instructions.ts).
 - **Structured error wrapping** — every tool handler passes through `wrapToolHandler` so failures return JSON with `code` and `suggested_next_tool` for agentic repair loops.
+- **Document targeting** — document-bound tool schemas receive optional `document_id` centrally in `src/core/document-target.ts`. The id is kept in async-local request context; ExtendScript execution resolves the exact open document inside the same JSX invocation immediately before the tool script. Non-ExtendScript document mutators can opt into server-side pre-activation; the UXP Neural Filter lane additionally selects the same id inside its `batchPlay` request. Successful pinned results expose `document_target` metadata.
 
 Entry point: [`src/index.ts`](../src/index.ts) → stdio transport.
 

@@ -19,8 +19,11 @@ State before action
   the source of truth for document dimensions, activeLayer, selection bounds and color
   mode.
 - Capture \`document.id\` from \`photoshop_get_state\` (or \`photoshop_list_documents\`)
-  and pass it as optional \`document_id\` on mutating tools. Photoshop's active tab
-  can change outside this integration; \`document_id\` pins the edit to that file.
+  and pass it as optional \`document_id\` on document-bound mutating tools and reads.
+  Photoshop's active tab can change outside this integration; a supplied positive-integer
+  \`document_id\` pins the operation to that file and successful calls report
+  \`document_target: { id, pinned: true }\`. Invalid ids fail closed: do not remove the id
+  and retry against whichever tab happens to be active.
 - For visual confirmation after meaningful edits, call
   \`photoshop_get_preview\` (cheap, side-effect free JPEG snapshot). Use it
   sparingly — once per major step, not per atomic tool.

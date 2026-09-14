@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `photoshop_transform_landmarks` and `photoshop_compare_landmarks` for reusable semantic-frame landmark transfer and normalized reference-vs-candidate error reporting without automatic landmark detection.
 - Add `scripts/test-measurement-tools.mjs` for live measurement/guide smoke testing.
 - Add `scripts/test-landmark-ergonomics.mjs` for Photoshop-independent landmark transform/compare regression coverage.
+- Add offline and two-document live regressions for document targeting in `scripts/test-document-targeting.mjs` and `scripts/test-document-targeting-live.mjs`.
 
 ### Changed
 
@@ -38,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standardize the Chat On Steroids Photoshop path on Core + direct stdio; the shared Plugins connector is no longer used for Photoshop execution, health checks, or fallback diagnostics.
 - Painting guidance now supports explicit measurement checkpoints for portraits, architecture, perspective, and other proportion-sensitive work; supplied landmark coordinates remain visually chosen rather than automatically detected.
 - Photoshop/COS execution is now sticky in the digital-painting control contract: short continuation turns cannot silently reroute an established Photoshop workflow to external image generation.
+- Harden optional `document_id` targeting across document-bound tools: ids must be positive integers, unknown ids fail closed, successful pinned calls expose `document_target`, and the UXP neural-filter lane both pre-activates the requested document and re-selects that id inside the same `batchPlay` request. ExtendScript tools retain the stronger same-script document guard immediately before the operation.
 
 ### Validation
 
@@ -52,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mixer Brush path stroking is not yet considered supported: a direct Action Manager `stroke` attempt using `wetBrushTool` returned an invalid-parameters Photoshop error.
 - Verified a 24-stroke heterogeneous pass through `AUTO` batching (6 internal batches) and a 32-segment Bezier taper through dynamics (8 internal batches) on Photoshop 2026 without per-script timeout.
 - Verified RGB per-stroke overrides remain intact while descriptor caching is active.
+- Verified document targeting with two simultaneously open temporary documents: while document B was active, pinned layer creation and guide mutation affected only document A, and pinned close closed A while leaving B open (`DOCUMENT_TARGETING_LIVE_TEST_OK`).
 - `npm run build:server` and `npm run lint` pass for the current painting branch.
 
 ### Pending

@@ -82,6 +82,13 @@ async function handleCommand(cmd) {
   try {
     if (cmdAction === 'neural_filter') {
       const descriptors = neuralDescriptors(params.filter, params);
+      if (Number.isInteger(params.document_id) && params.document_id > 0) {
+        descriptors.unshift({
+          _obj: 'select',
+          _target: [{ _ref: 'document', _id: params.document_id }],
+          _options: { dialogOptions: 'dontDisplay' },
+        });
+      }
       const result = await action.batchPlay(descriptors, {
         synchronousExecution: true,
         modalBehavior: 'execute',

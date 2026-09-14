@@ -43,6 +43,8 @@
     "test:landmark-ergonomics": "node scripts/test-landmark-ergonomics.mjs",
     "test:painting-batching": "node scripts/test-painting-batching.mjs",
     "test:painting-batching-live": "node scripts/test-painting-batching-live.mjs",
+    "test:document-targeting": "node scripts/test-document-targeting.mjs",
+    "test:document-targeting-live": "node scripts/test-document-targeting-live.mjs",
     "test:intent-expansion": "tsx scripts/test-intent-expansion-local.ts",
     "prepare": "npm run build",
     "sync:server-version": "tsx scripts/sync-server-version.ts",
