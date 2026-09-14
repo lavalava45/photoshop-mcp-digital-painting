@@ -1,20 +1,31 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { PhotoshopConnection } from '../platform/connection.js';
-import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import {
+  atomicFailureFromError,
+  atomicSuccess,
+  parseSnippetResult,
+  runSnippet,
+} from './atomic-shared.js';
 
 export function createLayerOrderingTools(connection: PhotoshopConnection): ToolDefinition[] {
   return [
     {
       tool: {
         name: 'photoshop_move_layer_to_position',
-        description: 'Move the active layer relative to another layer',
+        description:
+          'Move the active layer ABOVE/BELOW another layer, or to TOP/BOTTOM of its current parent stack.\n\n' +
+          'For ABOVE/BELOW, targetLayerId from photoshop_get_layers is preferred because names can be duplicated. targetLayerName remains supported for compatibility and searches recursively through groups. TOP/BOTTOM do not require a target.',
         inputSchema: {
           type: 'object',
           properties: {
             targetLayerName: {
               type: 'string',
-              description: 'Name of the layer to move relative to',
+              description: 'Exact target layer name for ABOVE/BELOW; recursive first match',
+            },
+            targetLayerId: {
+              type: 'number',
+              description: 'Stable target layer id from photoshop_get_layers (preferred for ABOVE/BELOW)',
             },
             position: {
               type: 'string',
@@ -22,7 +33,7 @@ export function createLayerOrderingTools(connection: PhotoshopConnection): ToolD
               enum: ['ABOVE', 'BELOW', 'TOP', 'BOTTOM'],
             },
           },
-          required: ['targetLayerName', 'position'],
+          required: ['position'],
         },
       },
       handler: async (args) => moveLayerToPosition(connection, args),
@@ -30,7 +41,7 @@ export function createLayerOrderingTools(connection: PhotoshopConnection): ToolD
     {
       tool: {
         name: 'photoshop_move_layer_to_top',
-        description: 'Move the active layer to the top of the layer stack',
+        description: 'Move the active layer to the top of its current parent stack (document or group)',
         inputSchema: {
           type: 'object',
           properties: {},
@@ -41,7 +52,7 @@ export function createLayerOrderingTools(connection: PhotoshopConnection): ToolD
     {
       tool: {
         name: 'photoshop_move_layer_to_bottom',
-        description: 'Move the active layer to the bottom of the layer stack',
+        description: 'Move the active layer to the bottom of its current parent stack (document or group)',
         inputSchema: {
           type: 'object',
           properties: {},
@@ -52,7 +63,7 @@ export function createLayerOrderingTools(connection: PhotoshopConnection): ToolD
     {
       tool: {
         name: 'photoshop_move_layer_up',
-        description: 'Move the active layer up one position in the layer stack',
+        description: 'Move the active layer up one position within its current parent stack',
         inputSchema: {
           type: 'object',
           properties: {},
@@ -63,7 +74,7 @@ export function createLayerOrderingTools(connection: PhotoshopConnection): ToolD
     {
       tool: {
         name: 'photoshop_move_layer_down',
-        description: 'Move the active layer down one position in the layer stack',
+        description: 'Move the active layer down one position within its current parent stack',
         inputSchema: {
           type: 'object',
           properties: {},
@@ -78,149 +89,77 @@ async function moveLayerToPosition(
   connection: PhotoshopConnection,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
-  const targetLayerName = args.targetLayerName as string;
+  const targetLayerName =
+    typeof args.targetLayerName === 'string' && args.targetLayerName.trim()
+      ? args.targetLayerName.trim()
+      : undefined;
+  const targetLayerId =
+    typeof args.targetLayerId === 'number' && Number.isFinite(args.targetLayerId)
+      ? Math.trunc(args.targetLayerId)
+      : undefined;
   const position = args.position as string;
 
+  if ((position === 'ABOVE' || position === 'BELOW') && targetLayerId === undefined && !targetLayerName) {
+    return atomicFailureFromError(new Error('Invalid arguments: ABOVE/BELOW requires targetLayerId or targetLayerName'), {
+      code: 'invalid_arguments',
+    });
+  }
+
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.moveLayerToPosition(targetLayerName, position);
-    const result = await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Layer moved ${position} "${targetLayerName}"\nResult: ${JSON.stringify(result)}`,
-        },
-      ],
-    };
+    const raw = await runSnippet(
+      connection,
+      ExtendScriptSnippets.moveLayerToPosition(targetLayerName, position, targetLayerId)
+    );
+    const parsed = parseSnippetResult(raw);
+    if (!parsed) {
+      return atomicFailureFromError(new Error(`Unparseable move-layer result: ${String(raw)}`));
+    }
+    return atomicSuccess(`Layer moved ${position}`, parsed, 'photoshop_get_layers');
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error moving layer: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
 async function moveLayerToTop(connection: PhotoshopConnection): Promise<ToolResult> {
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.moveLayerToTop();
-    const result = await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Layer moved to top\nResult: ${JSON.stringify(result)}`,
-        },
-      ],
-    };
+    const raw = await runSnippet(connection, ExtendScriptSnippets.moveLayerToTop());
+    const parsed = parseSnippetResult(raw);
+    if (!parsed) return atomicFailureFromError(new Error(`Unparseable move-to-top result: ${String(raw)}`));
+    return atomicSuccess('Layer moved to top', parsed, 'photoshop_get_layers');
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error moving layer to top: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
 async function moveLayerToBottom(connection: PhotoshopConnection): Promise<ToolResult> {
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.moveLayerToBottom();
-    const result = await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Layer moved to bottom\nResult: ${JSON.stringify(result)}`,
-        },
-      ],
-    };
+    const raw = await runSnippet(connection, ExtendScriptSnippets.moveLayerToBottom());
+    const parsed = parseSnippetResult(raw);
+    if (!parsed) return atomicFailureFromError(new Error(`Unparseable move-to-bottom result: ${String(raw)}`));
+    return atomicSuccess('Layer moved to bottom', parsed, 'photoshop_get_layers');
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error moving layer to bottom: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
 async function moveLayerUp(connection: PhotoshopConnection): Promise<ToolResult> {
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.moveLayerUp();
-    const result = await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Layer moved up\nResult: ${JSON.stringify(result)}`,
-        },
-      ],
-    };
+    const raw = await runSnippet(connection, ExtendScriptSnippets.moveLayerUp());
+    const parsed = parseSnippetResult(raw);
+    if (!parsed) return atomicFailureFromError(new Error(`Unparseable move-up result: ${String(raw)}`));
+    return atomicSuccess('Layer moved up', parsed, 'photoshop_get_layers');
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error moving layer up: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
 async function moveLayerDown(connection: PhotoshopConnection): Promise<ToolResult> {
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.moveLayerDown();
-    const result = await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Layer moved down\nResult: ${JSON.stringify(result)}`,
-        },
-      ],
-    };
+    const raw = await runSnippet(connection, ExtendScriptSnippets.moveLayerDown());
+    const parsed = parseSnippetResult(raw);
+    if (!parsed) return atomicFailureFromError(new Error(`Unparseable move-down result: ${String(raw)}`));
+    return atomicSuccess('Layer moved down', parsed, 'photoshop_get_layers');
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error moving layer down: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }

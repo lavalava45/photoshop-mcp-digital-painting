@@ -178,6 +178,48 @@ function getContextInfo() {
 }
 `;
 
+const layerLookupHelpers = `
+function __mcp_layerId(layer) {
+  try { return layer.id; } catch (e) { return null; }
+}
+
+function __mcp_layerPath(layer) {
+  var parts = [];
+  var current = layer;
+  while (current && current.typename !== 'Document') {
+    try { parts.unshift(current.name); } catch (eName) { parts.unshift(''); }
+    try { current = current.parent; } catch (eParent) { current = null; }
+  }
+  return parts.join('/');
+}
+
+function __mcp_findLayerByName(container, name) {
+  for (var i = 0; i < container.layers.length; i++) {
+    var layer = container.layers[i];
+    if (layer.name === name) return layer;
+    if (layer.typename === 'LayerSet') {
+      var nested = __mcp_findLayerByName(layer, name);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+function __mcp_findLayerById(container, id) {
+  for (var i = 0; i < container.layers.length; i++) {
+    var layer = container.layers[i];
+    try {
+      if (layer.id === id) return layer;
+    } catch (eId) {}
+    if (layer.typename === 'LayerSet') {
+      var nested = __mcp_findLayerById(layer, id);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+`;
+
 /** Curves adjustment layer helper — shared by atomics and recipes (uses __mcp_s2t / __mcp_c2t). */
 export const MCP_CURVES_ADJUSTMENT_HELPER = `
 function __mcp_makeCurvesAdjustmentLayer(preset) {
@@ -600,6 +642,7 @@ export const ExtendScriptSnippets = {
   createTextLayer: (text: string, x = 100, y = 100, fontSize = 24, fontName?: string) => `
     ${getContextInfo}
     ${resolveFontPostScriptName}
+    ${layerLookupHelpers}
     
     if (app.documents.length === 0) {
       throw new Error('No active document');
@@ -627,6 +670,8 @@ export const ExtendScriptSnippets = {
       ${fontName ? `font: textLayer.textItem.font,` : ''}
       context: getContextInfo()
     };
+    try { result.layerId = textLayer.id; } catch (eId) {}
+    try { result.path = __mcp_layerPath(textLayer); } catch (ePath) {}
     return result;
   `,
 
@@ -783,6 +828,7 @@ export const ExtendScriptSnippets = {
       layerName: layer.name,
       context: getContextInfo()
     };
+    try { result.layerId = layer.id; } catch (eId) {}
     return result;
   `,
 
@@ -790,13 +836,23 @@ export const ExtendScriptSnippets = {
    * Delete active layer
    */
   deleteLayer: () => `
+    ${getContextInfo}
     if (app.documents.length === 0) {
       throw new Error('No active document');
     }
     var doc = app.activeDocument;
     if (doc.activeLayer) {
-      doc.activeLayer.remove();
-      return { deleted: true };
+      var layer = doc.activeLayer;
+      var deletedName = layer.name;
+      var deletedId = null;
+      try { deletedId = layer.id; } catch (eId) {}
+      layer.remove();
+      return {
+        deleted: true,
+        layerName: deletedName,
+        layerId: deletedId,
+        context: getContextInfo()
+      };
     }
     throw new Error('No active layer');
   `,
@@ -810,6 +866,7 @@ export const ExtendScriptSnippets = {
    * Background / fully-locked layers cannot be filled, so fail clearly.
    */
   fillLayer: (red: number, green: number, blue: number) => `
+    ${getContextInfo}
     if (app.documents.length === 0) {
       throw new Error('No active document');
     }
@@ -846,7 +903,8 @@ export const ExtendScriptSnippets = {
     return {
       filled: true,
       layerName: layer.name,
-      color: { red: ${red}, green: ${green}, blue: ${blue} }
+      color: { red: ${red}, green: ${green}, blue: ${blue} },
+      context: getContextInfo()
     };
   `,
 
@@ -875,34 +933,44 @@ export const ExtendScriptSnippets = {
    */
   getLayerNames: () => `
     ${getContextInfo}
+    ${layerLookupHelpers}
     
     if (app.documents.length === 0) {
       throw new Error('No active document');
     }
     var doc = app.activeDocument;
     var layers = [];
-    function collectLayers(container) {
+    function collectLayers(container, depth) {
       for (var i = 0; i < container.layers.length; i++) {
         var layer = container.layers[i];
         try {
-          layers.push({
+          var entry = {
             name: layer.name,
-            kind: String(layer.kind),
+            typename: layer.typename,
+            depth: depth,
+            path: __mcp_layerPath(layer),
             visible: layer.visible,
             opacity: layer.opacity,
             blendMode: String(layer.blendMode)
-          });
+          };
+          try { entry.id = layer.id; } catch (eId) {}
+          try {
+            entry.kind = layer.typename === 'LayerSet' ? 'LayerSet' : String(layer.kind);
+          } catch (eKind) {
+            entry.kind = layer.typename;
+          }
+          layers.push(entry);
         } catch (e) {
           var layerName = 'layer_' + layers.length;
           try { layerName = layer.name; } catch (e2) {}
           layers.push({ name: layerName, error: e.message || String(e) });
         }
         if (layer.typename === 'LayerSet') {
-          collectLayers(layer);
+          collectLayers(layer, depth + 1);
         }
       }
     }
-    collectLayers(doc);
+    collectLayers(doc, 0);
     
     var result = {
       layerCount: layers.length,
@@ -917,25 +985,14 @@ export const ExtendScriptSnippets = {
    */
   selectLayerByName: (name: string) => `
     ${getContextInfo}
+    ${layerLookupHelpers}
     
     if (app.documents.length === 0) {
       throw new Error('No active document');
     }
     var doc = app.activeDocument;
     var targetName = "${jsString(name)}";
-    var target = null;
-    function findLayer(container, name) {
-      for (var i = 0; i < container.layers.length; i++) {
-        var l = container.layers[i];
-        if (l.name === name) return l;
-      }
-      for (var j = 0; j < container.layerSets.length; j++) {
-        var nested = findLayer(container.layerSets[j], name);
-        if (nested) return nested;
-      }
-      return null;
-    }
-    target = findLayer(doc, targetName);
+    var target = __mcp_findLayerByName(doc, targetName);
     if (!target) {
       throw new Error('Layer not found: ' + targetName);
     }
@@ -943,7 +1000,10 @@ export const ExtendScriptSnippets = {
     var result = {
       selected: true,
       layerName: target.name,
-      kind: String(target.kind),
+      layerId: __mcp_layerId(target),
+      path: __mcp_layerPath(target),
+      typename: target.typename,
+      kind: target.typename === 'LayerSet' ? 'LayerSet' : String(target.kind),
       context: getContextInfo()
     };
     try {
@@ -2655,52 +2715,76 @@ export const ExtendScriptSnippets = {
   /**
    * Move layer to specific position (reorder)
    */
-  moveLayerToPosition: (targetLayerName: string, position: string) => `
+  moveLayerToPosition: (targetLayerName: string | undefined, position: string, targetLayerId?: number) => `
     ${getContextInfo}
+    ${layerLookupHelpers}
     
     if (app.documents.length === 0) {
       throw new Error('No active document');
     }
     var doc = app.activeDocument;
     var activeLayer = doc.activeLayer;
-    
-    // Find target layer
+    var requestedPosition = "${position}";
+    var requestedTargetName = ${targetLayerName !== undefined ? `"${jsString(targetLayerName)}"` : 'null'};
+    var requestedTargetId = ${targetLayerId !== undefined ? targetLayerId : 'null'};
     var targetLayer = null;
-    for (var i = 0; i < doc.layers.length; i++) {
-      if (doc.layers[i].name === "${jsString(targetLayerName)}") {
-        targetLayer = doc.layers[i];
-        break;
+
+    if (requestedPosition === 'TOP') {
+      var topStack = activeLayer.parent.layers;
+      if (topStack.length > 0 && topStack[0] !== activeLayer) {
+        activeLayer.move(topStack[0], ElementPlacement.PLACEBEFORE);
+      }
+    } else if (requestedPosition === 'BOTTOM') {
+      var bottomStack = activeLayer.parent.layers;
+      if (bottomStack.length > 0) {
+        var bottomLayer = bottomStack[bottomStack.length - 1];
+        if (bottomLayer !== activeLayer) {
+          var bottomIsBackground = false;
+          try { bottomIsBackground = !!bottomLayer.isBackgroundLayer; } catch (eBg) {}
+          activeLayer.move(
+            bottomLayer,
+            bottomIsBackground ? ElementPlacement.PLACEBEFORE : ElementPlacement.PLACEAFTER
+          );
+        }
+      }
+    } else {
+      if (requestedTargetId !== null) {
+        targetLayer = __mcp_findLayerById(doc, requestedTargetId);
+      } else if (requestedTargetName !== null) {
+        targetLayer = __mcp_findLayerByName(doc, requestedTargetName);
+      }
+
+      if (!targetLayer) {
+        throw new Error(
+          'Layer not found: ' +
+          (requestedTargetId !== null ? ('id=' + requestedTargetId) : requestedTargetName)
+        );
+      }
+      if (targetLayer === activeLayer) {
+        throw new Error('Invalid arguments: active layer cannot be moved relative to itself');
+      }
+
+      if (requestedPosition === 'ABOVE') {
+        activeLayer.move(targetLayer, ElementPlacement.PLACEBEFORE);
+      } else if (requestedPosition === 'BELOW') {
+        activeLayer.move(targetLayer, ElementPlacement.PLACEAFTER);
+      } else {
+        throw new Error('Invalid position. Use: ABOVE, BELOW, TOP, or BOTTOM');
       }
     }
-    
-    if (!targetLayer) {
-      throw new Error('Target layer not found: ${targetLayerName}');
-    }
-    
-    // Determine ElementPlacement
-    var placement;
-    if ("${position}" === "ABOVE") {
-      placement = ElementPlacement.PLACEBEFORE;
-    } else if ("${position}" === "BELOW") {
-      placement = ElementPlacement.PLACEAFTER;
-    } else if ("${position}" === "TOP") {
-      placement = ElementPlacement.PLACEATBEGINNING;
-    } else if ("${position}" === "BOTTOM") {
-      placement = ElementPlacement.PLACEATEND;
-    } else {
-      throw new Error('Invalid position. Use: ABOVE, BELOW, TOP, or BOTTOM');
-    }
-    
-    // Move the layer
-    activeLayer.move(targetLayer, placement);
-    
+
     var result = {
       moved: true,
       layerName: activeLayer.name,
-      position: "${position}",
-      relativeTo: targetLayer.name,
+      layerId: __mcp_layerId(activeLayer),
+      position: requestedPosition,
       context: getContextInfo()
     };
+    if (targetLayer) {
+      result.relativeTo = targetLayer.name;
+      result.relativeToId = __mcp_layerId(targetLayer);
+      result.relativeToPath = __mcp_layerPath(targetLayer);
+    }
     return result;
   `,
 
@@ -2715,14 +2799,16 @@ export const ExtendScriptSnippets = {
     }
     var doc = app.activeDocument;
     var layer = doc.activeLayer;
+    var stack = layer.parent.layers;
     
-    if (doc.layers.length > 0) {
-      layer.move(doc.layers[0], ElementPlacement.PLACEBEFORE);
+    if (stack.length > 0 && stack[0] !== layer) {
+      layer.move(stack[0], ElementPlacement.PLACEBEFORE);
     }
     
     var result = {
       moved: true,
       layerName: layer.name,
+      parentName: layer.parent.typename === 'LayerSet' ? layer.parent.name : null,
       position: 'top',
       context: getContextInfo()
     };
@@ -2740,19 +2826,28 @@ export const ExtendScriptSnippets = {
     }
     var doc = app.activeDocument;
     var layer = doc.activeLayer;
+    var stack = layer.parent.layers;
 
     if (layer.isBackgroundLayer) {
       throw new Error('Cannot move background layer');
     }
 
-    if (doc.layers.length > 0) {
-      var bottomLayer = doc.layers[doc.layers.length - 1];
-      layer.move(bottomLayer, ElementPlacement.PLACEBEFORE);
+    if (stack.length > 0) {
+      var bottomLayer = stack[stack.length - 1];
+      if (bottomLayer !== layer) {
+        var bottomIsBackground = false;
+        try { bottomIsBackground = !!bottomLayer.isBackgroundLayer; } catch (eBg) {}
+        layer.move(
+          bottomLayer,
+          bottomIsBackground ? ElementPlacement.PLACEBEFORE : ElementPlacement.PLACEAFTER
+        );
+      }
     }
     
     var result = {
       moved: true,
       layerName: layer.name,
+      parentName: layer.parent.typename === 'LayerSet' ? layer.parent.name : null,
       position: 'bottom',
       context: getContextInfo()
     };
@@ -2770,11 +2865,12 @@ export const ExtendScriptSnippets = {
     }
     var doc = app.activeDocument;
     var layer = doc.activeLayer;
+    var stack = layer.parent.layers;
     
     // Find current layer index
     var currentIndex = -1;
-    for (var i = 0; i < doc.layers.length; i++) {
-      if (doc.layers[i] === layer) {
+    for (var i = 0; i < stack.length; i++) {
+      if (stack[i] === layer) {
         currentIndex = i;
         break;
       }
@@ -2789,11 +2885,12 @@ export const ExtendScriptSnippets = {
     }
     
     // Move before the layer above
-    layer.move(doc.layers[currentIndex - 1], ElementPlacement.PLACEBEFORE);
+    layer.move(stack[currentIndex - 1], ElementPlacement.PLACEBEFORE);
     
     var result = {
       moved: true,
       layerName: layer.name,
+      parentName: layer.parent.typename === 'LayerSet' ? layer.parent.name : null,
       direction: 'up',
       context: getContextInfo()
     };
@@ -2811,17 +2908,18 @@ export const ExtendScriptSnippets = {
     }
     var doc = app.activeDocument;
     var layer = doc.activeLayer;
+    var stack = layer.parent.layers;
     
     // Find current layer index
     var currentIndex = -1;
-    for (var i = 0; i < doc.layers.length; i++) {
-      if (doc.layers[i] === layer) {
+    for (var i = 0; i < stack.length; i++) {
+      if (stack[i] === layer) {
         currentIndex = i;
         break;
       }
     }
     
-    if (currentIndex === -1 || currentIndex >= doc.layers.length - 1) {
+    if (currentIndex === -1 || currentIndex >= stack.length - 1) {
       return {
         moved: false,
         message: 'Layer is already at the bottom',
@@ -2830,11 +2928,12 @@ export const ExtendScriptSnippets = {
     }
     
     // Move after the layer below
-    layer.move(doc.layers[currentIndex + 1], ElementPlacement.PLACEAFTER);
+    layer.move(stack[currentIndex + 1], ElementPlacement.PLACEAFTER);
     
     var result = {
       moved: true,
       layerName: layer.name,
+      parentName: layer.parent.typename === 'LayerSet' ? layer.parent.name : null,
       direction: 'down',
       context: getContextInfo()
     };

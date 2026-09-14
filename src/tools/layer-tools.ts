@@ -1,7 +1,12 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { PhotoshopConnection } from '../platform/connection.js';
-import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import {
+  atomicFailureFromError,
+  atomicSuccess,
+  parseSnippetResult,
+  runSnippet,
+} from './atomic-shared.js';
 
 export function createLayerTools(connection: PhotoshopConnection): ToolDefinition[] {
   return [
@@ -160,59 +165,27 @@ async function createLayer(
   const name = args.name as string | undefined;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.newLayer(name);
-    await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Layer created${name ? `: ${name}` : ''}`,
-        },
-      ],
-    };
+    const raw = await runSnippet(connection, ExtendScriptSnippets.newLayer(name));
+    const parsed = parseSnippetResult(raw);
+    if (!parsed) {
+      return atomicFailureFromError(new Error(`Unparseable create-layer result: ${String(raw)}`));
+    }
+    return atomicSuccess(`Layer created: ${String(parsed.layerName ?? name ?? 'unnamed')}`, parsed);
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error creating layer: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
 async function deleteLayer(connection: PhotoshopConnection): Promise<ToolResult> {
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.deleteLayer();
-    await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: 'Layer deleted successfully',
-        },
-      ],
-    };
+    const raw = await runSnippet(connection, ExtendScriptSnippets.deleteLayer());
+    const parsed = parseSnippetResult(raw);
+    if (!parsed) {
+      return atomicFailureFromError(new Error(`Unparseable delete-layer result: ${String(raw)}`));
+    }
+    return atomicSuccess('Layer deleted', parsed);
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error deleting layer: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
@@ -227,30 +200,17 @@ async function createTextLayer(
   const fontName = args.fontName as string | undefined;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.createTextLayer(text, x, y, fontSize, fontName);
-    await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Text layer created: "${text}" at (${x}, ${y})${fontName ? ` with font ${fontName}` : ''}`,
-        },
-      ],
-    };
+    const raw = await runSnippet(
+      connection,
+      ExtendScriptSnippets.createTextLayer(text, x, y, fontSize, fontName)
+    );
+    const parsed = parseSnippetResult(raw);
+    if (!parsed) {
+      return atomicFailureFromError(new Error(`Unparseable create-text-layer result: ${String(raw)}`));
+    }
+    return atomicSuccess(`Text layer created: ${String(parsed.layerName ?? 'text layer')}`, parsed);
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error creating text layer: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
@@ -263,59 +223,32 @@ async function fillLayer(
   const blue = args.blue as number;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.fillLayer(red, green, blue);
-    await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Layer filled with RGB(${red}, ${green}, ${blue})`,
-        },
-      ],
-    };
+    const raw = await runSnippet(connection, ExtendScriptSnippets.fillLayer(red, green, blue));
+    const parsed = parseSnippetResult(raw);
+    if (!parsed) {
+      return atomicFailureFromError(new Error(`Unparseable fill-layer result: ${String(raw)}`));
+    }
+    return atomicSuccess(`Layer filled with RGB(${red}, ${green}, ${blue})`, parsed);
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error filling layer: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
 async function getLayers(connection: PhotoshopConnection): Promise<ToolResult> {
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.getLayerNames();
-    const result = await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Layers:\n${JSON.stringify(result, null, 2)}`,
-        },
-      ],
-    };
+    const raw = await runSnippet(connection, ExtendScriptSnippets.getLayerNames());
+    const parsed = parseSnippetResult(raw);
+    if (!parsed) {
+      return atomicFailureFromError(new Error(`Unparseable get-layers result: ${String(raw)}`));
+    }
+    const count = typeof parsed.layerCount === 'number' ? parsed.layerCount : undefined;
+    return atomicSuccess(
+      count === undefined ? 'Listed layers' : `Listed ${count} layers`,
+      parsed,
+      'photoshop_select_layer_by_name'
+    );
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error getting layers: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
@@ -326,29 +259,13 @@ async function selectLayerByName(
   const name = args.name as string;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.selectLayerByName(name);
-    const result = await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Layer selected:\n${JSON.stringify(result, null, 2)}`,
-        },
-      ],
-    };
+    const raw = await runSnippet(connection, ExtendScriptSnippets.selectLayerByName(name));
+    const parsed = parseSnippetResult(raw);
+    if (!parsed) {
+      return atomicFailureFromError(new Error(`Unparseable select-layer result: ${String(raw)}`));
+    }
+    return atomicSuccess(`Layer selected: ${String(parsed.layerName ?? name)}`, parsed, 'photoshop_get_state');
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error selecting layer: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }

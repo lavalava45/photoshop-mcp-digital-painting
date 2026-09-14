@@ -136,6 +136,25 @@ The fork has been live-tested primarily on **Photoshop 2026 for Windows**. Durin
 
 The repository also retains upstream documentation for the broader Photoshop MCP feature set. Those inherited documents may describe upstream features that are not specific to Digital Painting Edition.
 
+## Layer API consistency
+
+The fork also tightens several inherited layer-operation contracts that matter in multi-layer painting workflows:
+
+- `photoshop_get_layers` now exposes recursive layer `id`, `path`, and `depth` metadata;
+- layer ordering resolves targets recursively, so layers returned by `photoshop_get_layers` can also be targeted when they live inside groups;
+- `photoshop_move_layer_to_position` accepts `targetLayerId` (preferred over a possibly duplicated name);
+- `photoshop_move_layer_up`, `photoshop_move_layer_down`, `photoshop_move_layer_to_top`, and `photoshop_move_layer_to_bottom` keep nested layers inside their current parent stack;
+- core layer tools now return structured JSON envelopes instead of a mixture of plain-text confirmations and JSON.
+
+Regression coverage is provided by:
+
+```bash
+node scripts/test-layer-api-contracts.mjs
+node scripts/test-layer-api-live.mjs
+```
+
+The live test creates its own temporary Photoshop document, exercises grouped/nested layers and id-based ordering, and closes that temporary document without saving.
+
 ## Upstream and attribution
 
 This fork is based on [Photoshop MCP](https://github.com/alisaitteke/photoshop-mcp), originally created by Ali Sait Teke.
