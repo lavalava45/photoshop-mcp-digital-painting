@@ -3,6 +3,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { callToolWithTimeout } from './mcp-request-options.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -33,7 +34,7 @@ function parseStructured(result) {
 }
 
 async function call(name, args = {}) {
-  const result = await client.callTool({ name, arguments: args });
+  const result = await callToolWithTimeout(client, { name, arguments: args });
   if (result.isError) {
     const text = result?.content?.find((item) => item.type === 'text')?.text;
     throw new Error(`${name} failed: ${text ?? 'unknown error'}`);
@@ -158,7 +159,7 @@ try {
   console.log('PAINTING_BATCHING_LIVE_TEST_OK');
 } finally {
   if (tempDocumentId !== null) {
-    await client.callTool({
+    await callToolWithTimeout(client, {
       name: 'photoshop_close_document',
       arguments: { document_id: tempDocumentId, save: false },
     }).catch(() => {});
@@ -180,10 +181,10 @@ try {
       smoothing_enabled: initialBrush.smoothing_enabled,
       smoothing: initialBrush.smoothing,
     };
-    await client.callTool({ name: 'photoshop_set_brush', arguments: restore }).catch(() => {});
+    await callToolWithTimeout(client, { name: 'photoshop_set_brush', arguments: restore }).catch(() => {});
   }
   if (initialForeground && Number.isFinite(initialForeground.red)) {
-    await client.callTool({
+    await callToolWithTimeout(client, {
       name: 'photoshop_set_foreground_color',
       arguments: initialForeground,
     }).catch(() => {});

@@ -23,11 +23,16 @@ Common issues when connecting to or scripting Photoshop through the MCP server.
 2. Check that scripting is enabled in Photoshop preferences
 3. On Windows, verify COM automation is not blocked by security settings
 
-### "Script execution timeout"
+### Timeouts: Photoshop script vs MCP request
 
-- Some operations may take longer on large documents
-- The default timeout is 30 seconds
-- For complex operations, consider breaking them into smaller steps
+There are two separate timeout layers:
+
+- **Photoshop script execution timeout** — the Windows executor defaults to 30 seconds for one ExtendScript/COM script. Painting `AUTO` batching keeps individual Photoshop scripts below this boundary when possible.
+- **MCP client request timeout** — `@modelcontextprotocol/sdk` defaults to 60 seconds for one `callTool()` request. A painting call can legitimately exceed 60 seconds when it contains several sequential AUTO batches even though each Photoshop script completes within its own limit.
+
+The repository's direct-stdio painting helpers use `scripts/mcp-request-options.mjs`, which raises the client-side request timeout to **180 seconds** by default. Override it for local scripts with `PHOTOSHOP_MCP_REQUEST_TIMEOUT_MS` when needed.
+
+If another MCP host still stops a tool at 60 seconds, that limit belongs to that host/client; the MCP server cannot unilaterally increase a remote client's request timeout.
 
 ### `photoshop_execute_script` returns `Result: undefined`
 

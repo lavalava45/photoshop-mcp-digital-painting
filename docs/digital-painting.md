@@ -119,6 +119,8 @@ card, or other bounded region.
 
 Live artistic tests confirmed `Square Charcoal` texture, pressure tapering, dabs, per-stroke overrides, automatic heterogeneous batching, and interpolated taper profiles. `photoshop_paint_strokes` now defaults to `batch_mode=AUTO`: expensive passes are split into several short Photoshop scripts before the per-script ExtendScript timeout is reached. Small/simple calls remain a single history step. `batch_mode=SINGLE_HISTORY` is available when one undo step matters more than timeout resilience.
 
+`AUTO` batching protects the per-Photoshop-script execution window, but the complete MCP request can still span several sequential batches. The MCP SDK client itself defaults to 60 seconds per request. Repository direct-stdio painting scripts therefore call tools through `scripts/mcp-request-options.mjs`, using a 180-second default request timeout that can be overridden with `PHOTOSHOP_MCP_REQUEST_TIMEOUT_MS`. This is a client-side setting; external MCP hosts may impose their own timeout.
+
 Dynamic profiles are rendered as multiple short path strokes with changing brush settings. This gives controllable directional tapering that Photoshop's binary `simulatePressure` cannot express, but it is still a segmented approximation rather than native continuous stylus pressure. Hard round brushes can show slight segment texture on aggressive tapers; omitting `steps` lets the tool choose a higher 12–64 segment count from the requested profile magnitude.
 
 Mixer Brush remains experimental. A direct Action Manager path-stroke attempt using `wetBrushTool` failed with invalid parameters, so Mixer Brush is intentionally not exposed yet.

@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { callToolWithTimeout } from './mcp-request-options.mjs';
 
 function getArg(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -39,7 +40,7 @@ try {
     : undefined;
 
   if (!documentId) {
-    const docsResult = await client.callTool({ name: 'photoshop_list_documents', arguments: {} });
+    const docsResult = await callToolWithTimeout(client, { name: 'photoshop_list_documents', arguments: {} });
     const docs = parseText(docsResult);
     documentId = docs.details?.active_document_id;
   }
@@ -48,7 +49,7 @@ try {
     throw new Error('Open a Photoshop document or pass --document-id <id>');
   }
 
-  const result = await client.callTool({
+  const result = await callToolWithTimeout(client, {
     name: 'photoshop_get_preview',
     arguments: {
       document_id: documentId,
