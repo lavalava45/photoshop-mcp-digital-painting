@@ -66,8 +66,8 @@ const guidePromptNames = new Set<string>(PHOTOSHOP_GUIDE_PROMPT_NAMES);
 
 assert.equal(PHOTOSHOP_RECIPE_TOOL_NAMES.length, 16);
 assert.equal(Object.keys(RECIPE_TO_PROMPT).length, 16);
-assert.equal(PHOTOSHOP_GUIDE_PROMPT_NAMES.length, 7);
-assert.equal(PHOTOSHOP_PROMPT_TEMPLATES.length, 23);
+assert.equal(PHOTOSHOP_GUIDE_PROMPT_NAMES.length, 8);
+assert.equal(PHOTOSHOP_PROMPT_TEMPLATES.length, 24);
 
 for (const recipeName of PHOTOSHOP_RECIPE_TOOL_NAMES) {
   const promptName = RECIPE_TO_PROMPT[recipeName];
@@ -133,6 +133,7 @@ for (const marker of [
   'photoshop_sky_replacement',
   'photoshop_neural_filter',
   'ps.generative_fill',
+  'ps.digital_painting_control',
 ]) {
   assert.ok(
     instructions.includes(marker),

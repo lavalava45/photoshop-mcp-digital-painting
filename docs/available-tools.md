@@ -1,6 +1,6 @@
 # Available Tools
 
-**116 tools total** — 100 atomic `photoshop_*` tools plus 16 recipe `photoshop_recipe_*` workflows (single undo step each).
+**124 tools total** — 108 atomic/non-recipe `photoshop_*` tools plus 16 recipe `photoshop_recipe_*` workflows (single undo step each).
 
 Reference for all atomic `photoshop_*` MCP tools exposed by this server (parameters, examples, and return shapes).
 
@@ -1136,6 +1136,40 @@ photoshop_image_stack({
   mode: "median"
 })
 ```
+
+### Digital Painting
+
+These tools are added by the digital-painting fork. See
+[`digital-painting.md`](digital-painting.md) and
+[`digital-painting-agent-skill.md`](digital-painting-agent-skill.md) for the
+painting workflow and visual-control rules.
+
+#### `photoshop_list_brush_presets`
+List installed Photoshop brush presets with optional case-insensitive filtering
+and a result limit.
+
+#### `photoshop_select_brush_preset`
+Select an installed brush preset by exact name and return the resulting brush
+settings.
+
+#### `photoshop_get_brush_settings`
+Read current Brush Tool settings, including size, hardness, opacity, flow,
+spacing, angle, roundness, flip state, pressure overrides, airbrush and
+smoothing where available.
+
+#### `photoshop_set_brush`
+Change any supported subset of Brush Tool settings while preserving the rest of
+the active Photoshop brush descriptor.
+
+#### `photoshop_set_foreground_color`
+Set the Photoshop foreground RGB color used by painting operations.
+
+#### `photoshop_paint_strokes`
+Paint one or many raster Brush/Pencil/Eraser/Smudge strokes on the active layer.
+Supports straight/polyline and Bezier paths, closed paths,
+`simulatePressure`, per-stroke RGB/size/opacity/flow overrides, and one-point
+brush dabs/stamps. Large heterogeneous passes should be chunked into smaller
+batches when many strokes change brush settings.
 
 ### Modern Export
 

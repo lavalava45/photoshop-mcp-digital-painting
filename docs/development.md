@@ -7,10 +7,20 @@ Build, lint, and test the photoshop-mcp server locally.
 ### From Source
 
 ```bash
-git clone https://github.com/alisaitteke/photoshop-mcp.git
-cd photoshop-mcp
-npm install
+git clone <this-fork-repository-url>
+cd photoshop-mcp-digital-painting
+npm ci
 npm run build
+```
+
+For end-user installation and MCP host configuration, see [`../INSTALL.md`](../INSTALL.md).
+
+Keep the official repository as a separate `upstream` remote when developing
+the fork:
+
+```bash
+git remote add upstream https://github.com/alisaitteke/photoshop-mcp.git
+git fetch upstream
 ```
 
 ### Build
@@ -77,7 +87,7 @@ Local MCP integration tests run against a live Photoshop instance over stdio
 | Prompt-layer smoke | `npm run test:mcp-local` | 16 prompt templates + core recipes |
 | Prompt ↔ recipe parity | `npm run verify:photoshop-prompts` | 12↔12 strict match + 4 guides |
 
-**Tool coverage:** 116 total tools (100 atomic `photoshop_*` + 16 recipe
+**Tool coverage:** 124 total tools (108 atomic/non-recipe `photoshop_*` + 16 recipe
 `photoshop_recipe_*`) — re-run `npm run test:mcp-all` for a fresh pass count.
 
 **Intentional skips** (environment-dependent, not regressions):

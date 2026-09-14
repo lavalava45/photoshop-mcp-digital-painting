@@ -109,6 +109,9 @@ User intent glossary
 - batch.csv_cards — "csv to cards", "batch cards", "data-driven graphics",
   "mail merge for images", "name badges from spreadsheet", "sertifika bas"
   → \`photoshop_recipe_csv_to_cards\`; prompt \`ps.csv_to_cards\`
+- paint.draw — "draw", "paint", "sketch", "digital painting", "illustrate with brushes"
+  → use the painting tools together with guide prompt \`ps.digital_painting_control\` for
+  semantic passes, checkpoints, occlusion-aware strokes, cleanup, and state-based completion.
 
 Degrade paths
 - Generative remove / distraction — prefer \`photoshop_generative_remove\`; degrade to
@@ -144,7 +147,9 @@ Guide prompts (MCP prompts/get)
 - Guide prompts (no recipe pair): \`ps.gradient_blend\` — fade via mask gradient;
   \`ps.color_correct\` — tone / contrast fix chain; \`ps.dodge_burn_guide\` — 50% gray
   overlay setup; \`ps.composite_blend\` — place asset + mask + blend mode;
-  \`ps.generative_fill\`, \`ps.generative_remove\`, \`ps.generative_expand\` — Firefly workflows
+  \`ps.generative_fill\`, \`ps.generative_remove\`, \`ps.generative_expand\` — Firefly workflows;
+  \`ps.digital_painting_control\` — iterative brush-painting workflow with visual checkpoints,
+  occlusion control, cleanup and Definition of Done.
 `.trim();
 
 export function buildPhotoshopInstructions(): string {

@@ -37,7 +37,7 @@ function main(): void {
   const allowed = new Set([data.total, data.atomic, data.recipes]);
   const problems: string[] = [];
 
-  // Counts as written in prose: "116 tools", "100 atomic", "16 recipe workflows".
+  // Counts as written in prose: "124 tools", "108 atomic", "16 recipe workflows".
   // Deliberately narrow so test-run tallies and image widths are not flagged.
   const COUNT = /\b(\d{2,3})\s+(?:total\s+)?(?:atomic|recipe|tools?\b)/gi;
 

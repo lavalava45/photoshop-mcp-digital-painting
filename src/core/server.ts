@@ -7,7 +7,12 @@ import {
   GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { Logger } from '../utils/logger.js';
-import { capture, onMcpClientConnected, onMcpClientDisconnected, recordMcpToolCall } from '../analytics/index.js';
+import {
+  capture,
+  onMcpClientConnected,
+  onMcpClientDisconnected,
+  recordMcpToolCall,
+} from '../analytics/index.js';
 import { ToolRegistry, ToolDefinition } from './tool-registry.js';
 import { PromptRegistry } from './prompt-registry.js';
 import { Session } from './session.js';
@@ -39,6 +44,7 @@ import { createColorAdjustmentTools } from '../tools/color-adjustment-tools.js';
 import { createDataTools } from '../tools/data-tools.js';
 import { createStackTools } from '../tools/stack-tools.js';
 import { createExportTools } from '../tools/export-tools.js';
+import { createPaintingTools } from '../tools/painting-tools.js';
 import { ensureUxpBridgeServer } from '../platform/uxp-bridge-server.js';
 
 export interface PhotoshopMCPServerOptions {
@@ -147,6 +153,7 @@ export class PhotoshopMCPServer {
     this.registerToolDefinitions(createDataTools(connection));
     this.registerToolDefinitions(createStackTools(connection));
     this.registerToolDefinitions(createExportTools(connection));
+    this.registerToolDefinitions(createPaintingTools(connection));
     this.registerToolDefinitions(createRecipeTools(connection));
 
     this.logger.info(

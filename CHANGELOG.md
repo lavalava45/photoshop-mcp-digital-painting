@@ -5,6 +5,49 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — Digital Painting fork
+
+### Added
+
+- Add an isolated digital-painting extension in `src/tools/painting-tools.ts`, integrated into the upstream server with only one import and one tool-registration call.
+- Add `photoshop_list_brush_presets` with optional case-insensitive filtering and result limiting.
+- Add `photoshop_select_brush_preset` for exact-name selection of installed Photoshop brush presets.
+- Add `photoshop_get_brush_settings` and `photoshop_set_brush` for size, hardness, opacity, flow, spacing, angle, roundness, tip flips, pressure overrides, airbrush, and smoothing.
+- Add `photoshop_set_foreground_color` for painting color control.
+- Add `photoshop_paint_strokes` for batched Brush/Pencil/Eraser/Smudge strokes, Bezier handles, closed paths, and Photoshop `simulatePressure`.
+- Add per-stroke `color`, `size`, `opacity`, and `flow` overrides to `photoshop_paint_strokes`.
+- Allow one-point strokes as brush dabs/stamps; internally they are converted to a zero-length path stroke.
+- Add `scripts/test-painting-tools.mjs` for live Photoshop validation.
+- Add `docs/digital-painting.md` for painting architecture and API documentation.
+- Add `docs/digital-painting-agent-skill.md` and MCP guide prompt `ps.digital_painting_control` for iterative visual control, semantic passes, occlusion-aware drawing, cleanup, and state-based completion.
+
+### Changed
+
+- Brush-setting updates now preserve the full active Photoshop Brush Tool descriptor and modify only requested fields, avoiding accidental loss of complex preset dynamics/settings.
+- Painting completion guidance now treats stroke counts as soft planning budgets by default; visual Definition of Done is the normal stopping criterion unless the user explicitly requests a hard cap.
+- Painting-skill evaluation now has a fresh-composition rule: prior demo coordinates, stroke lists, object proportions and precomputed object-specific occlusion geometry must not be reused unless the user explicitly asks for a variation/refinement.
+- Add release-oriented installation documentation for clean GitHub clone/ZIP installs, Chat On Steroids Core/direct-stdio and generic MCP host configuration, verification, updating, and a release checklist.
+- Standardize the Chat On Steroids Photoshop path on Core + direct stdio; the shared Plugins connector is no longer used for Photoshop execution, health checks, or fallback diagnostics.
+
+### Validation
+
+- Live-tested on Photoshop 2026 for Windows.
+- Enumerated 123 installed brush presets through Photoshop `presetManager` during the 2026-09-14 test.
+- Verified exact selection of `Hard Round Pressure Size`.
+- Verified write/readback of pressure-size, pressure-opacity, airbrush, and smoothing settings.
+- Verified batched straight, pressure-simulated, and Bezier strokes.
+- Verified textured `Square Charcoal` painting and pressure tapering.
+- Verified per-stroke color/size/opacity/flow overrides and one-point dabs.
+- Validated the painting primitives with iterative artistic tests in Photoshop.
+- Mixer Brush path stroking is not yet considered supported: a direct Action Manager `stroke` attempt using `wetBrushTool` returned an invalid-parameters Photoshop error.
+- Large heterogeneous batches with many per-stroke brush changes can exceed the 30-second script timeout; chunking into smaller batches is currently the safe workaround.
+- `npm run build:server` and `npm run lint` pass for the current painting branch.
+
+### Pending
+
+- Optimize or automatically chunk heterogeneous per-stroke batches to avoid script timeouts.
+- Investigate richer pressure representation beyond Photoshop's binary `simulatePressure` flag.
+
 ## [1.7.6] - 2026-09-09
 
 [v1.7.5...HEAD](https://github.com/alisaitteke/photoshop-mcp/compare/v1.7.5...HEAD)

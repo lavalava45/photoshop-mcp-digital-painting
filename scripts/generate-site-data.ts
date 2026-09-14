@@ -42,6 +42,7 @@ type ToolEntry = {
 };
 
 const CATEGORY_BY_FILE: Record<string, { id: string; label: string }> = {
+  'server.ts': { id: 'state', label: 'Connection & state' },
   'state-tools.ts': { id: 'state', label: 'Connection & state' },
   'document-tools.ts': { id: 'document', label: 'Documents' },
   'layer-tools.ts': { id: 'layers', label: 'Layers' },
@@ -69,6 +70,10 @@ const CATEGORY_BY_FILE: Record<string, { id: string; label: string }> = {
 
 function listToolFiles(): string[] {
   const files: string[] = [];
+  // `photoshop_ping` and `photoshop_get_version` are registered directly by
+  // the core server rather than a `src/tools/*-tools.ts` factory. Include the
+  // file so generated documentation matches the actual runtime tools/list.
+  files.push(join(ROOT, 'src', 'core', 'server.ts'));
   for (const name of readdirSync(TOOLS_DIR)) {
     const full = join(TOOLS_DIR, name);
     if (name.endsWith('-tools.ts')) files.push(full);

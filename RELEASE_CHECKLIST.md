@@ -1,0 +1,46 @@
+# Release Checklist — Digital Painting Fork
+
+Use this checklist before publishing a tagged GitHub release.
+
+## Repository
+
+- [ ] Public fork/repository remote is configured as `origin`.
+- [ ] Official Photoshop MCP repository remains configured as `upstream`.
+- [ ] Working tree is clean.
+- [ ] Release branch contains the intended painting API and visual-control skill changes.
+- [ ] `README.md`, `INSTALL.md`, `CHANGELOG.md`, and painting docs describe the same feature set.
+- [ ] No local machine paths, credentials, temporary screenshots, or test-only secrets are committed unintentionally.
+
+## Validation
+
+- [ ] `npm ci`
+- [ ] `npm run build:server`
+- [ ] `npm run lint`
+- [ ] `npm run verify:photoshop-prompts`
+- [ ] `node scripts/test-painting-tools.mjs` with a supported Photoshop version running.
+- [ ] Confirm `photoshop_paint_strokes` is present in `tools/list`.
+- [ ] Confirm `ps.digital_painting_control` is present in `prompts/list`.
+- [ ] Run at least one fresh-composition artistic regression test without reusing prior demo geometry.
+
+## Documentation
+
+- [ ] Installation from a fresh clone/ZIP has been tested on a clean directory.
+- [ ] Chat On Steroids instructions use Core + direct stdio to the fork's `dist/index.js` and do not depend on the shared Plugins connector.
+- [ ] `PHOTOSHOP_PATH` guidance covers current Photoshop versions.
+- [ ] Upstream-vs-fork distinction is explicit so users do not accidentally install the upstream npm package.
+- [ ] Known limitations are listed (for example Mixer Brush status and heterogeneous-batch timeout behavior).
+
+## Version / release notes
+
+- [ ] Choose a release version/tag.
+- [ ] Move relevant entries from `CHANGELOG.md` Unreleased into the release section.
+- [ ] Summarize upstream base version/commit in the release notes.
+- [ ] Call out painting-specific additions and known limitations.
+- [ ] Tag the tested commit only after the validation steps above pass.
+
+## Post-release
+
+- [ ] Verify GitHub release assets/source links.
+- [ ] Install once using the public release instructions rather than the developer checkout.
+- [ ] Re-run the live Photoshop smoke test from that installation.
+- [ ] Confirm upgrade instructions from the previous release work without losing MCP client configuration.

@@ -1,4 +1,6 @@
-# Photoshop MCP
+# Photoshop MCP — Digital Painting Edition
+
+> Community fork of [alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp), focused on native digital-painting control in Photoshop. This edition adds brush preset control, brush dynamics, batched raster strokes, per-stroke overrides, and an agent-oriented visual-control workflow while keeping the upstream editing toolset intact.
 
 <p align="center">
   <a href="https://github.com/alisaitteke/photoshop-mcp">
@@ -35,7 +37,7 @@ window. No code, no scripts, no IDE required.
 - 🎨 **Color grade & more** — film looks, sky replacement, generative fill (Adobe account required)
 - ⏪ **Stay safe** — every multi-step "recipe" is a single undo step in Photoshop
 
-Under the hood: 116 tools (100 atomic + 16 one-step recipes) — full list in
+Under the hood: 124 tools (108 atomic/non-recipe + 16 one-step recipes) — full list in
 [`docs/available-tools.md`](docs/available-tools.md).
 
 ## Try saying
@@ -70,6 +72,11 @@ pre-engineered prompt templates: [`docs/prompt-layer.md`](docs/prompt-layer.md).
 ## Get started
 
 You need **Photoshop running** (Windows or macOS, any version 2012+) and **Node.js 18+**.
+
+> **Digital Painting Fork:** the npm commands and one-click links below point to
+> the upstream Photoshop MCP package and do not include this fork's painting
+> extensions. To install this fork from GitHub, follow [`INSTALL.md`](INSTALL.md)
+> and launch this checkout's built `dist/index.js`.
 
 ### Option 1 — Easiest: the built-in chat window
 
@@ -119,7 +126,11 @@ next. Common fixes: [`docs/troubleshooting.md`](docs/troubleshooting.md).
 
 ## Documentation
 
-- [Available tools](docs/available-tools.md) — all 116 tools with parameters
+- [Install this fork](INSTALL.md) — clean GitHub clone/ZIP, build, MCP client and Chat On Steroids setup
+- [Release checklist](RELEASE_CHECKLIST.md) — validation and documentation checks before publishing a tag
+- [Digital painting extension](docs/digital-painting.md) — brush/preset/stroke API added by this fork
+- [Digital painting agent skill](docs/digital-painting-agent-skill.md) — checkpoints, occlusion control, cleanup and Definition of Done
+- [Available tools](docs/available-tools.md) — all 124 tools with parameters
 - [Standalone UI](docs/standalone-ui.md) — providers, auth modes, Action Plan, security
 - [Prompt layer](docs/prompt-layer.md) — prompt templates and recipes
 - [Architecture](docs/architecture.md) — how the bridge works under the hood

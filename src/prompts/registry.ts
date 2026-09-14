@@ -23,6 +23,7 @@ import { splitCarouselTemplate } from './templates/split-carousel.js';
 import { batchWatermarkTemplate } from './templates/batch-watermark.js';
 import { passportPhotoTemplate } from './templates/passport-photo.js';
 import { csvToCardsTemplate } from './templates/csv-to-cards.js';
+import { digitalPaintingControlTemplate } from './templates/digital-painting-control.js';
 
 export const PHOTOSHOP_GUIDE_PROMPT_NAMES = [
   'ps.gradient_blend',
@@ -32,6 +33,7 @@ export const PHOTOSHOP_GUIDE_PROMPT_NAMES = [
   'ps.generative_fill',
   'ps.generative_remove',
   'ps.generative_expand',
+  'ps.digital_painting_control',
 ] as const;
 
 export const PHOTOSHOP_PROMPT_TEMPLATES = [
@@ -58,6 +60,7 @@ export const PHOTOSHOP_PROMPT_TEMPLATES = [
   batchWatermarkTemplate,
   passportPhotoTemplate,
   csvToCardsTemplate,
+  digitalPaintingControlTemplate,
 ] as const;
 
 export function registerPhotoshopPrompts(registry: PromptRegistry): void {
