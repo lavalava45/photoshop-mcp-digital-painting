@@ -1,117 +1,151 @@
 # Photoshop MCP — Digital Painting Edition
 
-> **Community fork.** Based on [alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp) by Ali Sait Teke, with a focused extension for native digital-painting workflows in Photoshop.
->
-> **Original project / Upstream:** [alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp)<br>
-> **This fork:** [lavalava45/photoshop-mcp-digital-painting](https://github.com/lavalava45/photoshop-mcp-digital-painting)
+Community-maintained fork of [alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp), focused on native digital-painting workflows in Photoshop.
 
-### What this edition adds
+**Original project / upstream:** [alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp)<br>
+**This fork:** [lavalava45/photoshop-mcp-digital-painting](https://github.com/lavalava45/photoshop-mcp-digital-painting)
 
-- brush preset discovery and exact preset selection;
-- brush dynamics control, including pressure, opacity, flow, spacing, angle, roundness, airbrush, and smoothing;
-- batched raster painting with Brush, Pencil, Eraser, and Smudge strokes, including Bezier paths, dabs, and per-stroke overrides;
-- an agent-oriented visual-control workflow with semantic passes, checkpoints, cleanup, occlusion handling, and a fresh-composition rule for evaluation.
-
-**Languages:** English · [简体中文](README.zh-CN.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · [Türkçe](README.tr.md) · **[Website](https://photoshop-mcp.com/)**
-
-[![Action Plan](https://img.shields.io/badge/Action%20Plan-beta-amber.svg)](docs/standalone-ui.md#action-plan-beta)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-lightgrey.svg)]()
 
-**Chat with Photoshop like a colleague.** Describe what you want in plain words —
-"remove this background", "resize these for Instagram" — and your AI assistant
-does the clicking for you. Works with Cursor, Claude, or the built-in chat
-window. No code, no scripts, no IDE required.
+> This is an independent fork. It is not an official release of the upstream project and is not affiliated with or endorsed by Adobe Inc.
 
-> **Note:** This is an unofficial, community-maintained project and is not affiliated with or endorsed by Adobe Inc.
+## What this fork adds
 
-## What can it do?
+The upstream project already provides a broad Photoshop automation MCP. This edition keeps that toolset and adds a focused painting layer for brush-driven work:
 
-- ✂️ **Remove backgrounds** — subject isolated with a clean, editable mask
-- 👤 **Retouch portraits** — skin smoothing, tone fixes, dodge & burn setup
-- 🌐 **Export for web & social** — sRGB, sharpened, correctly sized for Instagram, X, and more
-- 🎞️ **Make carousels** — split one wide design into seamless, numbered slides
-- 💧 **Watermark in bulk** — a whole folder of photos in one go, originals untouched
-- 🎨 **Color grade & more** — film looks, sky replacement, generative fill (Adobe account required)
-- ⏪ **Stay safe** — every multi-step "recipe" is a single undo step in Photoshop
+- installed brush-preset discovery and exact preset selection;
+- brush size, hardness, opacity, flow, spacing, angle, roundness, flip, pressure, airbrush, and smoothing controls;
+- batched raster painting with Brush, Pencil, Eraser, and Smudge;
+- straight, polyline, and Bezier strokes;
+- one-point dabs/stamps;
+- per-stroke color, size, opacity, and flow overrides;
+- Photoshop `simulatePressure` support;
+- an agent visual-control workflow with semantic passes, previews, occlusion reasoning, cleanup, and a state-based Definition of Done.
 
-Under the hood: 124 tools (108 atomic/non-recipe + 16 one-step recipes) — full list in
-[`docs/available-tools.md`](docs/available-tools.md).
+The current build exposes **124 tools** (**108 atomic/non-recipe + 16 recipes**) and **24 prompts**.
 
-## Get started
+## Digital-painting tools
 
-You need **Photoshop running** (Windows or macOS, any version 2012+) and **Node.js 18+**.
-
-> **Digital Painting Fork:** the npm commands and one-click links below point to
-> the upstream Photoshop MCP package and do not include this fork's painting
-> extensions. To install this fork from GitHub, follow [`INSTALL.md`](INSTALL.md)
-> and launch this checkout's built `dist/index.js`.
-
-### Option 1 — Easiest: the built-in chat window
-
-```bash
-npx -p @alisaitteke/photoshop-mcp photoshop-mcp-ui
+```text
+photoshop_list_brush_presets
+photoshop_select_brush_preset
+photoshop_get_brush_settings
+photoshop_set_brush
+photoshop_set_foreground_color
+photoshop_paint_strokes
 ```
 
-A chat window opens in your browser. Sign in with an AI provider API key — or
-reuse your existing **Claude Code** / **Gemini CLI** account, no key needed.
+The painting workflow is also exposed as the MCP guide prompt:
 
-Details, providers, and security notes: [`docs/standalone-ui.md`](docs/standalone-ui.md).
-
-### Option 2 — Inside your AI app (Cursor, Claude, VS Code)
-
-Claude Code:
-
-```bash
-claude mcp add photoshop -- npx -y @alisaitteke/photoshop-mcp
+```text
+ps.digital_painting_control
 ```
 
-Or add this to your MCP client's config (Cursor, Claude Desktop, …):
+That guide is intended for iterative drawing rather than one-shot stroke dumping:
+
+```text
+plan → block-in → preview → construction → preview
+→ values/color → preview → detail → preview → cleanup → final preview
+```
+
+## Install this fork
+
+If you want the painting extensions, install **this repository from GitHub**. The upstream npm package does not contain the fork-specific painting tools.
+
+Requirements:
+
+- Adobe Photoshop;
+- Node.js 18 or newer;
+- Windows or macOS;
+- Git, or a downloaded GitHub source archive.
+
+Clone and build:
+
+```bash
+git clone https://github.com/lavalava45/photoshop-mcp-digital-painting.git
+cd photoshop-mcp-digital-painting
+npm ci
+npm run build:server
+```
+
+The MCP server entry point is:
+
+```text
+<repo>/dist/index.js
+```
+
+Point your MCP host directly at that file over stdio. Example:
 
 ```json
 {
   "mcpServers": {
-    "photoshop": {
-      "command": "npx",
-      "args": ["-y", "@alisaitteke/photoshop-mcp"]
+    "photoshop-painting": {
+      "command": "node",
+      "args": ["/absolute/path/to/photoshop-mcp-digital-painting/dist/index.js"],
+      "env": {
+        "PHOTOSHOP_PATH": "/absolute/path/to/Photoshop"
+      }
     }
   }
 }
 ```
 
-## How it works
+`PHOTOSHOP_PATH` is only required when Photoshop is not detected automatically.
 
-1. **You type** what you want in plain language.
-2. **The AI plans** the steps, checking the document state first.
-3. **Photoshop executes** — each recipe lands as one undoable step.
+For Chat On Steroids, this project uses **Chat On Steroids Core + direct stdio MCP**. The shared Plugins connector is not the execution path or health check for this fork.
 
-Something went wrong? The AI reads the structured error and knows what to try
-next. Common fixes: [`docs/troubleshooting.md`](docs/troubleshooting.md).
+See [`INSTALL.md`](INSTALL.md) for the full clean-machine setup.
+
+## Verify the installation
+
+Static checks:
+
+```bash
+npm run build:server
+npm run lint
+npm run verify:photoshop-prompts
+npm run verify:tool-counts
+```
+
+With Photoshop running, execute the live painting smoke test:
+
+```bash
+node scripts/test-painting-tools.mjs
+```
+
+The current verified tool-count result is:
+
+```text
+tool counts consistent: 124 = 108 atomic + 16 recipes
+```
+
+The fork has been live-tested primarily on **Photoshop 2026 for Windows**. During the current validation, 123 installed brush presets were enumerated and the painting smoke test completed with `PAINTING_TEST_OK`.
 
 ## Documentation
 
-- [Install this fork](INSTALL.md) — clean GitHub clone/ZIP, build, MCP client and Chat On Steroids setup
-- [Release checklist](RELEASE_CHECKLIST.md) — validation and documentation checks before publishing a tag
-- [Digital painting extension](docs/digital-painting.md) — brush/preset/stroke API added by this fork
-- [Digital painting agent skill](docs/digital-painting-agent-skill.md) — checkpoints, occlusion control, cleanup and Definition of Done
-- [Available tools](docs/available-tools.md) — all 124 tools with parameters
-- [Standalone UI](docs/standalone-ui.md) — providers, auth modes, Action Plan, security
-- [Prompt layer](docs/prompt-layer.md) — prompt templates and recipes
-- [Architecture](docs/architecture.md) — how the bridge works under the hood
-- [Development](docs/development.md) — build from source, tests
+- [`INSTALL.md`](INSTALL.md) — installation and MCP host configuration
+- [`docs/digital-painting.md`](docs/digital-painting.md) — painting API and design notes
+- [`docs/digital-painting-agent-skill.md`](docs/digital-painting-agent-skill.md) — visual-control workflow, checkpoints, cleanup, and Definition of Done
+- [`docs/available-tools.md`](docs/available-tools.md) — complete tool reference
+- [`docs/architecture.md`](docs/architecture.md) — architecture inherited from upstream plus fork integration points
+- [`docs/development.md`](docs/development.md) — build and development workflow
+- [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) — validation before publishing a release
+- [`docs/troubleshooting.md`](docs/troubleshooting.md) — common connection and Photoshop issues
 
-## Contributing
+The repository also retains upstream documentation for the broader Photoshop MCP feature set. Those inherited documents may describe upstream features that are not specific to Digital Painting Edition.
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
+## Upstream and attribution
 
-## Maintainer
+This fork is based on [Photoshop MCP](https://github.com/alisaitteke/photoshop-mcp), originally created by Ali Sait Teke.
 
-Built by **[Ali Sait Teke](https://alisait.com)** — [GitHub](https://github.com/alisaitteke) · [LinkedIn](https://www.linkedin.com/in/alisait/).
+The upstream source, documentation, and assets retain their original copyright and license notices. This fork is maintained independently; references to the upstream project do not imply that its original author maintains or endorses this fork.
+
+## Analytics
+
+The upstream anonymous usage-analytics subsystem remains in this fork. Aggregated analytics are enabled by default and can be disabled; see [`docs/anonymous-usage-analytics.md`](docs/anonymous-usage-analytics.md).
 
 ## License
 
-MIT
-
-Anonymous, aggregated usage analytics are collected by default and can be
-disabled anytime — details in [`docs/anonymous-usage-analytics.md`](docs/anonymous-usage-analytics.md).
+MIT. See [`LICENSE`](LICENSE). The original upstream copyright notice is retained there.
