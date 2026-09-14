@@ -89,6 +89,33 @@ At each checkpoint classify problems as:
 
 Do not add more detail while a must-fix problem remains underneath it.
 
+## Execution pacing and user-visible progress
+
+Painting should proceed as a sequence of **short, observable semantic passes**, not as a long background chain of Photoshop mutations.
+
+Use this execution contract for every non-trivial painting session:
+
+```text
+short semantic pass
+→ wait for the MCP/terminal call to finish completely
+→ obtain a preview
+→ tell the user what changed and what the preview shows
+→ only then start the next pass
+```
+
+Important rules:
+
+- Do **not** start another Photoshop mutation while the previous MCP/terminal call is still running. A returned session/process id is not completion; wait for the final terminal result/exit.
+- Do **not** queue several semantic passes into one long background command merely to save chat turns. Long hidden chains make interruption and recovery ambiguous.
+- If Photoshop may appear visually unchanged while an ExtendScript/MCP call is still executing, explicitly tell the user that the pass is still running and what operation is in progress.
+- Before starting a semantic pass, briefly state what will be changed. After it completes, report that it completed before moving to preview/inspection.
+- After each preview, summarize the visible result and classify the next issue as must-fix, should-fix, or optional refinement before issuing more paint commands.
+- During a long-running operation, keep the user informed in chat instead of remaining silent long enough that the session may look stalled. Prefer concise status updates over speculative claims that Photoshop is frozen.
+- If the chat/UI reloads, reconnects, or reports an interrupted response, treat the state as uncertain until the outstanding terminal/MCP job is checked. Do not assume that a previously launched Photoshop operation stopped merely because the chat response was interrupted.
+- If the user says to stop or wait, do not launch any new Photoshop mutation. First determine whether an already-started call is still running and report its status.
+
+This pacing rule is part of visual control, not merely UX. It keeps the image state, the agent's reasoning state, and the user's understanding synchronized at every checkpoint.
+
 ## Fresh-composition rule for skill evaluation
 
 When the purpose of a drawing is to evaluate the painting skill itself, start from a genuinely fresh composition unless the user explicitly asks for a variation of an existing image.
@@ -191,4 +218,4 @@ The returned guide should be treated as the execution contract for that painting
 
 ## Current implementation note
 
-Large batches with frequent per-stroke brush/color changes can exceed the current ExtendScript timeout. Until batching is optimized, heterogeneous passes should be chunked into small groups; live tests found roughly 6–8 mixed strokes reliable.
+Large batches with frequent per-stroke brush/color changes can exceed the current ExtendScript timeout. Until batching is optimized, heterogeneous passes should be chunked into small groups; live tests found roughly 6–8 mixed strokes reliable. Even when a batch is technically within timeout, prefer short semantic passes that can finish, preview, and be reported to the user before the next pass begins.
