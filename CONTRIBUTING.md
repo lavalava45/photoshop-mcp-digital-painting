@@ -50,151 +50,30 @@ npm run dev:ui
 
 This starts the server on port 5174 (with hot reload) and the web dev server concurrently.
 
-## Releasing this fork
+## Distribution and releases
 
-This fork is currently distributed from GitHub source and local stdio builds. The inherited
-upstream npm/MCP Registry publishing workflow is **not** a fork release target. Never configure
-this repository with credentials that can publish `@alisaitteke/photoshop-mcp`.
+This fork is source-distributed from
+[lavalava45/photoshop-mcp-digital-painting](https://github.com/lavalava45/photoshop-mcp-digital-painting)
+and is normally used through a local stdio build. It currently has **no fork npm
+package, no fork MCP Registry entry, and no fork directory-listing release flow**.
 
-The material below this point documents the inherited upstream release machinery for reference
-when rebasing/merging upstream changes; it must not be used to publish this fork under upstream identifiers.
+The repository intentionally does not contain GitHub Actions that publish to npm,
+the MCP Registry, Smithery, Glama, or other third-party catalogs. Do not add
+credentials or publishing commands for upstream identifiers to this fork.
 
-### Upstream release machinery (reference only)
+For a source release of the fork:
 
-Version bumps ship from **`master`**. Pushing a version tag triggers the
-[Release workflow](.github/workflows/release.yml), which creates a GitHub Release,
-publishes to npm, publishes metadata to the [Official MCP Registry](https://registry.modelcontextprotocol.io),
-and refreshes release notes once npm is live.
+1. Run the validation suite documented below.
+2. Update the fork's changelog/version metadata if a tagged GitHub source release is desired.
+3. Keep `server.json`, `mcpb/manifest.json`, package metadata, links, and release notes
+   under the fork's own `lavalava45/photoshop-mcp-digital-painting` identity.
+4. Create/push a Git tag or GitHub Release only under this repository. No external
+   registry publication is implied by a GitHub tag.
 
-**One-time setup:** add an npm automation token as the repository secret `NPM_TOKEN`
-(Settings → Secrets and variables → Actions). Use an npm **Automation** or
-**Publish** token scoped to `@alisaitteke/photoshop-mcp` (or the whole org).
-
-1. Merge feature work to `master`.
-2. Bump the `version` field in the root [`package.json`](package.json) only (the
-   standalone UI package in `web/package.json` uses its own semver and is bumped
-   separately when needed).
-3. Regenerate [`CHANGELOG.md`](CHANGELOG.md) and commit the release (tag is
-   created **after** the commit — `backfill-changelog.sh` reads `package.json`
-   for the pending version):
-
-   ```bash
-   ./scripts/backfill-changelog.sh
-   npm run sync:server-version
-   git add CHANGELOG.md package.json server.json
-   git commit -m "X.Y.Z"
-   git tag vX.Y.Z
-   ```
-
-4. Tag and push:
-
-   ```bash
-   git tag vX.Y.Z
-   git push origin master
-   git push origin vX.Y.Z
-   ```
-
-5. Wait for the [Release workflow](.github/workflows/release.yml) to finish, then
-   verify the new release on the repo **Releases** page. The workflow publishes to
-   npm and the MCP Registry, then refreshes release notes with **✅ Published on
-   npm.** Each release includes install commands, npm registry link,
-   [CHANGELOG.md](CHANGELOG.md) anchor, categorized commits, PR links (when `#123`
-   appears in messages), and **New Contributors** when applicable (see
-   [`scripts/build-release-notes.sh`](scripts/build-release-notes.sh)).
-
-   If publish failed but the GitHub Release exists, fix the issue and re-run the
-   failed **publish** job from Actions, or run [Refresh Release Notes](.github/workflows/refresh-release-notes.yml)
-   after a manual `npm publish` + `./mcp-publisher publish`.
-
-Always tag the **release commit on `master`**, not a feature branch. Re-pushing an
-existing tag is safe — the workflow skips creation when a release already exists.
-
-To backfill releases for tags that predate this workflow, run once:
-
-```bash
-./scripts/backfill-github-releases.sh
-```
-
-To rewrite release notes on existing releases (e.g. after improving the template):
-
-```bash
-./scripts/backfill-github-releases.sh --refresh
-```
-
-## Registry listings
-
-### Official MCP Registry
-
-Metadata lives in [`server.json`](server.json). The Release workflow publishes to
-[registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) after
-each npm publish (`mcp-publisher` via GitHub OIDC). `npm run sync:server-version`
-keeps `server.json` aligned with `package.json` before tagging.
-
-### Glama
-
-Listing: [glama.ai/mcp/servers/alisaitteke/photoshop-mcp](https://glama.ai/mcp/servers/alisaitteke/photoshop-mcp)
-
-[`glama.json`](glama.json) at the repo root lets org maintainers claim the server.
-After merging changes to `glama.json`, re-run the claim flow on Glama so metadata
-syncs.
-
-1. Open the server page → **Claim ownership** (GitHub OAuth).
-2. On the **admin** tab, configure the Docker/build spec (Node 20, `npm install`,
-   `node dist/index.js` via Glama's `mcp-proxy` wrapper).
-3. **Deploy** → wait for the sandbox health check (`initialize` + `tools/list`).
-4. **Make Release** with the semver matching the GitHub tag.
-
-Glama releases are independent of GitHub Releases — trigger a new Glama release when
-you want the directory grade/security scan refreshed for a shipped version.
-
-### Smithery (MCPB)
-
-Smithery distributes stdio servers as `.mcpb` bundles. Source manifest:
-[`mcpb/manifest.json`](mcpb/manifest.json). Build script:
-[`scripts/build-mcpb.ts`](scripts/build-mcpb.ts).
-
-```bash
-npm run build:mcpb
-# → release/photoshop-mcp-<version>.mcpb
-
-npx @smithery/cli auth login
-npx @smithery/cli mcp publish "./release/photoshop-mcp-<version>.mcpb" -n alisaitteke/photoshop-mcp
-```
-
-`tools_generated` / `prompts_generated` are set because this server exposes a large
-dynamic catalog. Rebuild and republish the MCPB after each semver release. Native
-deps (`better-sqlite3`) are compiled for the machine that runs `build:mcpb` — build
-on macOS for darwin bundles and on Windows for win32 if you need platform-specific
-artifacts.
-
-### PulseMCP
-
-Listing: [pulsemcp.com/servers/gh-alisaitteke-photoshop](https://www.pulsemcp.com/servers/gh-alisaitteke-photoshop)
-(`io.github.alisaitteke/photoshop-mcp`)
-
-PulseMCP ingests the Official MCP Registry; there is no durable public submit
-form (https://www.pulsemcp.com/submit is often paused). After a major surface
-change (tool count, platforms, website), email **hello@pulsemcp.com** and ask
-them to refresh the blurb from the registry / GitHub description. Keep the GitHub
-repo `description` in sync with `package.json` so crawlers pick up the same
-one-liner.
-
-### Chinese directories
-
-| Directory | Listing / submit | Notes |
-| --------- | ---------------- | ----- |
-| AIBase | [mcp.aibase.com/zh/server/1639703110358409836](https://mcp.aibase.com/zh/server/1639703110358409836) — update via [mcp.aibase.cn/submit](https://mcp.aibase.cn/submit) | Existing card; Chinese copy has gone stale (still said “50+ tools” in 2026). Re-submit with 118 tools, recipes, UI, Windows/macOS, and `npx -y @alisaitteke/photoshop-mcp`. |
-| mcp.so | skip | [mcp.so/submit](https://mcp.so/submit) is a **$39** paid featured listing. Do not pay. They may still scrape GitHub/registry on their own. |
-| MCP Hub CN | [mcp-cn.com](https://mcp-cn.com/) | Optional. Use the same CN one-liner if they expose a submit/收录 flow. |
-| ModelScope MCP 广场 | [modelscope.cn/mcp](https://modelscope.cn/mcp) | Optional. Catalog-only / local stdio if they allow it — this server cannot be hosted in their cloud (needs a local Photoshop). Skip hosted-deploy prompts. |
-
-CN one-liner for forms:
-
-> 跨平台（Windows / macOS）Photoshop MCP 服务器：118 个工具（含配方工作流与生成式 AI）、独立 Web UI。通过 Cursor / Claude 用自然语言控制 Photoshop。非 Adobe 官方。https://photoshop-mcp.com/
-
-## Website
-
-Public site: [photoshop-mcp.com](https://photoshop-mcp.com/) (Cloudflare Worker, not GitHub Pages).
+The original project's release and registry procedures belong to
+[alisaitteke/photoshop-mcp](https://github.com/alisaitteke/photoshop-mcp). Consult
+that repository when auditing upstream changes; do not copy its distribution
+credentials or identifiers into this fork.
 
 ## Project layout
 
