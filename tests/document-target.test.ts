@@ -42,13 +42,17 @@ describe('withOptionalDocumentId', () => {
 });
 
 describe('parseDocumentIdArg', () => {
-  it('truncates finite numbers', () => {
-    expect(parseDocumentIdArg({ document_id: 12.9 })).toBe(12);
+  it('accepts positive integers and rejects fractional or non-positive numbers', () => {
+    expect(parseDocumentIdArg({ document_id: 12 })).toBe(12);
+    expect(() => parseDocumentIdArg({ document_id: 12.9 })).toThrow('positive integer');
+    expect(() => parseDocumentIdArg({ document_id: 0 })).toThrow('positive integer');
+    expect(() => parseDocumentIdArg({ document_id: -1 })).toThrow('positive integer');
   });
 
-  it('rejects non-numbers', () => {
+  it('treats omission as optional and rejects explicitly invalid non-numbers', () => {
     expect(parseDocumentIdArg({})).toBeUndefined();
-    expect(parseDocumentIdArg({ document_id: '1' })).toBeUndefined();
+    expect(() => parseDocumentIdArg({ document_id: '1' })).toThrow('positive integer');
+    expect(() => parseDocumentIdArg({ document_id: Number.NaN })).toThrow('positive integer');
   });
 });
 
