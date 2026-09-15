@@ -116,6 +116,96 @@ try {
 `;
 }
 
+interface SamplePoint {
+  id?: string;
+  x: number;
+  y: number;
+}
+
+function parseSamplePoints(value: unknown): SamplePoint[] {
+  if (!Array.isArray(value) || value.length < 1) {
+    throw new Error('points must be a non-empty array');
+  }
+  if (value.length > 1024) throw new Error('points may contain at most 1024 entries');
+  return value.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`points[${index}] must be an object`);
+    }
+    const rec = item as Record<string, unknown>;
+    return {
+      id: rec.id === undefined ? undefined : String(rec.id),
+      x: finiteNumber(rec.x, `points[${index}].x`),
+      y: finiteNumber(rec.y, `points[${index}].y`),
+    };
+  });
+}
+
+function sampleColorsScript(points: SamplePoint[]): string {
+  const payload = JSON.stringify(points);
+  return `
+var __mcpSourceDoc = app.activeDocument;
+var __mcpTempDoc = null;
+var __mcpSampler = null;
+try {
+  var __mcpW = __mcpSourceDoc.width.as('px');
+  var __mcpH = __mcpSourceDoc.height.as('px');
+  var __mcpPoints = ${payload};
+  __mcpTempDoc = __mcpSourceDoc.duplicate('__MCP_COLOR_SAMPLES__' + (new Date().getTime()), true);
+  app.activeDocument = __mcpTempDoc;
+
+  function __mcpHex2(v) {
+    var h = v.toString(16).toUpperCase();
+    return h.length < 2 ? '0' + h : h;
+  }
+
+  var __mcpSamples = [];
+  for (var i = 0; i < __mcpPoints.length; i++) {
+    var p = __mcpPoints[i];
+    if (p.x < 0 || p.y < 0 || p.x >= __mcpW || p.y >= __mcpH) {
+      throw new Error('sample_out_of_bounds: point (' + p.x + ', ' + p.y + ') is outside ' + __mcpW + 'x' + __mcpH);
+    }
+    __mcpSampler = __mcpTempDoc.colorSamplers.add([
+      UnitValue(p.x, 'px'),
+      UnitValue(p.y, 'px')
+    ]);
+    var rgb = __mcpSampler.color.rgb;
+    var red = Number(rgb.red);
+    var green = Number(rgb.green);
+    var blue = Number(rgb.blue);
+    var r8 = Math.max(0, Math.min(255, Math.round(red)));
+    var g8 = Math.max(0, Math.min(255, Math.round(green)));
+    var b8 = Math.max(0, Math.min(255, Math.round(blue)));
+    __mcpSamples.push({
+      id: p.id === undefined ? null : p.id,
+      point: { x: p.x, y: p.y },
+      rgb: { red: red, green: green, blue: blue },
+      rgb_8bit: { red: r8, green: g8, blue: b8 },
+      hex: '#' + __mcpHex2(r8) + __mcpHex2(g8) + __mcpHex2(b8)
+    });
+    try { __mcpSampler.remove(); } catch (eRemove) {}
+    __mcpSampler = null;
+  }
+
+  return {
+    ok: true,
+    document: {
+      id: __mcpSourceDoc.id,
+      name: __mcpSourceDoc.name,
+      width: __mcpW,
+      height: __mcpH
+    },
+    mode: 'POINT_BATCH',
+    count: __mcpSamples.length,
+    samples: __mcpSamples
+  };
+} finally {
+  try { if (__mcpSampler) __mcpSampler.remove(); } catch (e) {}
+  try { if (__mcpTempDoc) __mcpTempDoc.close(SaveOptions.DONOTSAVECHANGES); } catch (e) {}
+  try { app.activeDocument = __mcpSourceDoc; } catch (e) {}
+}
+`;
+}
+
 export function createColorSamplingTools(connection: PhotoshopConnection): ToolDefinition[] {
   return [
     {
@@ -150,6 +240,36 @@ export function createColorSamplingTools(connection: PhotoshopConnection): ToolD
       },
       handler: async (args) => sampleColor(connection, args),
     },
+    {
+      tool: {
+        name: 'photoshop_sample_colors',
+        description:
+          'Sample many visible-composite point colors from one pinned Photoshop document in a single operation. ' +
+          'Large requests are automatically split into short Photoshop batches to avoid ExtendScript timeouts; each batch uses a merged temporary duplicate, and up to 1024 total point samples are returned without changing the source or leaving Color Sampler markers. ' +
+          'Use for reference-driven painting value maps, palette studies, and dense visual checkpoints where repeated photoshop_sample_color calls would be inefficient.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            points: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 1024,
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', description: 'Optional caller label preserved in the result' },
+                  x: { type: 'number', description: 'Document-space X coordinate in pixels' },
+                  y: { type: 'number', description: 'Document-space Y coordinate in pixels' },
+                },
+                required: ['x', 'y'],
+              },
+            },
+          },
+          required: ['points'],
+        },
+      },
+      handler: async (args) => sampleColors(connection, args),
+    },
   ];
 }
 
@@ -174,3 +294,38 @@ async function sampleColor(
   }
 }
 
+async function sampleColors(
+  connection: PhotoshopConnection,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  try {
+    const points = parseSamplePoints(args.points);
+    const chunkSize = 48;
+    const samples: unknown[] = [];
+    let document: unknown;
+    let batchCount = 0;
+    for (let offset = 0; offset < points.length; offset += chunkSize) {
+      const chunk = points.slice(offset, offset + chunkSize);
+      const raw = await runSnippet(connection, sampleColorsScript(chunk));
+      const parsed = parseSnippetResult(raw);
+      if (!parsed) throw new Error(`Unparseable color samples result: ${String(raw)}`);
+      if (document === undefined) document = parsed.document;
+      if (Array.isArray(parsed.samples)) samples.push(...parsed.samples);
+      batchCount++;
+    }
+    return atomicSuccess(
+      `Sampled ${points.length} colors in ${batchCount} batch${batchCount === 1 ? '' : 'es'}`,
+      {
+        document,
+        mode: 'POINT_BATCH',
+        count: samples.length,
+        batch_count: batchCount,
+        batch_size: chunkSize,
+        samples,
+      },
+      'photoshop_set_foreground_color'
+    );
+  } catch (error) {
+    return atomicFailureFromError(error);
+  }
+}

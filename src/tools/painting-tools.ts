@@ -30,13 +30,31 @@ interface PaintStroke {
   dynamics?: StrokeDynamics;
 }
 
+interface PaintDab {
+  x: number;
+  y: number;
+  color?: { red: number; green: number; blue: number };
+  size?: number;
+  opacity?: number;
+  flow?: number;
+}
+
+interface PaintDabGroup {
+  color?: { red: number; green: number; blue: number };
+  size?: number;
+  opacity?: number;
+  flow?: number;
+  points: Array<{ x: number; y: number }>;
+}
+
 type DynamicsEasing = 'LINEAR' | 'EASE_IN' | 'EASE_OUT' | 'EASE_IN_OUT';
 
 interface StrokeDynamics {
   size?: [number, number];
   opacity?: [number, number];
   flow?: [number, number];
-  steps: number;
+  steps?: number;
+  baseSteps: number;
   easing: DynamicsEasing;
 }
 
@@ -97,8 +115,8 @@ function parseDynamics(value: unknown, strokeIndex: number): StrokeDynamics | un
   if (!size && !opacity && !flow) {
     throw new Error(`strokes[${strokeIndex}].dynamics requires size, opacity, or flow`);
   }
-  const autoSteps = Math.min(
-    64,
+  const baseSteps = Math.min(
+    40,
     Math.max(
       12,
       size ? Math.ceil(Math.abs(size[1] - size[0]) / 1.5) : 0,
@@ -107,9 +125,9 @@ function parseDynamics(value: unknown, strokeIndex: number): StrokeDynamics | un
     )
   );
   const stepsRaw = rec.steps === undefined
-    ? autoSteps
+    ? undefined
     : finiteNumber(rec.steps, `strokes[${strokeIndex}].dynamics.steps`);
-  if (!Number.isInteger(stepsRaw) || stepsRaw < 2 || stepsRaw > 64) {
+  if (stepsRaw !== undefined && (!Number.isInteger(stepsRaw) || stepsRaw < 2 || stepsRaw > 64)) {
     throw new Error(`strokes[${strokeIndex}].dynamics.steps must be an integer between 2 and 64`);
   }
   const easingRaw = typeof rec.easing === 'string' ? rec.easing.toUpperCase() : 'LINEAR';
@@ -122,6 +140,7 @@ function parseDynamics(value: unknown, strokeIndex: number): StrokeDynamics | un
     opacity,
     flow,
     steps: stepsRaw,
+    baseSteps,
     easing: easingRaw as DynamicsEasing,
   };
 }
@@ -181,6 +200,81 @@ function parseStroke(value: unknown, index: number): PaintStroke {
   };
 }
 
+function parseDab(value: unknown, index: number): PaintDab {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`dabs[${index}] must be an object`);
+  }
+  const rec = value as Record<string, unknown>;
+  let color: { red: number; green: number; blue: number } | undefined;
+  if (rec.color !== undefined) {
+    if (!rec.color || typeof rec.color !== 'object' || Array.isArray(rec.color)) {
+      throw new Error(`dabs[${index}].color must be an object`);
+    }
+    const c = rec.color as Record<string, unknown>;
+    color = {
+      red: finiteNumber(c.red, `dabs[${index}].color.red`),
+      green: finiteNumber(c.green, `dabs[${index}].color.green`),
+      blue: finiteNumber(c.blue, `dabs[${index}].color.blue`),
+    };
+    for (const [channel, n] of Object.entries(color)) {
+      if (n < 0 || n > 255) throw new Error(`dabs[${index}].color.${channel} must be between 0 and 255`);
+    }
+  }
+  return {
+    x: finiteNumber(rec.x, `dabs[${index}].x`),
+    y: finiteNumber(rec.y, `dabs[${index}].y`),
+    color,
+    size: optionalNumber(rec.size, `dabs[${index}].size`, 1, 5000),
+    opacity: optionalNumber(rec.opacity, `dabs[${index}].opacity`, 0, 100),
+    flow: optionalNumber(rec.flow, `dabs[${index}].flow`, 0, 100),
+  };
+}
+
+function groupPaintDabs(dabs: PaintDab[]): PaintDabGroup[] {
+  const groups = new Map<string, PaintDabGroup>();
+  for (const dab of dabs) {
+    const key = JSON.stringify([
+      dab.color?.red ?? null,
+      dab.color?.green ?? null,
+      dab.color?.blue ?? null,
+      dab.size ?? null,
+      dab.opacity ?? null,
+      dab.flow ?? null,
+    ]);
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        color: dab.color,
+        size: dab.size,
+        opacity: dab.opacity,
+        flow: dab.flow,
+        points: [],
+      };
+      groups.set(key, group);
+    }
+    group.points.push({ x: dab.x, y: dab.y });
+  }
+  return [...groups.values()];
+}
+
+function chunkPaintDabGroups(groups: PaintDabGroup[], maxPointsPerScript = 12): PaintDabGroup[][] {
+  const batches: PaintDabGroup[][] = [];
+  for (const group of groups) {
+    for (let i = 0; i < group.points.length; i += maxPointsPerScript) {
+      batches.push([
+        {
+          color: group.color,
+          size: group.size,
+          opacity: group.opacity,
+          flow: group.flow,
+          points: group.points.slice(i, i + maxPointsPerScript),
+        },
+      ]);
+    }
+  }
+  return batches;
+}
+
 function ease(t: number, mode: DynamicsEasing): number {
   if (mode === 'EASE_IN') return t * t;
   if (mode === 'EASE_OUT') return 1 - (1 - t) * (1 - t);
@@ -210,11 +304,14 @@ function cubicPoint(
   ];
 }
 
-function sampleStrokePath(stroke: PaintStroke, targetSamples: number): [number, number][] {
+function denseStrokePath(stroke: PaintStroke, targetSamples: number): [number, number][] {
   if (stroke.points.length === 1) return [[stroke.points[0].x, stroke.points[0].y]];
 
   const dense: [number, number][] = [];
-  const segmentSamples = Math.max(8, Math.ceil(targetSamples / Math.max(1, stroke.points.length - 1)) * 4);
+  const segmentSamples = Math.max(
+    12,
+    Math.ceil(targetSamples / Math.max(1, stroke.points.length - 1)) * 6
+  );
   for (let i = 0; i < stroke.points.length - 1; i++) {
     const a = stroke.points[i];
     const b = stroke.points[i + 1];
@@ -227,20 +324,32 @@ function sampleStrokePath(stroke: PaintStroke, targetSamples: number): [number, 
       dense.push(cubicPoint(p0, p1, p2, p3, j / segmentSamples));
     }
   }
+  return dense;
+}
 
+function cumulativePathLengths(points: [number, number][]): number[] {
   const cumulative = [0];
-  for (let i = 1; i < dense.length; i++) {
-    const dx = dense[i][0] - dense[i - 1][0];
-    const dy = dense[i][1] - dense[i - 1][1];
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i][0] - points[i - 1][0];
+    const dy = points[i][1] - points[i - 1][1];
     cumulative.push(cumulative[i - 1] + Math.sqrt(dx * dx + dy * dy));
   }
+  return cumulative;
+}
+
+function sampleStrokePathAtFractions(
+  stroke: PaintStroke,
+  fractions: number[]
+): [number, number][] {
+  const dense = denseStrokePath(stroke, Math.max(16, fractions.length * 2));
+  const cumulative = cumulativePathLengths(dense);
   const total = cumulative[cumulative.length - 1];
-  if (total <= 1e-9) return Array.from({ length: targetSamples + 1 }, () => dense[0]);
+  if (total <= 1e-9) return fractions.map(() => dense[0]);
 
   const out: [number, number][] = [];
   let cursor = 1;
-  for (let s = 0; s <= targetSamples; s++) {
-    const target = (total * s) / targetSamples;
+  for (const fraction of fractions) {
+    const target = total * Math.max(0, Math.min(1, fraction));
     while (cursor < cumulative.length - 1 && cumulative[cursor] < target) cursor++;
     const lo = Math.max(0, cursor - 1);
     const hi = cursor;
@@ -254,16 +363,80 @@ function sampleStrokePath(stroke: PaintStroke, targetSamples: number): [number, 
   return out;
 }
 
+function estimateStrokeLength(stroke: PaintStroke): number {
+  const dense = denseStrokePath(stroke, 32);
+  const cumulative = cumulativePathLengths(dense);
+  return cumulative[cumulative.length - 1] ?? 0;
+}
+
+function resolvedDynamicSteps(stroke: PaintStroke, dynamics: StrokeDynamics): number {
+  if (dynamics.steps !== undefined) return dynamics.steps;
+
+  let geometrySteps = 12;
+  if (dynamics.size) {
+    const pathLength = estimateStrokeLength(stroke);
+    const minSize = Math.max(1, Math.min(dynamics.size[0], dynamics.size[1]));
+    // Keep thin sections dense enough that each path-stroke capsule is short
+    // relative to the brush diameter. AUTO caps at 40 to contain Action Manager cost.
+    geometrySteps = Math.ceil(pathLength / Math.max(2.5, minSize * 0.85));
+  }
+  return Math.min(40, Math.max(dynamics.baseSteps, geometrySteps));
+}
+
+function dynamicSampleFractions(dynamics: StrokeDynamics, steps: number): number[] {
+  if (!dynamics.size || Math.abs(dynamics.size[1] - dynamics.size[0]) < 1e-9) {
+    return Array.from({ length: steps + 1 }, (_, i) => i / steps);
+  }
+
+  // Allocate more render segments to the thin portion of a taper. Equal-length
+  // segmentation looks acceptable at the thick end but produces visible capsules
+  // at the thin end. Density biased by inverse square-root diameter keeps the thin end denser
+  // without starving the thick portion of segments.
+  const resolution = Math.max(256, steps * 8);
+  const cumulativeDensity = [0];
+  for (let i = 1; i <= resolution; i++) {
+    const a = (i - 1) / resolution;
+    const b = i / resolution;
+    const ta = ease(a, dynamics.easing);
+    const tb = ease(b, dynamics.easing);
+    const sizeA = lerp(dynamics.size[0], dynamics.size[1], ta);
+    const sizeB = lerp(dynamics.size[0], dynamics.size[1], tb);
+    const densityA = 1 / Math.sqrt(Math.max(1, sizeA));
+    const densityB = 1 / Math.sqrt(Math.max(1, sizeB));
+    cumulativeDensity.push(
+      cumulativeDensity[i - 1] + ((densityA + densityB) * 0.5) / resolution
+    );
+  }
+
+  const totalDensity = cumulativeDensity[cumulativeDensity.length - 1];
+  const fractions: number[] = [];
+  let cursor = 1;
+  for (let s = 0; s <= steps; s++) {
+    const target = (totalDensity * s) / steps;
+    while (cursor < cumulativeDensity.length - 1 && cumulativeDensity[cursor] < target) cursor++;
+    const lo = Math.max(0, cursor - 1);
+    const hi = cursor;
+    const span = cumulativeDensity[hi] - cumulativeDensity[lo];
+    const localT = span <= 1e-12 ? 0 : (target - cumulativeDensity[lo]) / span;
+    fractions.push((lo + localT) / resolution);
+  }
+  fractions[0] = 0;
+  fractions[fractions.length - 1] = 1;
+  return fractions;
+}
+
 function expandDynamicStroke(stroke: PaintStroke): PaintStroke[] {
   if (!stroke.dynamics) return [{ ...stroke, dynamics: undefined }];
   if (stroke.closed) throw new Error('dynamics is not supported for closed strokes');
   if (stroke.points.length < 2) throw new Error('dynamics requires at least 2 stroke points');
 
   const { dynamics } = stroke;
-  const sampled = sampleStrokePath(stroke, dynamics.steps);
+  const steps = resolvedDynamicSteps(stroke, dynamics);
+  const fractions = dynamicSampleFractions(dynamics, steps);
+  const sampled = sampleStrokePathAtFractions(stroke, fractions);
   const segments: PaintStroke[] = [];
-  for (let i = 0; i < dynamics.steps; i++) {
-    const midpoint = (i + 0.5) / dynamics.steps;
+  for (let i = 0; i < steps; i++) {
+    const midpoint = (fractions[i] + fractions[i + 1]) * 0.5;
     const t = ease(midpoint, dynamics.easing);
     segments.push({
       points: [
@@ -560,6 +733,76 @@ return { ok: true, stroke_count: strokes.length, layer_name: doc.activeLayer.nam
 `;
 }
 
+function paintDabsScript(groups: PaintDabGroup[]): string {
+  const payload = JSON.stringify(groups);
+  return `
+${paintRuntime()}
+if (app.documents.length === 0) throw new Error('No active document');
+var doc = app.activeDocument;
+var groups = ${payload};
+function __paint_dabsSetForeground(c) {
+  var color = new SolidColor();
+  color.rgb.red = c.red;
+  color.rgb.green = c.green;
+  color.rgb.blue = c.blue;
+  app.foregroundColor = color;
+}
+function __paint_dabsDiffers(a, b) {
+  return Math.abs(Number(a) - Number(b)) > 0.0001;
+}
+function __paint_applyDabGroups() {
+  var brushCache = __paint_createBrushCache();
+  var brushState = brushCache.state;
+  for (var g = 0; g < groups.length; g++) {
+    var group = groups[g];
+    var brushChanged = false;
+    if (group.size !== undefined && __paint_dabsDiffers(brushState.size, group.size)) {
+      brushState.size = group.size;
+      brushChanged = true;
+    }
+    if (group.opacity !== undefined && __paint_dabsDiffers(brushState.opacity, group.opacity)) {
+      brushState.opacity = group.opacity;
+      brushChanged = true;
+    }
+    if (group.flow !== undefined && __paint_dabsDiffers(brushState.flow, group.flow)) {
+      brushState.flow = group.flow;
+      brushChanged = true;
+    }
+    if (brushChanged) __paint_applyBrushCache(brushCache);
+    if (group.color) __paint_dabsSetForeground(group.color);
+
+    var subpaths = [];
+    for (var i = 0; i < group.points.length; i++) {
+      var src = group.points[i];
+      var p1 = new PathPointInfo();
+      p1.kind = PointKind.CORNERPOINT;
+      p1.anchor = [src.x, src.y];
+      p1.leftDirection = [src.x, src.y];
+      p1.rightDirection = [src.x, src.y];
+      var p2 = new PathPointInfo();
+      p2.kind = PointKind.CORNERPOINT;
+      p2.anchor = [src.x, src.y];
+      p2.leftDirection = [src.x, src.y];
+      p2.rightDirection = [src.x, src.y];
+      var sub = new SubPathInfo();
+      sub.closed = false;
+      sub.operation = ShapeOperation.SHAPEADD;
+      sub.entireSubPath = [p1, p2];
+      subpaths.push(sub);
+    }
+    var path = doc.pathItems.add('__MCP_DABS_' + g, subpaths);
+    try {
+      path.strokePath(ToolType.BRUSH, false);
+    } finally {
+      try { path.remove(); } catch (eRemove) {}
+    }
+  }
+}
+doc.suspendHistory('MCP Paint Dabs', '__paint_applyDabGroups()');
+return { ok: true, group_count: groups.length, layer_name: doc.activeLayer.name };
+`;
+}
+
 function paintStrokeCost(stroke: PaintStroke): number {
   let cost = 1;
   if (stroke.color) cost += 0.5;
@@ -756,7 +999,7 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
                   dynamics: {
                     type: 'object',
                     description:
-                      'Optional interpolated profile along an open stroke. Ranges are [start, end]. The path is sampled into short segments and rendered with changing brush settings.',
+                      'Optional interpolated profile along an open stroke. Ranges are [start, end]. AUTO segmentation follows arc length, increases density for long/thin tapers, and allocates shorter segments where the brush is smaller.',
                     properties: {
                       size: {
                         type: 'array',
@@ -781,7 +1024,7 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
                         minimum: 2,
                         maximum: 64,
                         description:
-                          'Optional rendered segment count. When omitted, an automatic 12–64 step count is chosen from the size/opacity/flow change magnitude.',
+                          'Optional rendered segment count. When omitted, AUTO chooses 12–40 steps from dynamics magnitude plus stroke length/local brush size. Explicit values preserve exact segment count.',
                       },
                       easing: {
                         type: 'string',
@@ -832,6 +1075,45 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
         },
       },
       handler: async (args) => paintStrokes(connection, args),
+    },
+    {
+      tool: {
+        name: 'photoshop_paint_dabs',
+        description:
+          'Paint many brush dabs/stamps efficiently on the active raster layer. Dabs with identical color/size/opacity/flow are grouped, then internally chunked into small Photoshop multi-subpath strokes for timeout resilience. Intended for stippling, overlapping dab chains, soft tonal buildup, texture, and photorealistic painting passes.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            dabs: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 5000,
+              items: {
+                type: 'object',
+                properties: {
+                  x: { type: 'number' },
+                  y: { type: 'number' },
+                  color: {
+                    type: 'object',
+                    properties: {
+                      red: { type: 'number', minimum: 0, maximum: 255 },
+                      green: { type: 'number', minimum: 0, maximum: 255 },
+                      blue: { type: 'number', minimum: 0, maximum: 255 },
+                    },
+                    required: ['red', 'green', 'blue'],
+                  },
+                  size: { type: 'number', minimum: 1, maximum: 5000 },
+                  opacity: { type: 'number', minimum: 0, maximum: 100 },
+                  flow: { type: 'number', minimum: 0, maximum: 100 },
+                },
+                required: ['x', 'y'],
+              },
+            },
+          },
+          required: ['dabs'],
+        },
+      },
+      handler: async (args) => paintDabs(connection, args),
     },
   ];
 }
@@ -987,6 +1269,47 @@ async function paintStrokes(
       batch_count: batches.length,
       history_steps: batches.length,
       auto_chunked: rawMode === 'AUTO' && batches.length > 1,
+      layer_name: layerName,
+    });
+  } catch (error) {
+    return atomicFailureFromError(error);
+  }
+}
+
+async function paintDabs(
+  connection: PhotoshopConnection,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  try {
+    if (!Array.isArray(args.dabs) || args.dabs.length === 0) {
+      throw new Error('dabs must be a non-empty array');
+    }
+    if (args.dabs.length > 5000) throw new Error('dabs may contain at most 5000 entries per call');
+    const dabs = args.dabs.map((dab, index) => parseDab(dab, index));
+    const groups = groupPaintDabs(dabs);
+    const batches = chunkPaintDabGroups(groups);
+    let layerName: unknown;
+    let completed = 0;
+    for (let i = 0; i < batches.length; i++) {
+      try {
+        const raw = await runSnippet(connection, paintDabsScript(batches[i]));
+        const parsed = parseSnippetResult(raw);
+        if (!parsed) throw new Error(`Unparseable paint dabs result: ${String(raw)}`);
+        layerName = parsed.layer_name;
+        completed += batches[i].reduce((sum, group) => sum + group.points.length, 0);
+      } catch (error) {
+        throw new Error(
+          `Paint-dabs batch ${i + 1}/${batches.length} failed after ${completed}/${dabs.length} dabs completed. ` +
+            `Earlier batches remain applied as separate history steps. ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+    return atomicSuccess(`Painted ${dabs.length} dab${dabs.length === 1 ? '' : 's'}`, {
+      dab_count: dabs.length,
+      group_count: groups.length,
+      batch_count: batches.length,
+      history_steps: batches.length,
+      auto_chunked: batches.length > 1,
       layer_name: layerName,
     });
   } catch (error) {

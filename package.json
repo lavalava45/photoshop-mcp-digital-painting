@@ -36,6 +36,7 @@
     "spike:2026": "tsx scripts/spike-2026-features.ts",
     "spike:issue-2": "tsx scripts/spike-issue-2.ts",
     "verify:photoshop-prompts": "tsx scripts/verify-photoshop-prompt-coverage.ts",
+    "verify:painting-policy": "node scripts/verify-digital-painting-policy.mjs",
     "test:mcp-local": "tsx scripts/test-mcp-local.ts",
     "test:ui-auth": "tsx scripts/test-ui-auth.ts",
     "test:mcp-all": "tsx scripts/test-all-mcp-tools.ts",

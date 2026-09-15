@@ -95,6 +95,32 @@ const mixed = Array.from({ length: 12 }, (_, i) => ({
 {
   const connection = recordingConnection();
   const handler = paintHandler(connection);
+  const result = parseToolJson(await handler({
+    strokes: [{
+      tool: 'BRUSH',
+      points: [{ x: 20, y: 140 }, { x: 220, y: 140 }],
+      dynamics: {
+        size: [30, 4],
+        easing: 'LINEAR',
+      },
+    }],
+  }));
+  assert(result.ok === true, 'AUTO geometric dynamics should succeed');
+  assert(result.details?.render_stroke_count > 12, 'long thin taper should use more than the minimum AUTO segments');
+  assert(result.details?.render_stroke_count <= 40, 'AUTO dynamics must respect the 40-segment cap');
+  assert(connection.scripts.length > 1, 'dense AUTO dynamics should remain safely chunked');
+
+  const allScripts = connection.scripts.join('\n');
+  const strokeMatches = [...allScripts.matchAll(/points:\[\{x:([0-9.\-]+),y:([0-9.\-]+)\},\{x:([0-9.\-]+),y:([0-9.\-]+)\}\]/g)];
+  if (strokeMatches.length >= 4) {
+    const lengths = strokeMatches.map((m) => Math.hypot(Number(m[3]) - Number(m[1]), Number(m[4]) - Number(m[2])));
+    assert(lengths[lengths.length - 1] < lengths[0], 'thin taper end should receive shorter render segments than thick start');
+  }
+}
+
+{
+  const connection = recordingConnection();
+  const handler = paintHandler(connection);
   const result = await handler({
     strokes: [{
       points: [{ x: 20, y: 20 }, { x: 100, y: 20 }],

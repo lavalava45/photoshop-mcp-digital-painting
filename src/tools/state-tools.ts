@@ -24,7 +24,7 @@ export function createStateTools(connection: PhotoshopConnection): ToolDefinitio
         name: 'photoshop_get_state',
         description:
           'Return a cheap read-only snapshot of Photoshop session state (active document, layer, selection).\n\n' +
-          'Use when: before any tool that needs an active document/layer, or after an error to recover context.\n' +
+          'Use when: before the first document/layer-dependent action, when active state may have changed, or after an error to recover context. A verified document/layer latch does not require repeating this read before every atomic action.\n' +
           'Do NOT use when: you only need a visual preview — use photoshop_get_preview instead.\n\n' +
           'Returns: JSON with hasDocument, document.id/name/dimensions/colorMode, activeLayer kind/name, hasSelection. Capture document.id and pass it as document_id on later mutating calls.\n' +
           'Preconditions: none (safe on empty session). Side effects: none.',
@@ -36,7 +36,7 @@ export function createStateTools(connection: PhotoshopConnection): ToolDefinitio
       tool: {
         name: 'photoshop_get_preview',
         description:
-          'Export the active document as a base64 JPEG preview for visual verification.\n\n' +
+          'Export the active/pinned document as a base64 JPEG preview for visual verification. The server injects optional document_id targeting for this tool; use it when multiple documents may be open.\n\n' +
           'Use when: after visual edits to confirm result before reporting success to the user.\n' +
           'Do NOT use when: you only need numeric state — use photoshop_get_state (much cheaper).\n\n' +
           'Returns: MCP image content block (JPEG) plus metadata text by default. Terminal-only clients may set materialize_path and include_image=false to persist the same JPEG and receive only lightweight metadata.\n' +

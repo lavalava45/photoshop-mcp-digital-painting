@@ -1,389 +1,687 @@
 # Digital Painting Visual Control Skill
 
-This skill defines how an AI painting agent should use the fork's Photoshop brush tools. It is deliberately separate from the low-level painting API: the API answers **how to make a stroke**, while this skill answers **when, where, and whether that stroke should be made**.
+This skill defines the visual-control policy for AI painting through the Photoshop MCP fork. The low-level API answers **how to make a mark**; this skill answers **when, where, with what visual intent, and whether the result should be kept**.
 
-The executable MCP guide prompt is:
+Executable guide prompt:
 
 ```text
 ps.digital_painting_control
 ```
 
-Use it for drawings, paintings, sketches, brush-based illustration, line art and similar work where the result depends on relationships between many strokes.
+Use it for drawings, paintings, brush-based illustration, line art, studies and similar work whose quality depends on relationships between many edits.
 
-## HARD TOOL-ROUTING INVARIANT — Photoshop mode
+## Hard execution invariants
 
-Once a task has entered Photoshop/COS/MCP mode, that execution mode is **sticky**. It remains active across subsequent turns until the user explicitly exits it.
+### Photoshop tool-routing latch
 
-While Photoshop mode is active:
+Once a task enters Photoshop/COS/MCP mode, that execution mode is sticky until the user explicitly exits it.
 
-1. Short continuation messages such as `да`, `давай`, `продолжай`, `сделай`, `рисуй`, `дальше`, `есть доступ`, `ок`, or `попробуй еще` **inherit the current Photoshop execution path**. They must not trigger a fresh tool-family decision.
-2. In Chat On Steroids, the first execution surface for a Photoshop continuation must be `Chat_On_Steroids_Core` for MCP/terminal work, or `Chat_On_Steroids_Desktop` only for read-only UI inspection when needed.
-3. `image_gen` or any other external image-generation path must **not** be called while Photoshop mode is active, even if the request contains words such as *draw*, *paint*, *image*, *portrait*, *render*, *create*, *edit*, or *repaint*.
-4. A short or ambiguous follow-up can never switch execution mode.
-5. Photoshop mode may be exited only by an explicit user instruction that clearly changes the execution path, for example: `используй ImageGen`, `сгенерируй через ImageGen`, `не в Photoshop`, or an equivalent explicit request.
-6. If routing logic would choose `image_gen` while Photoshop mode is active, treat that as a routing violation: stop that route and use the existing Photoshop/COS/MCP path instead.
-
-Operational latch:
+- Short continuations such as `да`, `давай`, `продолжай`, `рисуй`, `дальше`, `ок` inherit the current Photoshop path.
+- In Chat On Steroids, use `Chat_On_Steroids_Core` for Photoshop MCP/terminal execution; use Desktop only for read-only UI inspection when needed.
+- Do not switch to `image_gen` or another image-generation path merely because a follow-up says draw/paint/render/edit.
+- Switch execution family only on an explicit user instruction such as “используй ImageGen” or “не в Photoshop”.
 
 ```text
 CURRENT_EXECUTION_MODE = PHOTOSHOP_MCP
-Do not reconsider the tool family unless the user explicitly changes mode.
 ```
 
-Regression examples:
+### Document targeting latch
+
+Capture the working `document.id` from `photoshop_get_state` or `photoshop_list_documents` and keep it as the workflow latch.
+
+- Pass `document_id` on document-bound reads/mutations whenever multiple documents or outside UI/agent activity could retarget the active tab.
+- Invalid or closed ids fail closed. Never drop the id and silently retry against the active tab.
+- Recover a missing target by listing documents and deliberately re-establishing the latch.
+- Check returned `document_target: { id, pinned: true }` when deterministic targeting matters.
+- Global operations such as brush configuration or pure landmark transforms do not require a document latch.
+
+## Core controller
+
+### Why this skill exists
+
+It prevents three recurring classes of failure:
+
+- technically successful edits that are visually wrong;
+- detail/texture added over unresolved composition, shape, value or form;
+- habitual primitives or append-only painting replacing image-specific correction.
+
+The core loop is therefore:
 
 ```text
-Context: editing a portrait in Photoshop via MCP
-User: "давай"
-Correct: continue through Chat_On_Steroids_Core → direct stdio Photoshop MCP
-Wrong: image_gen
-
-User: "есть доступ"
-Correct: resume/check the Photoshop MCP path
-Wrong: image_gen
-
-User: "продолжай рисовать"
-Correct: continue the current Photoshop painting workflow
-Wrong: image_gen
+perceive → plan → mutate a short semantic pass → inspect → accept/correct/rollback → replan
 ```
 
-This invariant is stronger than a preference. It is a tool-routing guard intended to prevent a short continuation turn from escaping an already-established Photoshop workflow.
-
-## HARD DOCUMENT-TARGETING INVARIANT
-
-When a workflow is attached to an existing Photoshop document, capture its numeric `document.id` from `photoshop_get_state` or `photoshop_list_documents` and treat that id as the document latch for the workflow.
-
-Rules:
-
-1. If more than one document is open, or another user/agent/UI action could change the active tab, pass the latched `document_id` on every document-bound read and mutation that accepts it.
-2. Do not trust the visually active Photoshop tab as targeting state. Another MCP client, agent, action, Smart Object workflow, or user click may change it between calls.
-3. A supplied `document_id` must be a positive integer. Invalid values fail closed; never remove the id and retry against the active document as a fallback.
-4. Unknown/closed ids must be recovered by calling `photoshop_list_documents` and deliberately choosing the current target again.
-5. Successful pinned calls report `document_target: { id, pinned: true }`. Check this metadata when deterministic cross-document execution matters.
-6. Global/pure operations such as brush configuration, opening/creating a document, or pure landmark transforms do not need a document latch.
-
-The intended invariant is:
+### Universal painting hierarchy
 
 ```text
-capture document.id once
-→ pass document_id on document-bound operations
-→ verify returned document_target when needed
-→ never silently fall back to whichever tab happens to be active
+COMPOSITION → SHAPE → VALUE → FORM → EDGE → MATERIAL → DETAIL
 ```
 
-## Why this skill exists
+- **Composition** — focal hierarchy, placement, negative space, perspective/horizon, depth order and light direction.
+- **Shape** — silhouette and large masses.
+- **Value** — major light/shadow families and value grouping.
+- **Form** — plane turns and transitions that make masses read as volume.
+- **Edge** — deliberate hard/firm/soft/lost hierarchy.
+- **Material** — surface response to light, roughness/gloss, reflection, translucency and texture.
+- **Detail** — selected small information after larger problems are solved.
 
-A technically valid stroke can still be visually wrong. Common failures include:
+Advance only when the current level visually reads. If a later checkpoint exposes an earlier failure, return to that level.
 
-- drawing a long line through a foreground object;
-- adding detail before fixing silhouette/proportion;
-- creating accidental tangencies or doubled contours;
-- continuing to accumulate strokes without inspecting the image;
-- treating a requested stroke count as the definition of completion.
+### Operating modes
 
-The skill changes the workflow from:
+Choose the mode before painting:
+
+1. **Reference reproduction** — reconstruct from a visible reference. The reference supplies visual/measurement evidence; it is not pasted, blended as an underlay or mechanically traced by default.
+2. **Free composition** — derive a visual hypothesis from the brief: focal point, placement, perspective, large masses, negative space, depth order, light, atmosphere, palette and scale.
+3. **Stylized painting** — use the same hierarchy/control loop while adapting shape, edge, mark, material and finish criteria to the requested style.
+
+Photorealistic portrait work is a specialization of reference reproduction, not the universal painter.
+
+### Style contract
+
+Translate style into operational properties rather than `style name → preset`:
 
 ```text
-plan once → paint many strokes → inspect at the end
+style_contract = {
+  realism_level,
+  shape_language,
+  composition_bias,
+  edge_policy,
+  contour_role,
+  mark_visibility,
+  value_policy,
+  color_policy,
+  spatial_treatment,
+  material_treatment,
+  detail_density,
+  texture_policy,
+  primitive_footprint_tolerance,
+  layer_or_mask_bias,
+  finish_criteria
+}
 ```
 
-to:
+Record only relevant fields. The contract is upstream of region/action/primitive choice and modifies the critic as well as the painter. Judge previews against:
 
 ```text
-perceive → plan → paint a semantic pass → inspect → correct → continue
+USER BRIEF + STRUCTURAL READABILITY + STYLE CONTRACT
 ```
 
-## Universal painting hierarchy
+If no style is specified, derive only a minimal contract from brief/medium/finish level. Style may license visible marks or simplified geometry, but not accidental tangencies, broken occlusion or unintended crossings.
 
-The core discipline is subject-agnostic:
+### Painting state and persistence
+
+For non-trivial work maintain explicit state; for long/development sessions persist it to `process-dir/painting-state.json`:
 
 ```text
-SHAPE → VALUE → FORM → EDGE → MATERIAL → DETAIL
+{
+  session_id,
+  working_document_id,
+  reference_document_id?,
+  process_dir,
+  frame_counter,
+  accepted_frame,
+  current_frame,
+  last_psd_checkpoint?,
+  mode,
+  reference_or_brief,
+  style_contract,
+  stage,
+  active_scale,
+  unresolved_errors,
+  candidate_regions,
+  selected_region,
+  selected_action_class,
+  protected_regions,
+  rollback_anchor,
+  brush_state?: {
+    inventory_snapshot?,
+    preferred_brushes?,
+    required_brushes?,
+    required_usage?,
+    role_map?,
+    active_preset?,
+    effective_settings?,
+    last_probe?
+  },
+  last_action,
+  last_action_result
+}
 ```
 
-This hierarchy applies whether the subject is an apple, building, machine, landscape, animal, figure, prop, or invented form. It is not a portrait recipe.
+Persist after an accepted checkpoint, rollback, stage transition, meaningful replan or document/session recovery. Do not rewrite it after every read-only call.
 
-- **Shape** — composition, silhouette, negative space and large masses.
-- **Value** — the major light/shadow families and value-group design.
-- **Form** — plane turns and transitions that make flat masses read as volume.
-- **Edge** — deliberate hard/firm/soft/lost edge hierarchy.
-- **Material** — surface response to light: roughness, gloss, reflection, translucency, texture and highlight behavior.
-- **Detail** — selected small information and accents after the larger painting problems are solved.
+`accepted_frame` and `current_frame` are distinct: an uninspected frame is not accepted merely because it exists.
 
-A stage is not considered solved merely because pixels exist. The image should visually read at that level before advancing. If a later checkpoint exposes an earlier-stage failure, return to the earlier stage and correct it.
+#### Paired PSD checkpoint persistence
 
-### Brush-scale discipline
-
-Brush size is relational, not a fixed habit. Use a brush appropriate to the size of the form being described:
-
-- broad brushes for initial masses and coverage;
-- medium brushes for planes, value transitions and form modeling;
-- smaller brushes for selected edges, texture and focal detail.
-
-Large opaque primitive-like strokes are normal during block-in. They should not remain the dominant descriptive language throughout the whole painting unless the requested style explicitly calls for flat/vector/cel-like construction. After the large masses are established, reduce brush scale and increase control.
-
-### Painterly transitions and blending
-
-Blending does not mean indiscriminate blur. Prefer:
-
-- overlapping lower-opacity/lower-flow strokes;
-- intermediate values and temperatures;
-- strokes following the turning form;
-- scumbling, hatching or textured brushes where appropriate;
-- selective Smudge only when it improves a specific transition.
-
-Preserve useful edge structure. A convincing transition may contain both a soft gradient and a crisp accent; globally smoothing everything usually weakens form and material.
-
-### Anti-vector check
-
-Unless a flat graphic style is requested, watch for these failure modes:
-
-- final forms still built mostly from oversized opaque blobs;
-- every contour equally hard and equally dark;
-- identical-width curves used as a substitute for observed edges;
-- color regions separated like cut paper with little value transition;
-- no directional brushwork or surface texture;
-- highlights/shadows added as symbols rather than consequences of form and material.
-
-Correct them by returning to value/form/edge/material stages rather than merely adding more detail.
-
-## Semantic passes
-
-Prefer passes with clear visual purpose, following the hierarchy above:
-
-1. **Shape / block-in** — silhouette, negative space and large masses.
-2. **Value** — broad light/shadow families and value-group organization.
-3. **Form** — plane changes, halftones, shadow structure and volume cues.
-4. **Edge** — hard/firm/soft/lost edge decisions.
-5. **Material / color** — surface response, palette refinement, temperature, reflection and texture.
-6. **Detail / accents** — selected focal marks and small information.
-7. **Cleanup** — repainting/erasing accidental crossings, primitive artifacts, muddy transitions and inconsistent edges.
-
-Not every style exposes each pass separately, but the visual logic still applies. Complex work should not be executed as one blind batch, and detail should not be used to compensate for unsolved shape/value/form problems.
-
-## Reference color sampling
-
-For reference-driven painting, prefer measured palette pickup over guessing RGB values.
-Use `photoshop_sample_color` on the pinned reference document:
-
-- `radius=0` for a precise local pixel;
-- a small `radius` for skin, hair, fabric, shadow, or other noisy/textured areas where a representative local average is more useful than one pixel.
-
-The sampler reads the visible composite through a temporary merged duplicate and does not
-leave Color Sampler markers in the reference. Keep the reference `document_id` pinned so
-another open PSD cannot silently become the sampling source. Use sampled colors as evidence,
-not as a requirement to copy every local pixel literally; preserve the painting's intended
-value/color hierarchy.
-
-## Occlusion and protected regions
-
-Before a stroke is added, ask what existing form should appear in front of it.
-
-Protected regions should normally be **inferred dynamically from the current preview**, not hard-coded in advance for a specific subject. The agent may begin with a rough semantic depth hypothesis, but actual protected geometry should be updated after block-in/construction checkpoints from what is visibly present in the rendered image.
-
-Do not pre-program subject-specific coordinates such as “wheel circles”, “eye boxes”, or “hand polygons” merely to make a benchmark pass. That turns visual control into hidden task-specific scripting rather than a general painting skill. Predefined regions are appropriate only when the user explicitly supplies masks, selections, coordinates, or other geometry.
-
-Do not run a stroke through a foreground form unless the overlap is intentional. When a path crosses protected geometry, prefer one of these solutions:
-
-- split the stroke into visible segments;
-- place it on a lower layer;
-- mask it;
-- paint then erase the hidden segment;
-- redesign the stroke.
-
-Examples of protected regions can include the main silhouette, face/eyes, hands, foreground props or any already-resolved focal feature.
-
-## Long strokes
-
-Long strokes are not forbidden. They are allowed when their complete path is visually verified to be clear.
-
-If a long path crosses complex geometry, split it into shorter intentional strokes. The goal is not a particular stroke count; the goal is controlled visual relationships.
-
-## Visual checkpoints
-
-Use a preview after every major semantic pass. A useful cycle is:
+Whenever a preview/export is promoted to an **accepted intermediate checkpoint**, **stage transition**, or **recovery anchor**, also save a layered PSD checkpoint in the same process directory before continuing. Use the same serial/stem when practical so the visual preview and editable recovery file form an obvious pair, for example:
 
 ```text
-shape/block-in → preview
-value → preview
-form → preview
-edge + material/color → preview
-detail/accents → preview
-cleanup → final preview
+frame_0042_tower_form.jpg
+frame_0042_tower_form.psd
 ```
 
-At each checkpoint classify problems as:
+This PSD checkpoint is mandatory persistence, not an optional convenience. Save it with the latched `document_id`; do not silently continue if the PSD write failed. Record the successful path in `last_psd_checkpoint` / painting state.
 
-- **must-fix** — structural/readability/occlusion error that should be corrected before continuing;
-- **should-fix** — noticeable quality issue that matters at the requested finish level;
-- **optional refinement** — improvement that is not required for completion.
+Do **not** create a PSD for every high-frequency diagnostic/process JPEG. High-frequency image capture and editable PSD checkpoints have different cadence: ordinary mutation frames may remain JPEG-only, while accepted milestones/stage transitions/recovery anchors receive the paired PSD. If the user explicitly asks for denser PSD checkpointing, obey that stricter cadence.
 
-Do not add more detail while a must-fix problem remains underneath it.
+The current `photoshop_save_document(..., format="PSD")` path writes the checkpoint as a copy, preserving the working document association; use it rather than retargeting the live document to each checkpoint filename.
 
-### Measurement checkpoints for proportion-sensitive work
-
-For portraits, architecture, perspective-heavy scenes, repeated motifs, or
-other work where proportion drift matters, a checkpoint may include explicit
-geometry measurement before structural repainting.
-
-Preferred loop:
+Resume with:
 
 ```text
-preview/reference inspection
-→ choose semantic landmarks
-→ optional photoshop_add_guides
-→ photoshop_measure_points
-→ for cross-document reuse: photoshop_transform_landmarks
-→ compare current/reference sets with photoshop_compare_landmarks when useful
-→ structural correction
-→ preview again
+load state → verify Photoshop/document latch → inspect actual current/accepted frame → reconcile → continue
 ```
 
-The measurement tools do not detect semantic landmarks. The agent must choose
-the points from the visible reference/current preview (or use points supplied by
-the user). Do not present visually estimated landmark coordinates as if they
-were automatically detected by Photoshop.
+A successful `ROLLBACK` is not an end-of-turn condition: inspect the restored canvas, reconcile/persist it, then replan unless the user said stop/wait or Definition of Done already passes.
 
-For reusable landmark sets, define a semantic frame as axis-aligned bounds
-`{left, top, right, bottom}` around the region whose internal proportions matter
-(for example a face bounds box, product silhouette box, window opening, or card
-frame). `photoshop_transform_landmarks` converts each point to local `u/v`
-coordinates in the source frame and reconstructs it in the target frame.
-`photoshop_compare_landmarks` compares same-named points in their respective
-frames and reports normalized per-point error plus mean/RMSE/max error. This
-keeps the workflow general: the tools know geometry and names, not anatomy.
+### Compact hot loop
 
-## Execution pacing and user-visible progress
-
-Painting should proceed as a sequence of **short, observable semantic passes**, not as a long background chain of Photoshop mutations.
-
-Use this execution contract for every non-trivial painting session:
+Keep this active throughout long sessions:
 
 ```text
-short semantic pass
-→ wait for the MCP/terminal call to finish completely
-→ obtain a preview
-→ tell the user what changed and what the preview shows
-→ only then start the next pass
+BRIEF + STYLE CONTRACT
+→ largest unresolved problem at current scale
+→ protected areas + region priority
+→ ACTION CLASS (ADD is not default)
+→ stage-appropriate primitive/tool
+→ one short mutation / atomic visual bundle
+→ process capture
+→ inspect real Photoshop result
+→ execution sanity
+→ improvement | neutral | regression
+→ accept | correct | rollback
+→ persist accepted/recovered state
+→ replan
 ```
 
-Important rules:
+Must-not-forget guards:
 
-- Do **not** start another Photoshop mutation while the previous MCP/terminal call is still running. A returned session/process id is not completion; wait for the final terminal result/exit.
-- Do **not** queue several semantic passes into one long background command merely to save chat turns. Long hidden chains make interruption and recovery ambiguous.
-- If Photoshop may appear visually unchanged while an ExtendScript/MCP call is still executing, explicitly tell the user that the pass is still running and what operation is in progress.
-- Before starting a semantic pass, briefly state what will be changed. After it completes, report that it completed before moving to preview/inspection.
-- After each preview, summarize the visible result and classify the next issue as must-fix, should-fix, or optional refinement before issuing more paint commands.
-- During a long-running operation, keep the user informed in chat instead of remaining silent long enough that the session may look stalled. Prefer concise status updates over speculative claims that Photoshop is frozen.
-- If the chat/UI reloads, reconnects, or reports an interrupted response, treat the state as uncertain until the outstanding terminal/MCP job is checked. Do not assume that a previously launched Photoshop operation stopped merely because the chat response was interrupted.
-- If the user says to stop or wait, do not launch any new Photoshop mutation. First determine whether an already-started call is still running and report its status.
+- structure before texture;
+- primitive footprint is must-fix unless style explicitly licenses it;
+- never bury a known regression;
+- do not advance while a lower-frequency must-fix remains;
+- Photoshop output, not MCP success, is visual ground truth.
 
-This pacing rule is part of visual control, not merely UX. It keeps the image state, the agent's reasoning state, and the user's understanding synchronized at every checkpoint.
+### Action contract and classes
 
-## Fresh-composition rule for skill evaluation
-
-When the purpose of a drawing is to evaluate the painting skill itself, start from a genuinely fresh composition unless the user explicitly asks for a variation of an existing image.
-
-For a fresh-composition evaluation, do **not** reuse:
-
-- coordinate sets from an earlier artistic demo;
-- previous stroke lists or Bezier paths;
-- object proportions copied from an earlier demo script;
-- precomputed object-specific occlusion geometry;
-- a prior composition with only cosmetic changes.
-
-Reusing low-level helpers such as `line()`, `curve()`, `dab()`, batching utilities, brush presets, palette helpers, or generic layer setup is allowed. The restriction is about reusing the **composition and scene geometry**, not about reusing infrastructure.
-
-If the user asks to refine, continue, clean up, or create a deliberate variation of an existing painting, reuse is expected and this rule does not apply.
-
-This rule exists so a successful evaluation demonstrates that the agent can plan and inspect a new image rather than merely replay known geometry with better cleanup.
-
-## Cleanup checklist
-
-During the dedicated cleanup pass, explicitly search for:
-
-- accidental line/object intersections;
-- awkward tangencies;
-- duplicated contours;
-- floating or meaningless line endings;
-- broken silhouettes;
-- inconsistent line weight or edge hierarchy;
-- detail that obscures rather than clarifies the focal form;
-- obvious value/color marks that flatten the intended depth.
-
-Use Eraser strokes, repainting, opacity changes or replacement strokes as needed. Painting is iterative editing, not append-only drawing.
-
-## Completion criterion: Definition of Done
-
-Do **not** define completion by a fixed number of strokes unless the user explicitly requests a hard cap.
-
-The painting is done when all required gates pass:
-
-1. The subject reads clearly at the intended viewing scale.
-2. Major forms, proportions and silhouette are coherent for the requested finish level.
-3. Depth and occlusion relationships are intentional; no obvious accidental cross-object stroke remains.
-4. Focal features are resolved enough for the requested style and finish level.
-5. Value/color hierarchy and line/edge hierarchy support readability.
-6. A cleanup pass has been completed.
-7. Final inspection reveals no **must-fix** structural, overlap, tangent or readability defect.
-8. Additional strokes would be optional refinement rather than necessary correction.
-9. All explicit user constraints are satisfied.
-
-This creates a state-based stop condition:
+Before each semantic micro-pass formulate:
 
 ```text
-unfinished = at least one required quality gate fails
-finished   = all required quality gates pass and only optional refinement remains
+Current problem
+Scale
+Protected areas
+Region priority
+Action class
+Relevant style constraints
+Primitive/tool
+Expected visual result
 ```
 
-## Stroke budgets
+Keep the full contract in planner/session state; chat telemetry should normally compress it to one short line or a few clauses.
 
-A requested number of strokes is normally a **soft budget**, useful for:
+Choose the action class before the primitive:
 
-- estimating scope;
-- choosing batch sizes;
-- preventing uncontrolled overworking;
-- making a technical demo reproducible.
+- `ADD` — introduce genuinely missing information;
+- `REFINE` — improve an already-correct representation;
+- `REPLACE` — repaint a bad representation;
+- `ERASE` — remove an unwanted mark/edge/occlusion;
+- `ROLLBACK` — revert a failed pass;
+- `LEAVE` — intentionally do nothing.
 
-It is not automatically the finish line.
+`ADD` is not the default. A wrong representation should usually be replaced, erased or rolled back rather than buried.
 
-If the soft budget is reached but a must-fix issue remains, perform the corrective pass. If the Definition of Done is already satisfied before the budget is exhausted, stop.
+### Planning, scale and region priority
 
-Only treat a stroke count as a **hard cap** when the user explicitly says that the count itself is a constraint, for example: "use no more than 40 strokes".
+Use short-horizon planning: operationally commit only the next small semantic bundle, then replan from the actual canvas.
 
-## Finish levels
+Work from low to high frequency:
 
-### Sketch
+- **global** — composition, horizon, large value fields and dominant silhouette;
+- **medium** — planes, volume, secondary structures and material transitions;
+- **small** — selected edges, texture and focal accents.
 
-Completion emphasizes silhouette, proportion, gesture and the main value/color statement. Nonessential micro-detail may remain unresolved.
+After block-in choose semantic/adaptive regions, not a uniform fixed grid. Temporary grids may be diagnostic aids only.
 
-### Study
+When regions compete, consider:
 
-Resolve major forms, depth, focal details, values/colors and obvious cleanup problems, without chasing polish that does not materially improve readability.
+```text
+priority ≈ (severity × perceptual_importance × structural_dependency × expected_gain)
+           / execution_or_recovery_cost
+```
 
-### Polished
+This is a heuristic, not a numeric requirement.
 
-Require resolved focal details, deliberate edge/line hierarchy, accents and a thorough cleanup pass.
+### Brush preflight, inventory and role selection
+
+Brush choice is part of visual planning. Do not begin a non-trivial painting by accepting whichever preset happens to be active, and do not brute-force every installed brush.
+
+Before the first paint mutation, perform a **bounded inventory/preflight**:
+
+```text
+ROLE NEED
+→ BOUNDED INVENTORY / CANDIDATE SHORTLIST
+→ SELECT PRESET
+→ READ EFFECTIVE SETTINGS
+→ OPTIONAL FOOTPRINT PROBE
+→ ASSIGN / UPDATE ROLE MAP
+→ PAINT
+→ INSPECT REAL RESULT
+```
+
+The initial inventory is deliberately cheap. Call `photoshop_list_brush_presets` to establish what is installed and the approximate library size, but do not enumerate/test thousands of presets merely because they exist. The current preset-list API exposes names plus counts/filtering; it does not provide trustworthy folder/ABR-origin/category metadata, so do not invent those classifications.
+
+Derive only the brush roles needed by the current image or near-term pass. Typical roles include:
+
+- atmosphere / smooth low-frequency mass;
+- soft form modeling;
+- hard opaque structural mass;
+- planar / blocky architectural mark;
+- broken rock/material/texture mark;
+- fine line / detail;
+- glaze / light;
+- subject-specific roles such as hair/foliage only when actually needed.
+
+Use **progressive widening** rather than exhaustive search:
+
+1. **Trusted baseline** — a small already-characterized set of installed Photoshop/default archetypes, roughly 6–12 at most: smooth mass, hard round, pressure-sensitive round, planar/block, broken/textured and fine linear/detail where available.
+2. **User-selected pack / preferred brushes** — when the user supplies a pack or names brushes as preferred, treat that source as the primary candidate pool and use the trusted baseline mainly as comparison/fallback.
+3. **Broader installed-library discovery** — only when the needed role is still unfilled.
+
+A normal painting should usually evaluate only a small handful of candidates, often around 5–12 total and frequently fewer. One brush may fill several roles.
+
+#### Required user brushes are a hard constraint
+
+The user may name exact presets that are **required to be used**, not merely preferred.
+
+- Confirm every required preset is installed before relying on it.
+- Do not silently substitute a similarly named or default brush when a required preset is missing; report the missing preset as a constraint conflict.
+- Use each available required brush **meaningfully** in a role suited to its actual footprint/settings, and record the role/use in `brush_state.required_usage`.
+- Do not force a required brush into a destructive or structurally unsuitable pass merely to satisfy usage. Choose a safe meaningful role; if none exists, surface the conflict rather than degrading the painting.
+- A user-selected pack may be preferred without every brush in the pack becoming mandatory. `preferred` and `required` are separate concepts.
+
+The executable prompt exposes these as `preferred_brushes` and `required_brushes`.
+
+#### Effective-settings verification is mandatory after preset selection
+
+After every `photoshop_select_brush_preset`, call `photoshop_get_brush_settings` **before the first visual mutation with that newly selected preset**.
+
+Verify at least:
+
+- size;
+- hardness;
+- roundness;
+- spacing;
+- opacity;
+- flow;
+- exposed pressure-size override flag;
+- exposed pressure-opacity override flag;
+- airbrush/repeat;
+- smoothing enable/amount.
+
+Do not trust the preset name. Selecting a preset can silently change several effective settings. The exposed pressure flags are **not a complete readout of Photoshop Shape Dynamics**: a pressure-named preset may still render pressure-sensitive behavior even when these override flags are false. Treat unexposed preset dynamics as another reason to use a selective footprint probe when they matter.
+
+Useful diagnostic:
+
+```text
+approx stamp interval px ≈ brush size × spacing% / 100
+```
+
+For example, a 200 px brush at 25% spacing places brush tips roughly 50 px apart. That is an obvious warning for a supposedly continuous atmospheric stroke, but it is not a universal failure threshold. Spacing is **role-dependent**: dense/low spacing usually suits continuous low-frequency mass, while larger spacing may be desirable for charcoal, broken rock, foliage or other textured marks.
+
+If the controller changes brush settings after selection, the role map must record the **effective settings actually used**, not just the preset defaults.
+
+#### Selective footprint probes
+
+Settings introspection is necessary but does not fully describe brush-tip texture, scatter and other dynamics. Use a short footprint probe only when it adds information.
+
+Probe when one or more applies:
+
+- the preset is unknown/uncharacterized;
+- it is being assigned to a new visual role;
+- working scale changed substantially;
+- the brush will cover a large/expensive region;
+- settings look suspicious for the intended role;
+- mark language is visually important to the requested style.
+
+Do not probe every known brush on every image, hundreds of irrelevant presets, or an unchanged preset+settings+role+scale combination that already has a valid characterization.
+
+Keep probes semantically isolated. Prefer a small **disposable scratch document** for uncertain or expensive testing; a dedicated temporary layer in the target document is acceptable for a tiny local probe when the history cost is understood. Remove/close the probe artifact and deliberately restore the latched painting document before real work.
+
+Judge the probe for visible periodic circles/scallops, excessive gaps, repeated texture frequency, chains/grids, undesirable edge character and mismatch with the intended role. A cheap diagnostic may flag these patterns, but the visual critic remains final authority.
+
+#### Brush role map and cache
+
+Maintain a compact capability map rather than a giant preset catalog:
+
+| Role | Preferred candidate | Alternative | Effective settings / scale | Probe | Caveat |
+|---|---|---|---|---|---|
+| Atmosphere / smooth mass | Brush A | Soft Round | ... | pass | fails if spacing rises |
+| Hard architecture | Brush B | Hard Round | ... | pass | excessive smoothing weakens corners |
+| Broken rock form | Brush C | textured brush | ... | pass | too noisy for silhouette |
+| Fine detail | Brush D | Hard Round | ... | cached | reduce size/spacing |
+| Glaze / light | Brush E | Soft Round | ... | cached | low opacity only |
+
+Cache a useful mapping by a signature such as:
+
+```text
+preset identity + relevant effective settings + role + working-scale band
+```
+
+Reuse the mapping while that signature remains valid. Invalidate or re-probe when the preset/effective settings change materially, the scale moves to another band, or the real painting reveals a footprint mismatch despite an earlier probe. The real Photoshop result always overrides the cache.
+
+### Structure, marks and primitives
+
+If a defect survives thumbnail/blur inspection, treat it as composition/shape/value/form before texture or micro-detail.
+
+Brush scale is relational:
+
+- broad for initial masses;
+- medium for planes/form transitions;
+- small for selected edges, texture and focal detail.
+
+Block-in is temporary scaffolding. If a circle/blob/capsule/stripe still reads as the primitive during medium form, structurally repaint it; mark language may change between stages.
+
+#### Area vs line
+
+- Use **2D area patches** for continuous surfaces and broad tonal/form transitions. A valid patch is 2D coverage, not a regular grid, one-dimensional chain or mechanical sweep; vary placement/density/boundary falloff while keeping a compact quantized style family.
+- Use **line-oriented strokes** only for genuinely linear structures: seams, cables, railings, selected hard edges, lashes/hairs or narrow accents.
+- Do not use a line primitive to model a broad area.
+- The same region may legitimately progress `mass patch → planar/facet marks → small texture → edge correction`.
+
+For dense dabs, prefer a small reusable set of size/value/opacity/flow classes; create natural variation primarily through placement, density, overlap and clustering.
+
+Directional stroke dynamics are a segmented approximation rather than true continuous stylus pressure; strong hard-brush tapers may need more segments.
+
+#### Blending and layer blend modes
+
+Blend form with overlapping lower-opacity marks, intermediate values/temperatures, scumbling/hatching where appropriate, and selective Smudge only when it improves a specific transition. Do not globally blur away edge structure.
+
+Layer blend modes are optional downstream tools, not mandatory phases. `NORMAL` is the structural baseline. On isolated layers, when justified by the current problem:
+
+- `MULTIPLY` — controlled shadow/glaze;
+- `COLOR` — hue/chroma adjustment;
+- `SOFTLIGHT` / `OVERLAY` — restrained integration/contrast;
+- `SCREEN` / `LINEARDODGE` — selected emissive/specular accents.
+
+Do not impose a grayscale→glaze→highlight recipe or use blend modes to hide unresolved structure. Toggle/inspect risky blend-mode passes and rollback them if worse.
+
+#### Primitive-footprint check
+
+For realistic/photorealistic work, treat visible stamp circles/scallops, ribbon/sausage strokes, regular bands or mechanically repeated spacing as must-fix when the primitive reads before the depicted form/material.
+
+Correct the cause: rollback/delete an isolated failed pass, erase/repaint a local failure, or repaint with substantially smaller/denser marks and a changed directional pattern. If the artifact survives blur/thumbnail view, change silhouette/planar organization rather than adding texture.
+
+Also watch for a broader **vector/collage failure** when the requested style does not call for it: uniformly hard/dark contours, cut-paper color regions with weak value transition, identical-width curves, or symbolic highlights/shadows instead of form/material response. Correct the earlier value/form/edge/material stage rather than decorating the artifact.
+
+#### Occlusion and silhouette
+
+Protected regions are inferred from the current rendered state, user geometry, or validated measurement/segmentation helpers; do not hard-code benchmark-specific coordinates in advance.
+
+Do not run a stroke through a foreground form unless intentional. Split the path, change layer depth, mask, erase the hidden segment or redesign the mark. Long strokes are allowed only when the complete path is visually clear.
+
+Silhouette errors are structural. Correct the actual boundary with erase/mask/repaint or a genuine local background patch. Do not fake negative space with one sampled flat color. Keep risky silhouette corrections rollback-friendly and inspect them before continuing.
+
+### Semantic stages
+
+1. **Analyze / compose** — choose mode/style; establish composition hypothesis.
+2. **Global block-in** — background/ground, dominant silhouette and major value masses; must read at thumbnail scale.
+3. **Medium form** — planes, tonal patches, shadow transitions, volume and secondary structures.
+4. **Adaptive local refinement** — select the next semantic region by largest unresolved problem.
+5. **Edges / features / linear detail** — selected hard edges and genuinely linear information.
+6. **Finish / cleanup** — small value/color fixes, highlights, texture, atmosphere and local erase/repaint.
+
+Not every style exposes these as separate layers/passes, but do not use later-stage detail to compensate for an earlier-stage failure.
+
+### Visual checkpoints and execution sanity
+
+Reasoning previews are required after major semantic passes and risky local corrections.
+
+Use before/after image-delta only as **execution sanity**, not as an artistic score:
+
+- identical preview/hash when a visible mutation was expected is strong no-op evidence;
+- near-zero delta should trigger targeting/visibility/tool-state checks rather than being accepted as merely `neutral`;
+- large delta raises inspection priority;
+- non-zero delta proves only that something changed.
+
+Artistic acceptance remains `BRIEF + STRUCTURE + STYLE CONTRACT`.
+
+At checkpoints classify unresolved issues as `must-fix`, `should-fix` or `optional refinement`. Do not detail over a must-fix.
+
+#### Correction acceptance gate
+
+Do not accept a local `REPLACE`, `ERASE`, silhouette/background reconstruction, mask correction or other patch-like repair merely because the original defect became smaller. Before `ACCEPT`, inspect both the intended fix **and the correction footprint**:
+
+1. verify that the targeted defect actually improved at the intended viewing scale;
+2. inspect the full perimeter/transition zone of the edited region for seams, rectangular or straight-edged patch boundaries, hard corners, halos, value/color discontinuities, repeated dabs/scallops and other new primitive footprints;
+3. inspect once locally and once at normal/thumbnail scale, because a repair can look plausible up close while introducing a larger compositional artifact;
+4. compare new-error severity against the gain from the correction. A new same-or-higher-severity defect means `CORRECT` or `ROLLBACK`, not `ACCEPT`;
+5. when the repair is isolated on its own layer, toggle/compare it before acceptance when that provides a clearer judgment.
+
+At resume or before advancing stages, if recent work involved broad dabs, local background reconstruction, silhouette carving or rollback/recovery, perform a quick whole-image artifact scan before adding detail. Look specifically for residual primitive footprints, patch seams and abrupt geometric leftovers that may have escaped a local inspection.
+
+### Recovery, layers and execution cost
+
+Painting is editable state, not append-only output.
+
+- Latest bad action: Undo when safe.
+- Bad semantic pass: rollback to the last accepted visual state.
+- Isolated failed layer: toggle/compare, then delete/disable or locally repaint it.
+- Partly successful layer: preserve useful regions and erase/mask/repaint only the regression.
+- Restart the target only when recovery is unreliable or more expensive than restarting.
+
+Before a risky/destructive pass, establish a rollback anchor with `photoshop_get_history` or isolate the correction on a dedicated layer. Do not assume one MCP call equals one history step: `AUTO` batching may create several. Use `SINGLE_HISTORY` only when one undo step matters more than timeout resilience.
+
+Prefer semantic layers that earn their recovery/control cost (background, masses, subject base, form, detail/accents, temporary correction). Do not create one layer per stroke or one mask per tiny feature.
+
+Use masks/semantic isolation when they provide concrete depth, boundary, material, opacity or rollback control. Avoid segmentation that adds management cost without improving protection or recovery.
+
+Plan **visual cost** and **execution cost** together. Too many unique dab styles can expand one semantic pass into many scripts/history steps.
+
+If transport normalization is available, it may reduce a dense dab bundle to a compact set of reusable style tuples within the same semantic pass. Preserve meaningful mark role, scale, value/chroma, opacity and flow; prefer deterministic/discrete or perceptually sensible buckets over blind K-means on raw `[R,G,B,size]`. Group-count reduction is execution evidence, not artistic authority.
+
+## Conditional modules
+
+Use these only when the task requires them.
+
+### Manufactured / geometric form integrity
+
+For architecture, machinery, furniture, vehicles and other intentionally constructed forms, add a geometry-integrity checkpoint before detail and again when structural corrections are made. Check only relationships that are actually implied by the object/reference/style:
+
+- primary axes and intended straightness or taper;
+- parallelism/perpendicularity where applicable;
+- symmetry where applicable;
+- perspective consistency and convergence;
+- repeated spacing/alignment where applicable;
+- continuity of silhouettes and constructed edges;
+- whether line weight/edge hardness supports form/material instead of turning structural details into uniform vector symbols.
+
+Use measurement/landmark/guide helpers when precision matters. Do not impose perfect verticals, symmetry, parallelism or a mathematically ideal cylinder when the reference, perspective, construction or requested style does not support them. For rounded/cylindrical forms, establish believable light/shadow planes and turning form; no universal analytic gradient formula is required.
+
+### Reference reproduction
+
+#### Color/value sampling
+
+Keep the reference read-only and separately pinned.
+
+- `photoshop_sample_color(radius=0)` for a precise point.
+- small `radius` for a representative local average.
+- `photoshop_sample_colors` for dense point sampling/value maps.
+
+Samples are evidence; preserve the intended value/color hierarchy. Do not paste/place/duplicate reference pixels into the target, use the reference as an underlay, or trace it by default. Target-side masks and blend modes remain valid painting controls.
+
+#### Discrepancy diagnostics
+
+Optional discrepancy evidence may help region priority. Prefer registered/aligned multiscale signals:
+
+- low-frequency/mass;
+- edge/contour;
+- value;
+- optional late-stage color/detail.
+
+When available, show the critic a separate diagnostic composite such as `reference + current + discrepancy views`. Keep diagnostic heatmaps outside the working target by default. A bright region means **inspect here**, not **automatically repaint these pixels**. Raw RGB difference is not ground truth and does not apply to free composition.
+
+#### Measurement and spatial anchors
+
+For proportion-sensitive work (portrait, architecture, repeated geometry, perspective), use explicit measurement when useful:
+
+```text
+inspect → choose semantic landmarks → optional guides → measure_points
+→ transform_landmarks for cross-frame reuse → compare_landmarks → correct → preview
+```
+
+The tools do not detect semantic landmarks automatically. `photoshop_compare_landmarks` reports normalized per-point plus mean/RMSE/max error; treat these as evidence, not an absolute loss. If landmark evidence was established and proportion remains completion-relevant, re-check it at the final structural gate.
+
+For coordinate-sensitive local work, define semantic bounds `{left, top, right, bottom}`, plan points in local normalized `u/v`, convert to document coordinates at execution time, and update anchors after structural changes.
+
+### Photorealistic reference portrait
+
+Keep the reference read-only and the target separate. Apply these stricter rules:
+
+- establish/compare facial landmarks before detailed rendering; likeness errors are structural must-fix;
+- measure brush scale against visible **face width**, not canvas width: value masses about 8–12%, form modeling 2–6%, feature edges/hair groups 0.5–2%, micro-accents below ~0.5%;
+- broad facial planes use 2D patches; elongated structures may use dab chains; reserve path strokes for deliberately linear edges/details;
+- do not use `PathItem.strokePath()` / broad `photoshop_paint_strokes` as the default primitive for facial volume;
+- use soft/firmer marks according to plane/edge needs; avoid global blur;
+- completion requires likeness plus believable continuous form, not merely recognizability or tube/blob construction.
+
+If the same systemic failure repeats, diagnose whether the cause is visual planning, missing Photoshop control or inadequate agent guidance before retrying the same strategy.
+
+### Optional algorithmic helpers
+
+Helpers may provide evidence, proposals or constraints, never automatic artistic authority:
+
+- curve/contour fitting for genuinely exact geometric subproblems;
+- discrepancy-map generation for reference diagnostics;
+- segmentation-backed mask proposals for repeated boundary protection;
+- transport quantization for dense dabs;
+- lightweight raster/surrogate preflight for geometry/coverage.
+
+Evidence helpers may inform analysis/region priority; execution helpers normally sit after problem/action selection and before Photoshop execution.
+
+Preserve the no-tracing default: fitted Canny/potrace/Bezier contours may be diagnostic/landmark/proposal evidence, but do not mechanically transfer a reference-derived path unless the user explicitly requested tracing/exact contour reproduction or the workflow inherently requires exact geometry transfer.
+
+If segmentation is available, use it only when repeated boundary protection has concrete value. Inspect/correct/feather the proposed mask and do not freeze an early incorrect silhouette.
+
+A surrogate preflight may cheaply reject bad bounds, coverage, protected-region overlap, silhouette crossings, scalloping or excessive density, but Photoshop remains the ground-truth renderer:
+
+```text
+PLAN → SIMULATE CHEAPLY → reject/adjust → EXECUTE IN PHOTOSHOP → INSPECT REAL RESULT
+```
+
+Constructive sketching/gesture may eventually use a dedicated subskill rather than forcing the general painter to optimize line topology and gesture simultaneously.
+
+## Development, evaluation and operational recovery
+
+### Pacing & telemetry
+
+For non-trivial painting:
+
+```text
+announce the semantic problem briefly
+→ execute one short mutation / atomic visual bundle
+→ wait for actual MCP/terminal completion
+→ capture/preview
+→ inspect and classify outcome
+→ report concise result
+→ replan
+```
+
+An **atomic visual bundle** is narrow by definition. All included marks must:
+
+- address **one visual problem**;
+- affect **one semantic region** or one tightly coupled region set that cannot be judged meaningfully in isolation;
+- use **one action class** (`ADD`, `REFINE`, `REPLACE`, `ERASE`, `ROLLBACK` or `LEAVE`);
+- belong to the same stage/scale decision;
+- support one clear before/after acceptance question.
+
+If any of those conditions is false, split the work and preview between parts. Independent sky, land/water, foliage, architecture, subject-detail or other separately judgeable passes are **never one bundle** merely because they can be encoded in one MCP/script call.
+
+- Never launch another Photoshop mutation while the previous call is outstanding. A session/process id is not completion.
+- No next visual mutation may begin until the previous mutation/atomic bundle has **completed → been captured → been visually inspected → been classified** as improvement, neutral or regression. This is a hard barrier, not a suggestion.
+- Do not queue several semantic passes into a hidden background chain.
+- During genuinely long calls, send concise heartbeat updates roughly every 30–60 seconds.
+- If the user says stop/wait, launch no new mutation; first determine whether an already-started call is still running.
+- Full action contracts stay in planner/state; chat updates are execution telemetry, not essays.
+- When the user explicitly requests stricter capture such as one-stroke→one-preview, obey it even if slower.
+
+During skill development/testing, **high-frequency process capture is ON by default** unless disabled by the user:
+
+- save monotonic JPEGs (`frame_0001.jpg`, …) after every visual mutation or deliberately tiny atomic bundle;
+- do not duplicate frames after read-only calls;
+- **MUST split** any visually large, multi-region, multi-role or multi-stage change into separately completed, captured and inspected mutations/bundles;
+- for a medium-complexity evaluation target roughly **100+ meaningful frames** when practical;
+- reasoning-preview cadence and process-capture cadence are separate.
+
+Batching, style grouping, transport quantization or other execution optimization may reduce calls **only inside one already-approved atomic visual bundle**. They must never combine independent semantic passes, cross a stage/scale decision, or postpone a required preview/inspection barrier.
+
+When one of those frames is also an accepted checkpoint/stage transition/recovery anchor, save its paired PSD beside it before launching the next painting mutation.
+
+### Fresh-composition evaluation invariant
+
+When evaluating the skill on a fresh composition, do not reuse scene-specific geometry or execution plans from earlier artwork (coordinates, paths, stroke lists, proportions, precomputed occlusion regions or the same composition with cosmetic changes). Reuse only generic infrastructure such as batching helpers, brush presets, palette utilities and generic layer setup unless the user explicitly requests continuation/refinement/variation.
+
+### Operational failure / reconnect
+
+Visual regression and uncertain tool execution are different failure classes. For timeout, disconnect, Photoshop restart/closure, interrupted UI or another uncertain mutation state:
+
+```text
+stop new mutations
+→ check/poll the original process if it may still be running
+→ reconnect only if needed
+→ get/list Photoshop state and verify the latched document
+→ inspect history/layers if partial completion is possible
+→ obtain a current preview
+→ compare with last accepted/current frame and expected delta
+→ classify completed | not-executed | partial/uncertain
+→ reconcile Photoshop + painting-state.json
+→ only then retry/correct/rollback/replan
+```
+
+Never blindly repeat a timed-out mutation; it may already have executed.
+
+## Completion
+
+### Cleanup
+
+Before finishing, inspect for accidental intersections/tangencies, duplicated contours, meaningless line endings, broken silhouettes, inconsistent edge hierarchy and value/color marks that flatten depth. Correct with erase/repaint/mask/opacity/replacement as appropriate.
+
+### Definition of Done
+
+Do not stop because a stroke counter was reached. The painting is complete when:
+
+1. composition/focal hierarchy and subject read at the intended scale;
+2. major forms, proportions and silhouette are coherent for the requested finish;
+3. established landmark/measurement evidence, when applicable, has been reconciled;
+4. depth/occlusion and focal features are intentional/resolved;
+5. value/color and edge hierarchy support readability;
+6. the result is coherent with the style contract;
+7. cleanup is complete and no must-fix structural/overlap/tangent/readability error remains;
+8. additional marks would be optional refinement rather than necessary correction;
+9. explicit user constraints are satisfied.
+
+### Stroke budgets and finish levels
+
+Stroke count is a soft planning budget unless the user explicitly makes it a hard cap. If a soft budget is reached with a must-fix remaining, correct it; if Definition of Done passes early, stop.
+
+- **Sketch** — readable silhouette/proportion/gesture and main value/color statement; micro-detail may remain unresolved.
+- **Study** — resolve major forms/depth/focal detail/value/color and obvious cleanup without unnecessary polish.
+- **Polished** — resolved focal detail, deliberate edge hierarchy, accents and thorough cleanup.
 
 ## Using the MCP prompt
 
-Call `prompts/get` for `ps.digital_painting_control` with arguments such as:
+Call `prompts/get` for `ps.digital_painting_control`, for example:
 
 ```text
 subject: cat portrait
 style: anime cel-shaded
 finish_level: study
 constraints: white background; three layers maximum
+preferred_brushes: My Inking Pack; Square Charcoal
+required_brushes: My Dry Brush 04
 stroke_budget: 80
 budget_mode: soft
 ```
 
-The returned guide should be treated as the execution contract for that painting session.
-
-## Current implementation note
-
-`photoshop_paint_strokes` now defaults to cost-aware `AUTO` batching. Large heterogeneous passes are proactively split into multiple short Photoshop scripts instead of relying on the agent to manually keep batches near the old 6–8-stroke limit. The tool reports `batch_count`, `history_steps`, and `auto_chunked`; when AUTO creates multiple batches, each batch is a separate Photoshop history step. Use `SINGLE_HISTORY` only when preserving one undo step is worth the higher timeout risk.
-
-For directional tapering, a stroke may use `dynamics` ranges for size, opacity, and flow. These profiles are rendered as multiple short path strokes, so they are an approximation rather than true continuous pen-pressure data. Strong tapers with hard brushes may retain slight segment texture; prefer the automatic segment count or increase `steps` when visual smoothness matters.
-
-AUTO batching improves transport reliability but does **not** change the semantic-pacing rule: still paint one meaningful pass, wait for completion, preview it, report what changed, and only then start the next pass.
+Treat the returned guide as the executable session contract; this markdown file is the canonical detailed policy and rationale.

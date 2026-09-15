@@ -14,10 +14,11 @@ Session bootstrap
   once to learn which features the user's installed Photoshop version exposes.
 
 State before action
-- Before any tool that needs an active document or active layer, call
-  \`photoshop_get_state\` to confirm what is currently open. Treat its output as
-  the source of truth for document dimensions, activeLayer, selection bounds and color
-  mode.
+- Before the first tool that depends on the active document/layer, or whenever state may
+  have changed or become uncertain, call \`photoshop_get_state\` to confirm what is open.
+  Treat its output as the source of truth for document dimensions, activeLayer, selection
+  bounds and color mode. When a workflow has a verified/persisted document latch and known
+  layer target, do not add redundant state reads before every atomic operation.
 - Capture \`document.id\` from \`photoshop_get_state\` (or \`photoshop_list_documents\`)
   and pass it as optional \`document_id\` on document-bound mutating tools and reads.
   Photoshop's active tab can change outside this integration; a supplied positive-integer
@@ -26,7 +27,10 @@ State before action
   and retry against whichever tab happens to be active.
 - For visual confirmation after meaningful edits, call
   \`photoshop_get_preview\` (cheap, side-effect free JPEG snapshot). Use it
-  sparingly — once per major step, not per atomic tool.
+  sparingly in ordinary editing — normally once per major step, not per atomic tool.
+  Exception: an active guide such as \`ps.digital_painting_control\` may deliberately
+  require higher-frequency materialized process capture after each visual mutation while
+  keeping full visual-reasoning previews on their own cadence.
 
 Recipe tools over atomic chains
 - When the user's request matches a recipe purpose ("remove background",
@@ -113,10 +117,13 @@ User intent glossary
   "mail merge for images", "name badges from spreadsheet", "sertifika bas"
   → \`photoshop_recipe_csv_to_cards\`; prompt \`ps.csv_to_cards\`
 - paint.draw — "draw", "paint", "sketch", "digital painting", "illustrate with brushes"
-  → use the painting tools together with guide prompt \`ps.digital_painting_control\` for
-  shape → value → form → edge → material → detail hierarchy, checkpoints, controlled brush scale, cleanup, and state-based completion.
+  → use the painting tools with guide prompt \`ps.digital_painting_control\`.
+  The guide owns the executable painting-control policy (hierarchy, style/mode, hot loop,
+  reference modules, rollback/recovery, observability and Definition of Done); do not duplicate it here.
 - paint.sample_color — "pick this color", "sample from reference", "eyedropper", "what color is here"
   → \`photoshop_sample_color\`; use a small radius when a representative local average is preferable to one pixel.
+- paint.sample_colors — "sample many points", "reference value map", "palette grid"
+  → \`photoshop_sample_colors\` for efficient multi-point point sampling from one pinned reference; use the single-point sampler for averaged neighborhoods.
 
 Degrade paths
 - Generative remove / distraction — prefer \`photoshop_generative_remove\`; degrade to
@@ -153,7 +160,7 @@ Guide prompts (MCP prompts/get)
   \`ps.color_correct\` — tone / contrast fix chain; \`ps.dodge_burn_guide\` — 50% gray
   overlay setup; \`ps.composite_blend\` — place asset + mask + blend mode;
   \`ps.generative_fill\`, \`ps.generative_remove\`, \`ps.generative_expand\` — Firefly workflows;
-  \`ps.digital_painting_control\` — subject-agnostic brush-painting workflow built around shape → value → form → edge → material → detail, visual checkpoints, cleanup and Definition of Done.
+  \`ps.digital_painting_control\` — subject-agnostic brush-painting workflow built around composition → shape → value → form → edge → material → detail, multiscale error-driven local actions, visual checkpoints, rollback and Definition of Done.
 `.trim();
 
 export function buildPhotoshopInstructions(): string {
