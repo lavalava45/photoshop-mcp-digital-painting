@@ -39,7 +39,7 @@ When LLMs call Photoshop one command at a time, they burn tokens, guess layer ty
 
 **What this fork adds**
 
-- **Photoshop MCP** — 131 tools incl. 16 recipe workflows, digital-painting primitives, color sampling, and measurement/landmarks/guides
+- **Photoshop MCP** — 134 tools incl. 16 recipe workflows, digital-painting primitives, VisualMicroPlan execution, color sampling, and measurement/landmarks/guides
 
 > `images/og-social.png` is generated: `npx playwright install chromium` once, then
 > `npx tsx scripts/generate-og-image.ts`. It reads the tool counts from
@@ -67,6 +67,6 @@ Feedback and contributors welcome. If your team builds agent tooling or creative
 
 Set in repository **About** sidebar:
 
-- **Description:** `Independent Photoshop MCP fork for AI-driven digital painting — 131 tools with brush dynamics, color sampling, previews, landmarks/guides, hardened document targeting, and recipes.`
+- **Description:** `Independent Photoshop MCP fork for AI-driven digital painting — 134 tools with brush dynamics, VisualMicroPlan execution, color sampling, previews, landmarks/guides, hardened document targeting, and recipes.`
 - **Website:** leave blank unless a fork-owned site is created
 - **Topics:** `mcp`, `model-context-protocol`, `typescript`, `ai-agents`, `photoshop`, `automation`, `vue`, `hono`, `developer-tools`, `cursor`, `claude`, `extendscript`

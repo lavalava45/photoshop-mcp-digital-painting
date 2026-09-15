@@ -1,6 +1,6 @@
 # Available Tools
 
-**131 tools total** — 115 atomic/non-recipe `photoshop_*` tools plus 16 recipe `photoshop_recipe_*` workflows (single undo step each).
+**134 tools total** — 118 atomic/non-recipe `photoshop_*` tools plus 16 recipe `photoshop_recipe_*` workflows (single undo step each).
 
 Reference for all atomic `photoshop_*` MCP tools exposed by this server (parameters, examples, and return shapes).
 
@@ -1198,14 +1198,49 @@ dabs/stamps, automatic batching, and interpolated dynamics on open strokes.
 **Dynamics:** each open stroke may include a `dynamics` object with optional
 `size`, `opacity`, and/or `flow` ranges written as `[start, end]`, optional
 `steps` (2–64), and `easing` (`LINEAR`, `EASE_IN`, `EASE_OUT`,
-`EASE_IN_OUT`). When `steps` is omitted, the tool chooses an automatic 12–64
-segment count from the magnitude of the requested profile. Dynamic Beziers are
+`EASE_IN_OUT`). When `steps` is omitted, the tool chooses an automatic 12–40
+segment count from profile magnitude plus stroke length/local brush size. Dynamic Beziers are
 sampled by path length before rendering so the progression follows the visible
 curve rather than raw control-point spacing.
 
 Dynamic rendering is segmented, not native continuous tablet pressure. A strong
 taper with a hard round brush can show slight segment texture; higher step
 counts reduce it. Dynamics is intentionally rejected for closed strokes.
+
+#### `photoshop_paint_dabs`
+Paint up to 5000 independent Brush dabs in one MCP call. Dabs with identical
+color/size/opacity/flow are grouped and internally chunked into short Photoshop
+scripts for timeout resilience. Use this for dense tonal buildup, stippling,
+texture and overlapping patch work where individual marks do not need directional
+Bezier geometry.
+
+#### `photoshop_execute_visual_microplan`
+Execute one **atomic visual bundle** as a single MCP round-trip:
+
+```text
+0..N preparation/read steps
+→ exactly one approved visual mutation
+→ photoshop_get_preview
+→ STOP for visual verdict
+```
+
+The tool is intentionally narrower than the standalone UI Action Plan. It cannot
+queue multiple semantic passes. Allowed visual mutations are currently
+`photoshop_paint_strokes`, `photoshop_paint_dabs`, `photoshop_fill_layer`, and
+`photoshop_undo`. Preparation may select/read brush state, sample/measure, inspect
+layers/state/history, select/create a layer, and set brush/foreground state.
+
+`document_id` is required and is propagated into document-bound internal steps.
+Step argument values may reference an earlier normalized JSON result with
+`$steps.<stepId>.<dot.path>`. If a brush preset is selected, a later
+`photoshop_get_brush_settings` is mandatory before the mutation.
+
+The preview image is returned in the same MCP result. Its SHA-256 opens a server
+barrier: the next VisualMicroPlan for that document is rejected until the caller
+supplies `previous_preview: { sha256, verdict, disposition }`, proving that the
+exact prior frame was classified as `improvement`, `neutral`, or `regression`.
+Mutation errors are never blindly retried; the tool still attempts the mandatory
+preview because an AUTO batch may have partially changed the canvas.
 
 ### Measurement & Guides
 

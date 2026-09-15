@@ -92,6 +92,26 @@ per point. This is particularly useful for photorealistic value buildup, sampled
 studies, soft skin transitions and texture passes. Use `photoshop_paint_strokes` when the
 mark itself needs direction, Bezier curvature, taper or a non-Brush tool.
 
+### `photoshop_execute_visual_microplan`
+Collapses the host↔MCP chatter around one already-chosen visual action without turning
+painting into a long blind Action Plan. A valid micro-plan contains optional preparation
+and read/configuration steps, exactly one approved visible mutation, then
+`photoshop_get_preview` immediately. The preview image and SHA-256 are returned in the
+same MCP result.
+
+The server keeps a per-document preview barrier. After a micro-plan returns a preview,
+another micro-plan for that document is rejected until the caller supplies the prior
+preview SHA together with its visual verdict (`improvement|neutral|regression`) and
+disposition (`accept|correct|rollback`). This makes the latency optimization compatible
+with the canonical hard preview barrier: one MCP request may contain many marks only
+inside one atomic visual bundle, but never two independently judgeable visual mutations.
+
+The executor also normalizes JSON tool results for backward-only `$steps.<id>.<path>`
+references and automatically propagates the pinned top-level `document_id` to internal
+document-bound calls. If the one mutation reports an error, the executor does not retry
+it; it still attempts the mandatory preview because a timeout or chunk failure may have
+left a partial visible result that must be reconciled first.
+
 ## Measurement and reference tools
 
 The fork also exposes six general-purpose geometry tools that are useful for
@@ -167,7 +187,7 @@ Mixer Brush remains experimental. A direct Action Manager path-stroke attempt us
 
 The fork has two deliberately separate layers:
 
-1. **Painting API** — brush presets/settings, strokes, dabs, sampling, measurements and Photoshop execution primitives.
+1. **Painting API** — brush presets/settings, strokes, dabs, sampling, measurements, VisualMicroPlan orchestration and Photoshop execution primitives.
 2. **Painting agent policy** — the canonical visual-control specification in `digital-painting-agent-skill.md`, exposed at runtime through `ps.digital_painting_control`.
 
 Do not duplicate normative painting policy in this implementation document. Changes to action classes, style/critic behavior, pacing, rollback, reference diagnostics, session persistence or Definition of Done belong in the skill first; this file records implementation facts and experiment results that explain the available primitives.

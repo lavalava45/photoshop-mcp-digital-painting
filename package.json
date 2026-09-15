@@ -1,7 +1,7 @@
 {
   "name": "photoshop-mcp-digital-painting-fork",
   "version": "1.7.6",
-  "description": "Independent community fork of Photoshop MCP for AI-driven digital painting — 131 tools with painting, color sampling, landmarks/guides, previews, recipes, and hardened document targeting. Based on alisaitteke/photoshop-mcp; not an official upstream release.",
+  "description": "Independent community fork of Photoshop MCP for AI-driven digital painting — 134 tools with painting, VisualMicroPlan execution, color sampling, landmarks/guides, previews, recipes, and hardened document targeting. Based on alisaitteke/photoshop-mcp; not an official upstream release.",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
@@ -76,7 +76,7 @@
     "vue",
     "hono"
   ],
-  "author": "Ali Sait Teke (original upstream project)",
+  "author": "lavalava45 (fork maintainer; based on the original project by Ali Sait Teke)",
   "license": "MIT",
   "repository": {
     "type": "git",

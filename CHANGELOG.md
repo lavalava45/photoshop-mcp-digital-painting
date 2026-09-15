@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `scripts/test-landmark-ergonomics.mjs` for Photoshop-independent landmark transform/compare regression coverage.
 - Add offline and two-document live regressions for document targeting in `scripts/test-document-targeting.mjs` and `scripts/test-document-targeting-live.mjs`.
 - Add offline and live color-sampling regressions in `scripts/test-color-sampling.mjs` and `scripts/test-color-sampling-live.mjs`.
+- Add `photoshop_sample_colors` for batched visible-composite point sampling from a pinned reference document.
+- Add `photoshop_paint_dabs` for grouped/chunked high-volume brush dabs without one MCP call per mark.
+- Add `photoshop_execute_visual_microplan`: one MCP round-trip may now contain bounded preparation/read/configuration steps, exactly one approved visual mutation, and its mandatory preview. A per-document preview SHA/verdict gate prevents the next micro-plan from running before the returned frame is visually classified.
+- Add VisualMicroPlan validation/regression tests for one-mutation enforcement, preview placement, brush-settings verification after preset selection, backward-only `$steps.*` result references, pinned document propagation, mutation-error preview reconciliation, and cross-plan preview-verdict blocking.
 
 ### Changed
 
@@ -44,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Harden optional `document_id` targeting across document-bound tools: ids must be positive integers, unknown ids fail closed, successful pinned calls expose `document_target`, and the UXP neural-filter lane both pre-activates the requested document and re-selects that id inside the same `batchPlay` request. ExtendScript tools retain the stronger same-script document guard immediately before the operation.
 - Separate fork identity from upstream branding/distribution across README, translated docs, package/server/MCPB metadata, client examples, web/site surfaces, and release tooling. The fork is source-distributed from `lavalava45/photoshop-mcp-digital-painting`; upstream `photoshop-mcp.com`, `@alisaitteke/photoshop-mcp`, and `io.github.alisaitteke/photoshop-mcp` are now explicitly labeled as upstream-only rather than fork distribution channels.
 - Disable inherited upstream analytics by default in the fork by removing the embedded upstream Rybbit site id; analytics now require an explicit fork-owned `RYBBIT_SITE_ID` configuration.
+- Remove inherited upstream publishing/sponsorship/directory machinery from the fork (`npm`/MCP Registry GitHub Actions, upstream Funding/Glama metadata, upstream release-note publishing scripts). Replace inherited translated upstream READMEs with short fork-safe archive notices pointing to the canonical fork README/INSTALL instead of executable upstream install commands.
+- Digital-painting transport guidance now prefers VisualMicroPlan when it can safely collapse setup/read calls around one atomic visual bundle; the hard preview barrier remains mandatory and mutation errors are reconciled by preview rather than blind retry.
 
 ### Validation
 
@@ -60,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verified RGB per-stroke overrides remain intact while descriptor caching is active.
 - Verified document targeting with two simultaneously open temporary documents: while document B was active, pinned layer creation and guide mutation affected only document A, and pinned close closed A while leaving B open (`DOCUMENT_TARGETING_LIVE_TEST_OK`).
 - Verified `photoshop_sample_color` on Photoshop 2026 with two temporary documents: pinned point samples returned the intended document's composite color, radius-based Average sampling returned the same known uniform color, source documents were unchanged, and out-of-bounds coordinates failed closed (`COLOR_SAMPLING_LIVE_TEST_OK`).
+- Verified the current source catalog at 134 tools (118 atomic/non-recipe + 16 recipes) and 24 prompts; regenerated the derived site tool metadata after discovering that prior hand-written counts lagged the already-implemented `photoshop_sample_colors` and `photoshop_paint_dabs` tools.
+- VisualMicroPlan/unit regression suite passes 51/51 tests; build, lint, painting-policy verification, prompt parity, pack-integrity verification, painting batching, color sampling, and document-targeting regressions all pass.
 - `npm run build:server` and `npm run lint` pass for the current painting branch.
 
 ### Pending

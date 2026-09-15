@@ -35,6 +35,7 @@ const sharedInvariants = [
   ['atomic visual bundle definition', /atomic visual bundle[\s\S]{0,900}(?:one visual problem|one semantic region)/i],
   ['hard preview barrier', /hard preview barrier|no next visual mutation may begin[\s\S]{0,300}(?:captured|inspected)[\s\S]{0,300}(?:classified|regression)/i],
   ['batching cannot cross semantic passes', /batching[\s\S]{0,500}(?:never|must never)[\s\S]{0,500}(?:independent semantic passes|preview\/inspection barrier)/i],
+  ['VisualMicroPlan preview gate', /photoshop_execute_visual_microplan[\s\S]{0,900}(?:one|ONE)[\s\S]{0,500}(?:preview|photoshop_get_preview)[\s\S]{0,900}(?:verdict|previous_preview)/i],
   ['state-based completion', /DEFINITION OF DONE|Definition of Done/i],
 ];
 

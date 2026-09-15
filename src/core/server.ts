@@ -47,6 +47,7 @@ import { createStackTools } from '../tools/stack-tools.js';
 import { createExportTools } from '../tools/export-tools.js';
 import { createPaintingTools } from '../tools/painting-tools.js';
 import { createMeasurementTools } from '../tools/measurement-tools.js';
+import { createVisualMicroPlanTools } from '../tools/visual-microplan-tools.js';
 import { ensureUxpBridgeServer } from '../platform/uxp-bridge-server.js';
 
 export interface PhotoshopMCPServerOptions {
@@ -162,6 +163,7 @@ export class PhotoshopMCPServer {
     this.registerToolDefinitions(createPaintingTools(connection));
     this.registerToolDefinitions(createMeasurementTools(connection));
     this.registerToolDefinitions(createRecipeTools(connection));
+    this.registerToolDefinitions(createVisualMicroPlanTools(this.toolRegistry));
 
     this.logger.info(
       `Registered ${this.toolRegistry.count()} tools and ${this.promptRegistry.count()} prompts`

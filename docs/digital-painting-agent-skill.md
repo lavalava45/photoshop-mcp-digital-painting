@@ -616,6 +616,8 @@ During skill development/testing, **high-frequency process capture is ON by defa
 
 Batching, style grouping, transport quantization or other execution optimization may reduce calls **only inside one already-approved atomic visual bundle**. They must never combine independent semantic passes, cross a stage/scale decision, or postpone a required preview/inspection barrier.
 
+`photoshop_execute_visual_microplan` is the preferred transport optimization when several preparation/read/configuration calls are already known to belong to the same approved bundle. It may collapse those calls plus **exactly one** visual mutation and its immediately following `photoshop_get_preview` into one MCP round-trip. The micro-plan must keep one stage, scale, semantic region and action class; it is not permission to hide several passes in one request. The server returns the preview image plus SHA-256 and blocks the next VisualMicroPlan for that document until the caller supplies that exact SHA with a visual verdict (`improvement|neutral|regression`) and disposition (`accept|correct|rollback`). A mutation error is not auto-retried: the executor still attempts the preview because partial AUTO batches may already have altered the canvas. `$steps.<id>.<path>` may reuse earlier normalized preparation results inside the same micro-plan, and the top-level pinned `document_id` remains authoritative for all document-bound internal steps.
+
 When one of those frames is also an accepted checkpoint/stage transition/recovery anchor, save its paired PSD beside it before launching the next painting mutation.
 
 ### Fresh-composition evaluation invariant
