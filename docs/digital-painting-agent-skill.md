@@ -18,6 +18,10 @@ Once a task enters Photoshop/COS/MCP mode, that execution mode is sticky until t
 
 - Short continuations such as `да`, `давай`, `продолжай`, `рисуй`, `дальше`, `ок` inherit the current Photoshop path.
 - In Chat On Steroids, use `Chat_On_Steroids_Core` for Photoshop MCP/terminal execution; use Desktop only for read-only UI inspection when needed.
+- The canonical COS transport is **Core → direct stdio → this fork's built `dist/index.js` → Photoshop**. The Chat On Steroids `Plugins` section / shared MCP connector is **not** the Photoshop transport for this workflow.
+- Do not search for, require, or fall back to a Photoshop connector under `Chat_On_Steroids_Plugins`. Absence of such a connector is not evidence that Photoshop MCP is unavailable; verify the Core/direct-stdio route instead.
+- On the current Windows workspace, the fork source is `E:\Downloads\devspace-test\experiments\photoshop-mcp-digital-painting`; after `npm run build:server`, direct stdio must target this repository's `dist/index.js`.
+- The optional `uxp-plugin/` bridge is Photoshop-side infrastructure for Neural Filters only and must not be confused with the Chat On Steroids Plugins UI.
 - Do not switch to `image_gen` or another image-generation path merely because a follow-up says draw/paint/render/edit.
 - Switch execution family only on an explicit user instruction such as “используй ImageGen” or “не в Photoshop”.
 
@@ -588,6 +592,45 @@ announce the semantic problem briefly
 → replan
 ```
 
+#### Hard user-visible report barrier
+
+Every completed **external tool action** must be reported to the user before the controller starts any later external tool action.
+
+An external tool action is any completed COS / Photoshop MCP / terminal / repository tool call, including read-only calls such as document/state/history/layer/preview inspection. The only exception is polling or `write_stdin` for the **same still-running process**: those polls are continuation of that one unfinished action, not new actions.
+
+The mandatory completion report is:
+
+```text
+Что сделал: ...
+Зачем: ...
+Результат: ...
+```
+
+This is a **hard execution barrier**, not optional narration:
+
+- once a tool call returns a terminal/completed result, do not invoke another external tool until the report above has been emitted to the user;
+- if the action produced no visible change, say that explicitly in `Результат` rather than silently continuing;
+- if an action failed, stalled, timed out, or was classified `not-executed` / `partial` / `uncertain`, report that state before any recovery action starts;
+- a heartbeat during a long-running call does **not** count as the completion report and does not release this barrier;
+- do not evade the barrier by redefining a chain of tool calls as one “workflow step”, “preflight”, “recovery”, “checkpoint”, “preparation block” or other semantic group;
+- one valid `photoshop_execute_visual_microplan` call is one external tool action even though it contains internal server-side substeps; when that call completes, the user-visible report is mandatory before any later external tool call.
+
+During a long-running external action, send a concise heartbeat roughly every 30–60 seconds. The heartbeat must state what is still pending and whether any visual mutation has been confirmed. Silence while waiting for MCP/terminal completion is not allowed.
+
+#### Hard UI focus barrier
+
+Operate Photoshop in the background by default. Never take window focus or alter the user's visible Photoshop context on your own initiative.
+
+Without explicit user permission for that specific focus/context change:
+
+- do **not** bring Photoshop to the foreground, raise/activate its window, or otherwise steal keyboard/window focus;
+- do **not** automatically switch the active Photoshop document/tab, even if the Photoshop window remains in the background;
+- do **not** open or activate scratch/probe documents when doing so changes the active document visible to the user;
+- do **not** use `photoshop_set_active_document` merely to make execution convenient; prefer pinned `document_id` operations that leave the user's active document untouched;
+- if a workflow genuinely requires changing the active document or foreground window, stop after the preceding report and ask for explicit permission before that action.
+
+If the user wants to inspect Photoshop, the user can bring it forward or switch documents themselves. Background-safe execution and pinned document targeting are the default.
+
 An **atomic visual bundle** is narrow by definition. All included marks must:
 
 - address **one visual problem**;
@@ -601,7 +644,7 @@ If any of those conditions is false, split the work and preview between parts. I
 - Never launch another Photoshop mutation while the previous call is outstanding. A session/process id is not completion.
 - No next visual mutation may begin until the previous mutation/atomic bundle has **completed → been captured → been visually inspected → been classified** as improvement, neutral or regression. This is a hard barrier, not a suggestion.
 - Do not queue several semantic passes into a hidden background chain.
-- During genuinely long calls, send concise heartbeat updates roughly every 30–60 seconds.
+- During genuinely long calls, send concise heartbeat updates roughly every 30–60 seconds; these do not replace the mandatory completion report.
 - If the user says stop/wait, launch no new mutation; first determine whether an already-started call is still running.
 - Full action contracts stay in planner/state; chat updates are execution telemetry, not essays.
 - When the user explicitly requests stricter capture such as one-stroke→one-preview, obey it even if slower.

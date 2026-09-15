@@ -18,6 +18,38 @@
 | Chat On Steroids | Core → direct stdio → this fork's `dist/index.js` |
 | Local development | `npm install && npm run build:server && node dist/index.js` — see [docs/development.md](docs/development.md) |
 
+### Chat On Steroids: canonical Photoshop route
+
+For this repository, **do not use the Chat On Steroids `Plugins` section / shared MCP connector to reach Photoshop**. That was an older integration path and is not the route used by the current painting workflow.
+
+The canonical path is:
+
+```text
+ChatGPT agent
+  → Chat_On_Steroids_Core
+  → direct stdio MCP process
+  → node <this-fork>/dist/index.js
+  → PhotoshopMCPServer
+  → ExtendScript/COM on Windows or AppleScript on macOS
+  → Adobe Photoshop
+```
+
+In the current Windows workspace, the fork source lives at:
+
+```text
+E:\Downloads\devspace-test\experiments\photoshop-mcp-digital-painting
+```
+
+and the server entry after `npm run build:server` is this repository's `dist/index.js`.
+
+Agent routing rules:
+
+- Photoshop execution in Chat On Steroids goes through `Chat_On_Steroids_Core` and a direct stdio client/process pointed at **this fork's** `dist/index.js`.
+- Do **not** look for, require, or fall back to a Photoshop entry in `Chat_On_Steroids_Plugins` / the COS Plugins UI.
+- Do **not** conclude that Photoshop MCP is unavailable merely because no Photoshop plugin/connector is listed there; verify the Core/direct-stdio route instead.
+- `Chat_On_Steroids_Desktop` is for read-only desktop/UI inspection when useful, not the Photoshop MCP transport.
+- The optional Adobe UXP bridge in `uxp-plugin/` is a separate Photoshop-side helper for Neural Filters only; it is not the Chat On Steroids Plugins route.
+
 **Prerequisites:** Photoshop running on Windows or macOS, Node.js 18+. This is unofficial and not affiliated with Adobe.
 
 **Tool surface:** 134 MCP tools — 118 atomic/non-recipe `photoshop_*` + 16 recipe `photoshop_recipe_*`; 24 MCP prompt templates (`ps.*`).
