@@ -11,6 +11,16 @@ Community-maintained fork of [alisaitteke/photoshop-mcp](https://github.com/alis
 
 > This is an independent fork. It is not an official release of the upstream project and is not affiliated with or endorsed by Adobe Inc.
 
+## GuardBot — project mascot
+
+<p align="center">
+  <img src="assets/mascot/guardbot.jpg" alt="GuardBot, the Photoshop MCP Digital Painting Edition mascot" width="360">
+</p>
+
+**GuardBot** is the mascot of this fork: a wind-up screenprint robot produced by the painting pipeline itself during a fresh holdout validation run. It represents the fork's core ideas — recognition-first construction, stable layer targeting, protected achieved features, and mandatory visual review after each semantic mutation.
+
+The mascot image is not an upstream Photoshop MCP asset and does not represent Adobe branding.
+
 ## What this fork adds
 
 The upstream project already provides a broad Photoshop automation MCP. This edition keeps that toolset and adds a focused painting and visual-control layer for brush-driven work:
