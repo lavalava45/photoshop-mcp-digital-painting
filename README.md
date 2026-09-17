@@ -21,6 +21,8 @@ Community-maintained fork of [alisaitteke/photoshop-mcp](https://github.com/alis
 
 The mascot image is not an upstream Photoshop MCP asset and does not represent Adobe branding.
 
+See [docs/mascot.md](docs/mascot.md) for the story of the holdout run that produced him.
+
 ## What this fork adds
 
 The upstream project already provides a broad Photoshop automation MCP. This edition keeps that toolset and adds a focused painting and visual-control layer for brush-driven work:
