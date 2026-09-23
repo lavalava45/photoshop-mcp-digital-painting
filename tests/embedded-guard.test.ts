@@ -2294,6 +2294,58 @@ describe('embedded Photoshop Guard', () => {
     expect(runtime.store.paintingState().documents['42'].workflow_lifecycle.status).toBe('active');
   });
 
+  it('keeps an active painting workflow active when a close-only read is finalized', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-read-close-only-'));
+    dirs.push(dir);
+    const { registry } = fakeRegistry(dir);
+    const runtime = runtimeFor(registry, dir);
+    runtime.store.updatePaintingState(42, current => ({
+      ...current,
+      document_id: 42,
+      workflow_lifecycle: {
+        status: 'active',
+        reason: 'operation_dispatched',
+        operation_id: 'prior-paint-pass',
+        at: new Date().toISOString(),
+      },
+    }));
+
+    const read = await runtime.cycleAuto({
+      next_pass: {
+        request_key: 'mid-run-state-read',
+        document_id: 42,
+        goal: 'Read current state without ending the active painting workflow',
+        actions: [{
+          id: 'state-read',
+          tool: 'photoshop_get_state',
+          args: { document_id: 42 },
+        }],
+      },
+    }) as any;
+    expect(read.execution).toMatchObject({
+      operation_id: 'mid-run-state-read',
+      tool: 'photoshop_get_state',
+      phase: 'completed',
+      failed: false,
+    });
+
+    const closed = await runtime.cycleAuto({
+      previous_operation_id: 'mid-run-state-read',
+      previous_observation: {
+        observed: 'The pinned document state was read successfully and no pixels were changed.',
+        target: 'resolved',
+        regression: null,
+      },
+    }) as any;
+
+    expect(closed.closed_previous.closed).toBe(true);
+    expect(runtime.store.paintingState().documents['42'].workflow_lifecycle).toMatchObject({
+      status: 'active',
+      reason: 'operation_dispatched',
+      operation_id: 'prior-paint-pass',
+    });
+  });
+
   it('rolls back the whole close-only transaction when latency finalization fails after closure writes', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-close-only-latency-rollback-'));
     dirs.push(dir);

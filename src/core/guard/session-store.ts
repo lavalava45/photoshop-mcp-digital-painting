@@ -2699,8 +2699,11 @@ export class SessionStore {
       phase: 'ready',
       last_advancement_at: null,
       seconds_since_last_advancement: null,
+      seconds_since_last_visual_change: null,
       silent_stall: false,
       silent_stall_reason: null,
+      nonvisual_progress_stall: false,
+      nonvisual_progress_stall_reason: null,
       next_required_action: 'ready',
     };
     if (!Number.isSafeInteger(documentId) || documentId <= 0) return empty;
@@ -2721,6 +2724,7 @@ export class SessionStore {
     const uncertain = records.find(r => r.phase !== 'completed' && !r.resolved);
     const pendingVisual = records.find(r => !isAbandonedRecovery(r) && r.visual && !r.verdict);
     const latestClassifiedVisual = [...records].reverse().find(r => r.visual && r.verdict);
+    const metrics = this.workflowMetrics(documentId, all, projectionContext);
     const hasOpenProblem = Object.values(documentState?.visual_problems ?? {}).some(problem => problem?.status !== 'resolved');
     const activeProblemId = textOrUndefined(documentState?.active_problem?.problem_id);
     const activeProblemOpen = !!activeProblemId
@@ -2765,6 +2769,30 @@ export class SessionStore {
       && nextRequiredAction !== 'ready'
       && Number.isFinite(secondsSinceAdvancement)
       && secondsSinceAdvancement >= SILENT_STALL_SECONDS;
+    const art = documentState?.art_director;
+    const unfinishedPlannerWork = !!art?.directive_id
+      && art.status !== 'completed'
+      && (!!art.review_due
+        || art.status === 'review_due'
+        || art.status === 'interrupted'
+        || (art.tasks ?? []).some(task => task?.status !== 'completed'));
+    const technicalClosurePending = activeJobs.length > 0
+      || !!pendingReport
+      || !!pendingAck
+      || !!uncertain
+      || !!barrier
+      || !!pendingVisual;
+    const secondsSinceVisualChange = metrics.seconds_since_last_visual_operation;
+    const nonvisualProgressStall = continuationActive
+      && unfinishedPlannerWork
+      && !technicalClosurePending
+      && Number.isFinite(secondsSinceVisualChange)
+      && secondsSinceVisualChange >= SILENT_STALL_SECONDS;
+    const nonvisualProgressStallReason = nonvisualProgressStall
+      ? (art?.review_due || art?.status === 'review_due' || art?.status === 'interrupted'
+        ? 'planner_review_not_followed_by_visual_pass'
+        : 'unfinished_painting_without_visual_pass')
+      : null;
 
     return {
       active_visual_workflow: activeVisualWorkflow,
@@ -2776,8 +2804,11 @@ export class SessionStore {
       phase,
       last_advancement_at: lastAdvancementAt,
       seconds_since_last_advancement: secondsSinceAdvancement,
+      seconds_since_last_visual_change: secondsSinceVisualChange,
       silent_stall: silentStall,
       silent_stall_reason: silentStall ? phase : null,
+      nonvisual_progress_stall: nonvisualProgressStall,
+      nonvisual_progress_stall_reason: nonvisualProgressStallReason,
       next_required_action: nextRequiredAction,
     };
   }
@@ -2816,16 +2847,16 @@ export class SessionStore {
     if (barrier) return barrier.sha256
       ? 'inspect/classify preview before another visual mutation'
       : 'obtain recovery/required preview before another visual mutation';
+    const art = state.art_director;
+    if (art?.status === 'interrupted' || art?.status === 'review_due' || art?.review_due) {
+      return `Art Director review required for directive ${art.directive_id}: ${art.review_reason ?? art.status}`;
+    }
     const lastClassifiedVisual = [...records].reverse().find(r => r.visual && r.verdict);
     if (!this.workflowContinuationActive(state, records, lastClassifiedVisual)) {
       return 'ready';
     }
     const checkpoint = this.checkpointState(documentId, all, projectionContext);
     if (checkpoint.due) return 'save required checkpoint, then dispatch next meaningful visual pass';
-    const art = state.art_director;
-    if (art?.status === 'interrupted' || art?.status === 'review_due' || art?.review_due) {
-      return `Art Director review required for directive ${art.directive_id}: ${art.review_reason ?? art.status}`;
-    }
     if (art?.status === 'completed') {
       return `Art Director directive ${art.directive_id} completed; issue the next directive or end the painting stage`;
     }
@@ -4700,4 +4731,4 @@ function visualEvidenceSignature(record, preview) {
       return `${file}:missing`;
     }
   }).join('|');
-}\n
+}

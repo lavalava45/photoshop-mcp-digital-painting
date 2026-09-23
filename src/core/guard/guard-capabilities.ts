@@ -88,4 +88,4 @@ export function guardCapabilities(env = process.env) {
       wall_clock_age_deadline: false,
     },
   };
-}\n
+}

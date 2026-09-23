@@ -190,4 +190,4 @@ export function assessVisualSignificance({ before, after, mode = 'normal' }) {
       ? VISUAL_SIGNIFICANCE_THRESHOLDS.subtle_local
       : VISUAL_SIGNIFICANCE_THRESHOLDS.normal,
   };
-}\n
+}

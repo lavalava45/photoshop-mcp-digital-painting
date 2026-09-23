@@ -68,6 +68,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 2026-09-23: harden painting-continuation liveness around read-only Guard checks. Closing a
+  read-only compact operation without `next_pass` no longer marks an active painting workflow as
+  stopped; pending Art Director review now outranks a stale lifecycle `ready` projection; and
+  `continuation_watch` exposes `nonvisual_progress_stall` plus the visual-idle duration without
+  allowing read-only churn to reset that clock. Regression coverage reproduces the exact
+  visual-pass → cadence-review → read-only-check failure mode and the >90 s no-visual-progress
+  watchdog case. Also remove committed literal `\\n` EOF artifacts from seven Guard/value source
+  files that prevented TypeScript/Vitest from parsing the current HEAD.
 - 2026-09-23: fix the canonical selection-state lane after live regression testing. UXP selection
   mutations now perform their post-mutation selection readback with modal-safe `batchPlay` options
   while already inside `executeAsModal`, preventing a successfully applied `Feather` from being

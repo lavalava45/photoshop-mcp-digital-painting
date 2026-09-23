@@ -116,4 +116,4 @@ export function analyzeLuminanceJpeg(buffer: Buffer, maxSamples = 240_000): Lumi
 export function isDetailStage(stage: unknown): boolean {
   if (typeof stage !== 'string') return false;
   return /(?:^|[_\s-])(detail|details|detailing|micro|micro-detail)(?:$|[_\s-])/i.test(stage.trim());
-}\n
+}

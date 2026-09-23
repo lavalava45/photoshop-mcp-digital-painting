@@ -133,4 +133,4 @@ export function progressPayload(operation, state = 'running') {
 export function hostProgressPayload(operation, state = 'running') {
   const progress = progressPayload(operation, state);
   return { ...progress, protocol: 'cos.host_progress.v1' };
-}\n
+}

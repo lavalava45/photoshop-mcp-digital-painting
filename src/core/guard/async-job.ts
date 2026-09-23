@@ -163,4 +163,4 @@ export function writeJobCompleted(dir, exitCode, extra = {}) {
   atomicJson(jobFiles(dir).completed, body);
   updateJob(dir, { state: exitCode === 0 ? 'completed' : 'failed', completed_at: body.at });
   return body;
-}\n
+}

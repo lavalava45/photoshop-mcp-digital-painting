@@ -429,4 +429,4 @@ export async function executeLogicalOperation({
   } catch (error) {
     return { record: store.fail(activeRecord, error), replay: false, timing };
   }
-}\n
+}

@@ -1515,6 +1515,78 @@ describe('Guard session-store regressions', () => {
     expect(s.paintingState().documents['5004'].visual_problems['shape-open'].status).toBe('open');
   });
 
+  it('prioritizes a pending Art Director review over a stopped lifecycle ready state', () => {
+    const s = store();
+    writeProjectionRecord(s, {
+      id: 'review-due-visual', documentId: 42, sequence: 1,
+      visual: true, report: true, ack: true, verdict: true,
+    });
+    s.updatePaintingState(42, current => ({
+      ...current,
+      document_id: 42,
+      workflow_lifecycle: {
+        status: 'stopped',
+        reason: 'close_only_finalization',
+        operation_id: 'read-only-check',
+        at: new Date().toISOString(),
+      },
+      art_director: {
+        directive_id: 'review-priority-regression',
+        status: 'review_due',
+        review_due: true,
+        review_reason: 'cadence:5_microplans',
+        current_task_id: 'foliage-light',
+        tasks: [{ task_id: 'foliage-light', status: 'active' }],
+      },
+    }));
+
+    expect(s.documentNextRequiredAction(42)).toBe(
+      'Art Director review required for directive review-priority-regression: cadence:5_microplans'
+    );
+  });
+
+  it('detects nonvisual progress stall without letting read-only churn reset the visual clock', () => {
+    const s = store();
+    vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 8, 20, 12, 3, 40));
+    writeProjectionRecord(s, {
+      id: 'last-visual-before-read-churn', documentId: 77, sequence: 1,
+      visual: true, report: true, ack: true, verdict: true,
+    });
+    writeProjectionRecord(s, {
+      id: 'late-read-only-check', documentId: 77, sequence: 200,
+      report: true, ack: true,
+    });
+    s.updatePaintingState(77, current => ({
+      ...current,
+      document_id: 77,
+      workflow_lifecycle: {
+        status: 'active',
+        reason: 'operation_dispatched',
+        operation_id: 'last-visual-before-read-churn',
+        at: new Date(Date.UTC(2026, 8, 20, 12, 0, 1)).toISOString(),
+      },
+      art_director: {
+        directive_id: 'nonvisual-stall-regression',
+        status: 'active',
+        review_due: false,
+        current_task_id: 'foliage-light',
+        tasks: [
+          { task_id: 'foliage-light', status: 'active' },
+          { task_id: 'focal-details', status: 'pending' },
+        ],
+      },
+    }));
+
+    const watch = s.continuationWatchState(77);
+    expect(watch.seconds_since_last_visual_change).toBeGreaterThanOrEqual(210);
+    expect(watch.seconds_since_last_advancement).toBeGreaterThanOrEqual(210);
+    expect(watch.nonvisual_progress_stall).toBe(true);
+    expect(watch.nonvisual_progress_stall_reason).toBe('unfinished_painting_without_visual_pass');
+    expect(watch.next_required_action).toBe(
+      'Painter: execute bounded task foliage-light under directive nonvisual-stall-regression'
+    );
+  });
+
   it('does not infer legacy workflow completion from a mid-run PSD checkpoint save', () => {
     const s = store();
     vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 8, 20, 12, 1, 0));

@@ -824,7 +824,7 @@ export class EmbeddedGuardRuntime {
         const closureStartedAt = Date.now();
         try {
           closedPrevious = this.store.closePreviousCycle(cycleInput);
-          if (!nextOperation && closedPrevious.closed) {
+          if (!nextOperation && closedPrevious.closed && !isGuardReadTool(previousRecordBeforeClosure?.tool)) {
             const documentId = previousRecordBeforeClosure?.args?.document_id;
             if (Number.isSafeInteger(documentId) && documentId > 0) {
               this.store.setWorkflowLifecycle(
