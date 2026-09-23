@@ -3,6 +3,8 @@ import { isAbsolute } from 'node:path';
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
 import { PhotoshopConnection } from '../platform/connection.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 import {
   atomicFailureFromError,
   atomicSuccess,
@@ -10,7 +12,10 @@ import {
   runSnippet,
 } from './atomic-shared.js';
 
-export function createSmartObjectTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createSmartObjectTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -33,7 +38,7 @@ export function createSmartObjectTools(connection: PhotoshopConnection): ToolDef
           },
         },
       },
-      handler: async (args) => convertToSmartObject(connection, args),
+      handler: async (args) => convertToSmartObject(connection, backendRouter, args),
     },
     {
       tool: {
@@ -61,7 +66,7 @@ export function createSmartObjectTools(connection: PhotoshopConnection): ToolDef
           required: ['file_path'],
         },
       },
-      handler: async (args) => replaceSmartObjectContents(connection, args),
+      handler: async (args) => replaceSmartObjectContents(connection, backendRouter, args),
     },
     {
       tool: {
@@ -84,7 +89,7 @@ export function createSmartObjectTools(connection: PhotoshopConnection): ToolDef
           },
         },
       },
-      handler: async (args) => editSmartObjectContents(connection, args),
+      handler: async (args) => editSmartObjectContents(connection, backendRouter, args),
     },
     {
       tool: {
@@ -106,7 +111,7 @@ export function createSmartObjectTools(connection: PhotoshopConnection): ToolDef
           },
         },
       },
-      handler: async (args) => createSmartObjectViaCopy(connection, args),
+      handler: async (args) => createSmartObjectViaCopy(connection, backendRouter, args),
     },
   ];
 }
@@ -141,9 +146,38 @@ async function runSmartObjectSnippet(
 
 async function convertToSmartObject(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const layerName = typeof args.layer_name === 'string' ? args.layer_name.trim() : undefined;
+  try {
+    const backend = await backendRouter.backendFor('smart_object.convert');
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' && Number.isSafeInteger(args.document_id) && args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'convert_to_smart_object',
+        {
+          ...(layerName ? { layer_name: layerName } : {}),
+          ...(documentId !== undefined ? { document_id: documentId } : {}),
+        },
+        'uxp_convert_to_smart_object_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_convert_to_smart_object_failed');
+      return atomicSuccess(
+        layerName ? `Layer "${layerName}" converted to Smart Object` : 'Active layer converted to Smart Object',
+        Object.fromEntries(
+          ['layer_name', 'kind', 'already_smart_object', 'context']
+            .filter((key) => result.data?.[key] !== undefined)
+            .map((key) => [key, result.data?.[key]])
+        )
+      );
+    }
+  } catch (error) {
+    return atomicFailureFromError(error);
+  }
   return runSmartObjectSnippet(
     connection,
     ExtendScriptSnippets.convertToSmartObject(layerName),
@@ -154,6 +188,7 @@ async function convertToSmartObject(
 
 async function replaceSmartObjectContents(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const filePath = typeof args.file_path === 'string' ? args.file_path.trim() : '';
@@ -176,6 +211,33 @@ async function replaceSmartObjectContents(
     );
   }
 
+  try {
+    const backend = await backendRouter.backendFor('smart_object.replace');
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' && Number.isSafeInteger(args.document_id) && args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'replace_smart_object_contents',
+        {
+          file_path: filePath,
+          ...(layerName ? { layer_name: layerName } : {}),
+          ...(documentId !== undefined ? { document_id: documentId } : {}),
+        },
+        'uxp_replace_smart_object_contents_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_replace_smart_object_contents_failed');
+      const details: Record<string, unknown> = {};
+      for (const key of ['layer_name', 'file_path', 'context']) {
+        if (result.data[key] !== undefined) details[key] = result.data[key];
+      }
+      return atomicSuccess(`Smart Object contents replaced from ${filePath}`, details);
+    }
+  } catch (error) {
+    return atomicFailureFromError(error);
+  }
+
   return runSmartObjectSnippet(
     connection,
     ExtendScriptSnippets.replaceSmartObjectContents(filePath, layerName),
@@ -186,9 +248,38 @@ async function replaceSmartObjectContents(
 
 async function editSmartObjectContents(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const layerName = typeof args.layer_name === 'string' ? args.layer_name.trim() : undefined;
+  try {
+    const backend = await backendRouter.backendFor('smart_object.edit');
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' && Number.isSafeInteger(args.document_id) && args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'edit_smart_object_contents',
+        {
+          ...(layerName ? { layer_name: layerName } : {}),
+          ...(documentId !== undefined ? { document_id: documentId } : {}),
+        },
+        'uxp_edit_smart_object_contents_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_edit_smart_object_contents_failed');
+      const details: Record<string, unknown> = {};
+      for (const key of ['parent_document', 'embedded_document', 'layer_name', 'context']) {
+        if (result.data[key] !== undefined) details[key] = result.data[key];
+      }
+      return atomicSuccess(
+        'Smart Object opened for editing — active document is now the embedded contents',
+        details
+      );
+    }
+  } catch (error) {
+    return atomicFailureFromError(error);
+  }
   return runSmartObjectSnippet(
     connection,
     ExtendScriptSnippets.editSmartObjectContents(layerName),
@@ -199,9 +290,35 @@ async function editSmartObjectContents(
 
 async function createSmartObjectViaCopy(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const layerName = typeof args.layer_name === 'string' ? args.layer_name.trim() : undefined;
+  try {
+    const backend = await backendRouter.backendFor('smart_object.copy');
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' && Number.isSafeInteger(args.document_id) && args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'create_smart_object_via_copy',
+        {
+          ...(layerName ? { layer_name: layerName } : {}),
+          ...(documentId !== undefined ? { document_id: documentId } : {}),
+        },
+        'uxp_create_smart_object_via_copy_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_create_smart_object_via_copy_failed');
+      const details: Record<string, unknown> = {};
+      for (const key of ['source_layer_name', 'new_layer_name', 'kind', 'context']) {
+        if (result.data[key] !== undefined) details[key] = result.data[key];
+      }
+      return atomicSuccess('New Smart Object created via copy', details);
+    }
+  } catch (error) {
+    return atomicFailureFromError(error);
+  }
   return runSmartObjectSnippet(
     connection,
     ExtendScriptSnippets.createSmartObjectViaCopy(layerName),

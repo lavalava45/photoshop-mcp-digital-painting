@@ -91,14 +91,15 @@ async function main(): Promise<void> {
     'ps.composite_blend',
     'ps.dodge_burn_guide',
     'ps.gradient_blend',
-    'ps.generative_fill',
-    'ps.generative_remove',
-    'ps.generative_expand',
+    'ps.digital_painting_control',
   ];
   const expectedPromptCount = expectedRecipePrompts.length + expectedGuidePrompts.length;
   if (promptNames.length !== expectedPromptCount) fail('prompt count', String(promptNames.length));
   for (const name of [...expectedRecipePrompts, ...expectedGuidePrompts]) {
     if (!promptNames.includes(name)) fail('missing prompt', name);
+  }
+  for (const removed of ['ps.generative_fill', 'ps.generative_remove', 'ps.generative_expand']) {
+    if (promptNames.includes(removed)) fail('removed prompt still exposed', removed);
   }
   ok(
     `${expectedPromptCount} prompt templates`,
@@ -153,12 +154,7 @@ async function main(): Promise<void> {
     'photoshop_recipe_dodge_burn',
     'photoshop_recipe_remove_distraction',
     'photoshop_recipe_csv_to_cards',
-    'photoshop_generative_fill',
-    'photoshop_generative_remove',
-    'photoshop_generative_expand',
-    'photoshop_generative_upscale',
     'photoshop_sky_replacement',
-    'photoshop_generate_image',
     'photoshop_neural_filter',
     'photoshop_apply_layer_style',
     'photoshop_apply_lut',
@@ -174,6 +170,15 @@ async function main(): Promise<void> {
   ];
   for (const name of required) {
     if (!toolNames.has(name)) fail('missing tool', name);
+  }
+  for (const removed of [
+    'photoshop_generative_fill',
+    'photoshop_generative_remove',
+    'photoshop_generative_expand',
+    'photoshop_generative_upscale',
+    'photoshop_generate_image',
+  ]) {
+    if (toolNames.has(removed)) fail('removed tool still exposed', removed);
   }
   ok('recipe + state tools registered', `${required.length} checked`);
 

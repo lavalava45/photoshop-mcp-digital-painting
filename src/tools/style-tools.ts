@@ -1,6 +1,8 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 import {
   atomicFailureFromError,
   atomicSuccess,
@@ -23,7 +25,10 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
   return Math.max(min, Math.min(max, Math.round(n)));
 }
 
-export function createStyleTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createStyleTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -54,13 +59,14 @@ export function createStyleTools(connection: PhotoshopConnection): ToolDefinitio
           },
         },
       },
-      handler: async (args) => applyLayerStyle(connection, args),
+      handler: async (args) => applyLayerStyle(connection, backendRouter, args),
     },
   ];
 }
 
 async function applyLayerStyle(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const style = parseStyle(args.style);
@@ -76,6 +82,26 @@ async function applyLayerStyle(
   };
 
   try {
+    const backend = await backendRouter.backendFor('layer.style.apply');
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' && Number.isSafeInteger(args.document_id) && args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'apply_layer_style',
+        {
+          ...options,
+          ...(documentId !== undefined ? { document_id: documentId } : {}),
+        },
+        'uxp_apply_layer_style_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_apply_layer_style_failed');
+      return atomicSuccess(`Layer style ${style} applied`, {
+        style,
+        layer_name: result.data.layer_name,
+      });
+    }
     const raw = await runSnippet(connection, ExtendScriptSnippets.applyLayerStyle(options));
     const parsed = parseSnippetResult(raw);
     if (!parsed) {

@@ -38,15 +38,15 @@ flowchart TB
   Hono --> UI
   Hono --> SQLite
   MCP -->|AppleScript / COM| ES
-  MCP -->|HTTP poll 127.0.0.1:38452| UXP
+  MCP -->|localhost long-poll 127.0.0.1:38452| UXP
 ```
 
 | Layer | Responsibility | Key paths |
 | ----- | -------------- | --------- |
 | **MCP core** | Tool/prompt registry, session, MCP protocol | `src/core/` |
 | **Platform** | Photoshop detection, script execution | `src/platform/` |
-| **Tools** | 118 atomic/non-recipe + 16 recipe (134 total) | `src/tools/` + core connection tools |
-| **Prompt layer** | Server instructions, 24 MCP prompt templates | `src/prompts/` |
+| **Tools** | 129 atomic/non-recipe + 16 recipe (145 total) | `src/tools/` + core connection/Guard tools |
+| **Prompt layer** | Server instructions, 21 MCP prompt templates | `src/prompts/` |
 | **Errors** | Structured envelopes for agent self-correction | `src/errors/envelope.ts` |
 | **Standalone UI** | Hono API, multi-provider agent, chat persistence | `src/ui/`, `web/` |
 | **Analytics** | Opt-out anonymous usage (Rybbit) | `src/analytics/` |
@@ -57,28 +57,81 @@ flowchart TB
 
 `PhotoshopMCPServer` wires the official MCP SDK with:
 
-- **134 tools** registered via `ToolRegistry` (atomic/non-recipe operations + outcome-oriented recipes + generative/neural AI + digital painting/color sampling + measurement/landmarks/guides + VisualMicroPlan orchestration).
-- **24 prompts** via `PromptRegistry` (`prompts/list`, `prompts/get`).
+- **145 tools** registered via `ToolRegistry` (atomic/non-recipe operations + outcome-oriented recipes + Neural Filters + digital painting/color sampling + method selection + value analysis + measurement/landmarks/guides + VisualMicroPlan orchestration + embedded Guard façade).
+- **21 prompts** via `PromptRegistry` (`prompts/list`, `prompts/get`).
 - **Server instructions** on `initialize` — workflow contract for host LLMs (state-before-action, prefer recipes, error recovery). See [`src/prompts/instructions.ts`](../src/prompts/instructions.ts).
 - **Structured error wrapping** — every tool handler passes through `wrapToolHandler` so failures return JSON with `code` and `suggested_next_tool` for agentic repair loops.
 - **Document targeting** — document-bound tool schemas receive optional `document_id` centrally in `src/core/document-target.ts`. The id is kept in async-local request context; ExtendScript execution resolves the exact open document inside the same JSX invocation immediately before the tool script. Non-ExtendScript document mutators can opt into server-side pre-activation; the UXP Neural Filter lane additionally selects the same id inside its `batchPlay` request. Successful pinned results expose `document_target` metadata.
 
-Entry point: [`src/index.ts`](../src/index.ts) → stdio transport.
+Entry points:
+
+- [`src/index.ts`](../src/index.ts) → ordinary/compatibility stdio transport (`PHOTOSHOP_GUARD_MODE=compatible` unless overridden);
+- [`src/cos-plugin.ts`](../src/cos-plugin.ts) → Chat On Steroids guarded stdio entry (`PHOTOSHOP_GUARD_MODE=required` before loading the same server).
 
 ---
 
 ## Platform abstraction (`src/platform/`)
 
-Photoshop has no stable HTTP API for external automation. This server uses **ExtendScript** executed through platform-specific bridges:
+Photoshop has no general external HTTP automation API. Production semantic routing is now
+**UXP-first** through the Photoshop-side companion. Ordinary migrated catalog primitives retain
+a bounded ExtendScript/COM implementation that may be selected only when UXP availability is
+resolved **before dispatch**; persistence and Neural Filters remain intentional UXP-only
+exceptions. The UXP companion provides `batchPlay`/DOM/Imaging capabilities for the migrated
+catalog, non-interfering persistence, and the low-latency semantic lane:
 
 | OS | Detection | Execution |
 | -- | --------- | --------- |
 | **macOS** | Spotlight / app bundle paths (`macos-detector.ts`) | AppleScript → `do javascript` (`macos-executor.ts`) |
 | **Windows** | Registry (`windows-detector.ts`) | COM automation (`windows-executor.ts`) |
 
-`connection.ts` manages the lifecycle: find Photoshop, verify responsiveness, route scripts.
+`connection.ts` manages the legacy external-script lifecycle. New transport migration does
+not overload that class. `src/platform/photoshop-backend.ts` defines semantic backend
+capabilities and `PhotoshopBackendRouter`, which chooses a backend **before dispatch** for
+each migrated primitive. Once dispatch has started, the router never catches a failure and
+replays the same operation through another backend; that rule is required before mutating
+primitives dispatch and remains mandatory now that P0 mutations are UXP-first.
 
-**Design decision:** ExtendScript remains the default external automation path for **Photoshop 2012–2026+** on both platforms. **Generative Fill / Remove / Expand** run via ExtendScript `executeAction` with extended timeouts. **Neural Filters** require the optional **UXP bridge** (`uxp-plugin/` + MCP-hosted poll server on `127.0.0.1:38452`) because `batchPlay` is only available inside a UXP plugin.
+**Design decision:** production Photoshop dispatch is **UXP-first with bounded pre-dispatch ExtendScript/COM fallback**. `PhotoshopBackendRouter` resolves backend support/readiness before the semantic operation starts. For ordinary migrated tools it may select the retained legacy implementation only before any UXP dispatch; after a UXP command has been dispatched, claimed, become uncertain, or returned an error, the same operation is never replayed through the other backend. `photoshop_save_document` and `photoshop_neural_filter` are intentionally UXP-only/fail-closed, and raw `photoshop_execute_script` remains retired from the production surface. Cloud text/image generation is intentionally not exposed by this fork.
+
+The semantic read lane is UXP-first for `state.read`, `document.info`, `documents.list`,
+`selection.bounds`, `layers.list`, `brush.presets.list`, `brush.settings.read`,
+`preview.read`, `color.sample`, `colors.sample`, and `history.read`, with legacy ExtendScript selected only **before
+dispatch** when UXP is unavailable. These UXP reads use read-only `batchPlay` descriptors rather
+than Photoshop DOM reads because live foreground sampling showed DOM state access could activate
+Photoshop. `layers.list` additionally reconstructs the ExtendScript recursive layer ordering from
+Action Manager indexes and group section markers; brush settings use application
+`currentToolOptions` rather than a direct `brush` target because that target can trigger a
+modal `Get` error in Photoshop 27.8. Public MCP schema/result shapes remain
+unchanged. Preview and color sampling use the UXP Imaging API; `getPixels` is wrapped in a
+read-only `executeAsModal` because Photoshop 27.8 requires modal scope for Imaging API reads.
+
+The P0 mutation lane is also UXP-first: brush preset selection, brush settings, foreground
+color, layer fill, compound regions, path strokes and ordered dabs use UXP when the companion
+is healthy and retain ExtendScript only as a **pre-dispatch** fallback. Fill matches the legacy
+`Select Canvas → Fill → Deselect` Photoshop history sequence. Regions construct UXP compound
+paths, convert the named path to a selection with Action Manager, fill/deselect, and delete the
+temporary path. Strokes/dabs use named UXP paths and retrieve the actual PathItem through
+`doc.pathItems.getByName()` before `strokePath`. In Photoshop 27.8, assigning
+`app.foregroundColor` inside a painting modal can restore stale opacity/flow; the accepted
+implementation re-applies desired size/opacity/flow after each color write.
+
+The 2026-09-23 P1/P2/P3 catalog migration extends this same policy across document lifecycle,
+selection/masks, layer transforms/merge, adjustments, filters, text/export, guides/actions,
+datasets/image placement, Smart Objects, styles, crop/resize and the remaining migrated catalog
+surface. Source migration is complete. The current rebuilt child is live on bridge revision
+`compact-v2-20260923-full`; the load/revision preflight is accepted, while the final
+representative post-migration behavior/no-focus-steal trace remains a separate live gate.
+
+Document-bound semantic mutations do not silently activate another tab to satisfy
+`document_id`. The explicit `photoshop_set_active_document` tool is the navigation operation;
+Guard classifies it as preparation rather than a visual mutation so checkpoint cadence cannot
+deadlock a deliberate tab switch.
+
+`photoshop_measure_points` is intentionally not a separate host primitive anymore: it reads
+document geometry through `document.info` and calculates normalized coordinates, distances,
+and ratios in Node. This keeps Photoshop transport concerns out of pure caller-supplied geometry.
+
+The bridge HTTP server binds only to `127.0.0.1:38452`. In the currently live-tested Photoshop 2026 / UXP runtime, narrowed manifest declarations for that loopback HTTP origin are rejected at runtime with `Manifest entry not found`, including both host-only and host-plus-port forms. The companion manifest therefore currently declares `requiredPermissions.network.domains: "all"` while retaining a loopback-only server listener. This is a runtime compatibility concession, not a request to expose the bridge server beyond localhost.
 
 ExtendScript snippets live in [`src/api/extendscript.ts`](../src/api/extendscript.ts); tools compose them rather than embedding raw strings inline.
 
@@ -145,8 +198,7 @@ photoshop-mcp/
 │   └── ui/                # Standalone UI server, agent, providers, store
 ├── web/                   # Vue SPA (built to web/dist, bundled in npm)
 ├── docs/                  # Architecture, development, prompt layer, …
-├── images/                # README screenshots, OG social preview
-├── uxp-plugin/            # Optional UXP bridge for Neural Filters
+├── uxp-plugin/            # Photoshop-side UXP bridge: Neural Filters + fast-lane development
 └── scripts/               # Integration tests, spike probes, release tooling
 ```
 
@@ -165,6 +217,7 @@ photoshop-mcp/
 
 ## Related docs
 
+- [Photoshop Guard architecture](photoshop-guard-architecture.md) — current controller/gateway ownership, host capability requests, and external proxy fallback
 - [Prompt layer](prompt-layer.md) — instructions, templates, recipes
 - [Available tools](available-tools.md) — full `photoshop_*` reference
 - [Development](development.md) — build, test, from-source setup

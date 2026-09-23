@@ -1,6 +1,8 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { ExtendScriptSnippets, type GradientMaskDirection } from '../api/extendscript.js';
 import { PhotoshopConnection } from '../platform/connection.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpApplyGradientMask, invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 import { clampInt } from './recipes/_shared.js';
 import {
   atomicFailure,
@@ -80,7 +82,10 @@ function parseGradientDirection(value: unknown): GradientMaskDirection {
   return 'bottom_to_top';
 }
 
-export function createMaskTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createMaskTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -124,7 +129,7 @@ export function createMaskTools(connection: PhotoshopConnection): ToolDefinition
           },
         },
       },
-      handler: async (args) => applyGradientMask(connection, args),
+      handler: async (args) => applyGradientMask(connection, backendRouter, args),
     },
     {
       tool: {
@@ -148,7 +153,7 @@ export function createMaskTools(connection: PhotoshopConnection): ToolDefinition
           },
         },
       },
-      handler: async (args) => createClippingMask(connection, args),
+      handler: async (args) => createClippingMask(connection, backendRouter, args),
     },
     {
       tool: {
@@ -171,16 +176,43 @@ export function createMaskTools(connection: PhotoshopConnection): ToolDefinition
           },
         },
       },
-      handler: async (args) => releaseClippingMask(connection, args),
+      handler: async (args) => releaseClippingMask(connection, backendRouter, args),
     },
   ];
 }
 
 async function createClippingMask(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const layerName = typeof args.layer_name === 'string' ? args.layer_name.trim() : undefined;
+  try {
+    const backend = await backendRouter.backendFor('layer.clipping.create');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'create_clipping_mask',
+        layerName ? { layer_name: layerName } : {},
+        'uxp_create_clipping_mask_failed'
+      );
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? 'uxp_create_clipping_mask_failed');
+      }
+      const failure = mapClippingSnippetFailure(result.data);
+      if (failure) return failure;
+      const details: Record<string, unknown> = {};
+      for (const key of ['layer_name', 'is_clipping', 'already_clipping']) {
+        if (result.data[key] !== undefined) details[key] = result.data[key];
+      }
+      if (result.data.context !== undefined) details.context = result.data.context;
+      return atomicSuccess(
+        layerName ? `Clipping mask created on "${layerName}"` : 'Clipping mask created on active layer',
+        details
+      );
+    }
+  } catch (error) {
+    return atomicFailureFromError(error);
+  }
   return runClippingMaskSnippet(
     connection,
     ExtendScriptSnippets.createClippingMask(layerName),
@@ -191,9 +223,36 @@ async function createClippingMask(
 
 async function releaseClippingMask(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const layerName = typeof args.layer_name === 'string' ? args.layer_name.trim() : undefined;
+  try {
+    const backend = await backendRouter.backendFor('layer.clipping.release');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'release_clipping_mask',
+        layerName ? { layer_name: layerName } : {},
+        'uxp_release_clipping_mask_failed'
+      );
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? 'uxp_release_clipping_mask_failed');
+      }
+      const failure = mapClippingSnippetFailure(result.data);
+      if (failure) return failure;
+      const details: Record<string, unknown> = {};
+      for (const key of ['layer_name', 'is_clipping']) {
+        if (result.data[key] !== undefined) details[key] = result.data[key];
+      }
+      if (result.data.context !== undefined) details.context = result.data.context;
+      return atomicSuccess(
+        layerName ? `Clipping mask released from "${layerName}"` : 'Clipping mask released from active layer',
+        details
+      );
+    }
+  } catch (error) {
+    return atomicFailureFromError(error);
+  }
   return runClippingMaskSnippet(
     connection,
     ExtendScriptSnippets.releaseClippingMask(layerName),
@@ -204,6 +263,7 @@ async function releaseClippingMask(
 
 async function applyGradientMask(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const direction = parseGradientDirection(args.direction);
@@ -211,49 +271,32 @@ async function applyGradientMask(
   const endPct = clampInt(args.end_pct, 0, 100, 100);
   const angleDeg = typeof args.angle_deg === 'number' ? args.angle_deg : undefined;
 
-  const gradientScript = ExtendScriptSnippets.applyGradientMask(
-    direction,
-    startPct,
-    endPct,
-    angleDeg
-  );
-
-  let maskAutoCreated = false;
-
   try {
-    const raw = await runSnippet(connection, gradientScript);
+    const backend = await backendRouter.backendFor('layer.mask.gradient');
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' &&
+        Number.isSafeInteger(args.document_id) &&
+        args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpApplyGradientMask({
+        ...(documentId !== undefined ? { document_id: documentId } : {}),
+        direction,
+        start_pct: startPct,
+        end_pct: endPct,
+        ...(angleDeg !== undefined ? { angle_deg: angleDeg } : {}),
+      });
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_apply_gradient_mask_failed');
+      return atomicSuccess('Gradient applied on layer mask', result.data);
+    }
+    const raw = await runSnippet(
+      connection,
+      ExtendScriptSnippets.applyGradientMask(direction, startPct, endPct, angleDeg)
+    );
     const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Snippet returned unparseable payload: ${String(raw)}`));
-    }
-    return atomicSuccess('Gradient applied on layer mask', {
-      ...parsed,
-      mask_auto_created: false,
-    });
-  } catch (firstError) {
-    const firstMessage = firstError instanceof Error ? firstError.message : String(firstError);
-    if (!/no layer mask/i.test(firstMessage)) {
-      return atomicFailureFromError(firstError);
-    }
-  }
-
-  try {
-    const maskRaw = await runSnippet(connection, ExtendScriptSnippets.createLayerMask());
-    const maskParsed = parseSnippetResult(maskRaw);
-    if (maskParsed?.maskCreated === true) {
-      maskAutoCreated = true;
-    }
-
-    const raw = await runSnippet(connection, gradientScript);
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Snippet returned unparseable payload: ${String(raw)}`));
-    }
-
-    return atomicSuccess('Gradient applied on layer mask', {
-      ...parsed,
-      mask_auto_created: maskAutoCreated,
-    });
+    if (!parsed) throw new Error(`Unparseable gradient-mask result: ${String(raw)}`);
+    return atomicSuccess('Gradient applied on layer mask', parsed);
   } catch (error) {
     return atomicFailureFromError(error);
   }

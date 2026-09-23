@@ -1,0 +1,239 @@
+{
+  "schema": "photoshop.task19.cache_ab_benchmark.v1",
+  "generated_at": "2026-09-22T01:39:30.230Z",
+  "mode": "repository-safe-synthetic-dispatch",
+  "pairs": 3,
+  "child_process_cold_reset": true,
+  "child_pids": [
+    16996,
+    31320,
+    25012
+  ],
+  "safety": {
+    "photoshop_invoked": false,
+    "artwork_mutation": false,
+    "note": "Exercises production VisualMicroPlan preparation-cache code with delayed local handlers; paint handler is synthetic and never calls Photoshop."
+  },
+  "rows": [
+    {
+      "pair": 1,
+      "condition": "cold",
+      "child_pid": 16996,
+      "preparation_host_calls": 2,
+      "preparation_cache_events": [
+        {
+          "reason": "miss_empty",
+          "tool": "photoshop_select_brush_preset",
+          "step_id": "select"
+        },
+        {
+          "reason": "invalidate_preparation_mutation",
+          "tool": "photoshop_select_brush_preset",
+          "step_id": "select"
+        },
+        {
+          "reason": "miss_empty",
+          "tool": "photoshop_get_brush_settings",
+          "step_id": "settings"
+        }
+      ],
+      "capability_cache": {
+        "process_cold_start": true,
+        "same_registry_runtime_revision": true
+      },
+      "guard_preflight_ms": 37.11500000000001,
+      "photoshop_dispatch_ms": 11.136000000000081,
+      "semantic_cycle_wall_ms": 100.54230000000007,
+      "preview_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "safety": {
+        "photoshop_invoked": false,
+        "synthetic_dispatch_only": true
+      }
+    },
+    {
+      "pair": 1,
+      "condition": "warm",
+      "child_pid": 16996,
+      "preparation_host_calls": 0,
+      "preparation_cache_events": [
+        {
+          "reason": "hit",
+          "tool": "photoshop_select_brush_preset",
+          "step_id": "select"
+        },
+        {
+          "reason": "hit",
+          "tool": "photoshop_get_brush_settings",
+          "step_id": "settings"
+        }
+      ],
+      "capability_cache": {
+        "process_cold_start": false,
+        "same_registry_runtime_revision": true
+      },
+      "guard_preflight_ms": 5.461900000000014,
+      "photoshop_dispatch_ms": 8.86590000000001,
+      "semantic_cycle_wall_ms": 23.5689000000001,
+      "preview_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "safety": {
+        "photoshop_invoked": false,
+        "synthetic_dispatch_only": true
+      }
+    },
+    {
+      "pair": 2,
+      "condition": "cold",
+      "child_pid": 31320,
+      "preparation_host_calls": 2,
+      "preparation_cache_events": [
+        {
+          "reason": "miss_empty",
+          "tool": "photoshop_select_brush_preset",
+          "step_id": "select"
+        },
+        {
+          "reason": "invalidate_preparation_mutation",
+          "tool": "photoshop_select_brush_preset",
+          "step_id": "select"
+        },
+        {
+          "reason": "miss_empty",
+          "tool": "photoshop_get_brush_settings",
+          "step_id": "settings"
+        }
+      ],
+      "capability_cache": {
+        "process_cold_start": true,
+        "same_registry_runtime_revision": true
+      },
+      "guard_preflight_ms": 40.40289999999999,
+      "photoshop_dispatch_ms": 9.146199999999965,
+      "semantic_cycle_wall_ms": 99.58240000000004,
+      "preview_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "safety": {
+        "photoshop_invoked": false,
+        "synthetic_dispatch_only": true
+      }
+    },
+    {
+      "pair": 2,
+      "condition": "warm",
+      "child_pid": 31320,
+      "preparation_host_calls": 0,
+      "preparation_cache_events": [
+        {
+          "reason": "hit",
+          "tool": "photoshop_select_brush_preset",
+          "step_id": "select"
+        },
+        {
+          "reason": "hit",
+          "tool": "photoshop_get_brush_settings",
+          "step_id": "settings"
+        }
+      ],
+      "capability_cache": {
+        "process_cold_start": false,
+        "same_registry_runtime_revision": true
+      },
+      "guard_preflight_ms": 6.48739999999998,
+      "photoshop_dispatch_ms": 8.901400000000024,
+      "semantic_cycle_wall_ms": 24.842399999999998,
+      "preview_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "safety": {
+        "photoshop_invoked": false,
+        "synthetic_dispatch_only": true
+      }
+    },
+    {
+      "pair": 3,
+      "condition": "cold",
+      "child_pid": 25012,
+      "preparation_host_calls": 2,
+      "preparation_cache_events": [
+        {
+          "reason": "miss_empty",
+          "tool": "photoshop_select_brush_preset",
+          "step_id": "select"
+        },
+        {
+          "reason": "invalidate_preparation_mutation",
+          "tool": "photoshop_select_brush_preset",
+          "step_id": "select"
+        },
+        {
+          "reason": "miss_empty",
+          "tool": "photoshop_get_brush_settings",
+          "step_id": "settings"
+        }
+      ],
+      "capability_cache": {
+        "process_cold_start": true,
+        "same_registry_runtime_revision": true
+      },
+      "guard_preflight_ms": 46.64690000000002,
+      "photoshop_dispatch_ms": 9.486899999999991,
+      "semantic_cycle_wall_ms": 106.94370000000004,
+      "preview_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "safety": {
+        "photoshop_invoked": false,
+        "synthetic_dispatch_only": true
+      }
+    },
+    {
+      "pair": 3,
+      "condition": "warm",
+      "child_pid": 25012,
+      "preparation_host_calls": 0,
+      "preparation_cache_events": [
+        {
+          "reason": "hit",
+          "tool": "photoshop_select_brush_preset",
+          "step_id": "select"
+        },
+        {
+          "reason": "hit",
+          "tool": "photoshop_get_brush_settings",
+          "step_id": "settings"
+        }
+      ],
+      "capability_cache": {
+        "process_cold_start": false,
+        "same_registry_runtime_revision": true
+      },
+      "guard_preflight_ms": 6.329099999999983,
+      "photoshop_dispatch_ms": 9.86099999999999,
+      "semantic_cycle_wall_ms": 35.96879999999999,
+      "preview_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "safety": {
+        "photoshop_invoked": false,
+        "synthetic_dispatch_only": true
+      }
+    }
+  ],
+  "medians": {
+    "cold": {
+      "n": 3,
+      "preparation_host_calls_median": 2,
+      "preparation_cache_hits_median": 0,
+      "preparation_cache_misses_median": 2,
+      "guard_preflight_ms_median": 40.40289999999999,
+      "photoshop_dispatch_ms_median": 9.486899999999991,
+      "semantic_cycle_wall_ms_median": 100.54230000000007
+    },
+    "warm": {
+      "n": 3,
+      "preparation_host_calls_median": 0,
+      "preparation_cache_hits_median": 2,
+      "preparation_cache_misses_median": 0,
+      "guard_preflight_ms_median": 6.329099999999983,
+      "photoshop_dispatch_ms_median": 8.901400000000024,
+      "semantic_cycle_wall_ms_median": 24.842399999999998
+    }
+  },
+  "observed_improvement": {
+    "preparation_host_calls": true,
+    "semantic_cycle_wall_ms": true
+  },
+  "limitation": "Repository measurement only. guard_preflight_ms measures preflightVisualMicroPlanForExecution, not the full embedded Guard compiler. It does not establish compact-v2 live Photoshop preparation-cache latency or live Guard capability-snapshot cold timing."
+}

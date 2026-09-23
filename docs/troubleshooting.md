@@ -34,6 +34,49 @@ The repository's direct-stdio painting helpers use `scripts/mcp-request-options.
 
 If another MCP host still stops a tool at 60 seconds, that limit belongs to that host/client; the MCP server cannot unilaterally increase a remote client's request timeout.
 
+### Rebuilt CoS plugin still runs old code
+
+**Symptom:** `npm run build:server` completed, but Chat On Steroids still behaves like the
+previous build. A ChatGPT Plugins **Refresh** may have been performed already.
+
+**Cause:** schema/connector refresh and child-process restart are different operations.
+
+**Fix:** in the **Chat On Steroids app**, open **Plugins → Photoshop MCP Digital Painting
+Fork → … → Restart**. This restarts only the custom `dist/cos-plugin.js` child. Do not
+restart all of CoS and do not use legacy restart-helper scripts. If necessary, verify that
+the child PID/creation time changed after Restart.
+
+### UXP bridge still runs old `main.js`
+
+**Fix:** Adobe UXP Developer Tool → Photoshop MCP UXP Bridge → `…` → **Reload**. If the
+changed file is `manifest.json`, use **Unload → Load** instead. Then verify bridge health:
+
+```text
+GET http://127.0.0.1:38452/health
+```
+
+Healthy current development output includes `plugin_connected: true` and
+`transport: "long-poll"`.
+
+### UXP bridge says `Permission denied ... Manifest entry not found`
+
+**Symptom:** the panel loads, but `/health` reports `plugin_connected: false` and UXP
+reports a permission error for `http://127.0.0.1:38452/poll`.
+
+**Current live-tested behavior:** Photoshop 2026 / the bundled UXP runtime used by this
+fork rejects narrowed loopback HTTP declarations even when the exact host or exact
+host-plus-port is listed. The development manifest therefore uses
+`requiredPermissions.network.domains: "all"`. The MCP bridge server itself still binds
+only to `127.0.0.1`, so the transport remains local to the machine.
+
+After any permission change, use **Unload → Load**, not only Reload; manifest permissions
+are snapshotted when the plugin is loaded. Confirm that `/health` shows
+`plugin_connected: true` before running `photoshop_save_document` or a Neural Filter.
+
+`photoshop_save_document` never falls back to COM/ExtendScript. If the bridge is not
+connected it fails closed with `uxp_bridge_unavailable`, which avoids reintroducing the
+foreground-stealing persistence path.
+
 ### `photoshop_execute_script` returns `Result: undefined`
 
 **Symptom:** The tool succeeds but the result text is `"undefined"`, or you assume the script did not run.

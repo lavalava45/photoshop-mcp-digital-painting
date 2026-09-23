@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('os')>();
@@ -18,43 +18,38 @@ vi.mock('../src/platform/detector.js', () => ({
   },
 }));
 
-import { MacOSExecutor } from '../src/platform/macos-executor.js';
 import { PhotoshopConnection } from '../src/platform/connection.js';
 
-const appNameOf = (executor: MacOSExecutor) =>
-  (executor as unknown as { appName: string }).appName;
-
-describe('PhotoshopConnection on macOS', () => {
-  const seenAppNames: string[] = [];
-
-  beforeEach(() => {
-    seenAppNames.length = 0;
-    vi.spyOn(MacOSExecutor.prototype, 'isPhotoshopRunning').mockImplementation(async function (
-      this: MacOSExecutor
-    ) {
-      seenAppNames.push(appNameOf(this));
-      return true;
+describe('PhotoshopConnection pre-dispatch legacy fallback transport', () => {
+  it('keeps detector/version access and executes through an explicitly selected legacy executor', async () => {
+    const execute = vi.fn(async (script: string) => ({ script }));
+    const isPhotoshopRunning = vi.fn(async () => true);
+    const launchPhotoshop = vi.fn(async () => undefined);
+    const connection = new PhotoshopConnection({
+      executor: { execute, isPhotoshopRunning, launchPhotoshop },
+      platformType: 'darwin',
     });
-    vi.spyOn(MacOSExecutor.prototype, 'execute').mockImplementation(async function (
-      this: MacOSExecutor
-    ) {
-      seenAppNames.push(appNameOf(this));
-      return 'ok';
-    });
+
+    await expect(connection.getVersion()).resolves.toBe('27.9.1');
+    await expect(connection.executeScript('app.version')).resolves.toEqual({ script: 'app.version' });
+    expect(isPhotoshopRunning).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith('app.version', undefined);
+    expect(launchPhotoshop).not.toHaveBeenCalled();
   });
 
-  it('applies the detected app name before the very first script runs', async () => {
-    // Regression: the executor is created lazily, and setAppName used to run
-    // before getExecutor(), so the first call of every session targeted the
-    // hard-coded "Adobe Photoshop 2025" and failed on any other version.
-    const connection = new PhotoshopConnection();
-    await connection.executeScript('app.version');
-    expect(seenAppNames).toEqual(['Adobe Photoshop 2026', 'Adobe Photoshop 2026']);
-  });
+  it('launches Photoshop before legacy fallback dispatch when the selected executor reports it stopped', async () => {
+    const execute = vi.fn(async () => undefined);
+    const isPhotoshopRunning = vi.fn(async () => false);
+    const launchPhotoshop = vi.fn(async () => undefined);
+    const connection = new PhotoshopConnection({
+      executor: { execute, isPhotoshopRunning, launchPhotoshop },
+      platformType: 'darwin',
+    });
 
-  it('applies the detected app name in ensurePhotoshopRunning', async () => {
-    const connection = new PhotoshopConnection();
-    await connection.ensurePhotoshopRunning();
-    expect(seenAppNames).toEqual(['Adobe Photoshop 2026']);
+    await expect(connection.ensurePhotoshopRunning()).resolves.toBeUndefined();
+    expect(launchPhotoshop).toHaveBeenCalledWith(
+      '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app'
+    );
+    expect(execute).not.toHaveBeenCalled();
   });
 });

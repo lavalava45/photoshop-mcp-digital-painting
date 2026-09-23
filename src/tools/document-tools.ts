@@ -1,7 +1,16 @@
+import { randomUUID } from 'node:crypto';
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
+import { documentGuardScript } from '../core/document-target.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import {
+  invokeUxpCreateDocument,
+  invokeUxpOperation,
+  invokeUxpSaveDocument,
+  type UxpSaveFormat,
+} from '../platform/uxp-bridge-client.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
 import {
   atomicFailure,
   atomicFailureFromError,
@@ -10,7 +19,10 @@ import {
   runSnippet,
 } from './atomic-shared.js';
 
-export function createDocumentTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createDocumentTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -49,7 +61,7 @@ export function createDocumentTools(connection: PhotoshopConnection): ToolDefini
           required: ['width', 'height'],
         },
       },
-      handler: async (args) => createDocument(connection, args),
+      handler: async (args) => createDocument(connection, backendRouter, args),
     },
     {
       tool: {
@@ -60,7 +72,7 @@ export function createDocumentTools(connection: PhotoshopConnection): ToolDefini
           properties: {},
         },
       },
-      handler: async () => getDocumentInfo(connection),
+      handler: async () => getDocumentInfo(backendRouter),
     },
     {
       tool: {
@@ -76,7 +88,7 @@ export function createDocumentTools(connection: PhotoshopConnection): ToolDefini
           properties: {},
         },
       },
-      handler: async () => listDocuments(connection),
+      handler: async () => listDocuments(backendRouter),
     },
     {
       tool: {
@@ -107,17 +119,17 @@ export function createDocumentTools(connection: PhotoshopConnection): ToolDefini
           },
         },
       },
-      handler: async (args) => setActiveDocument(connection, args),
+      handler: async (args) => setActiveDocument(connection, backendRouter, args),
     },
     {
       tool: {
         name: 'photoshop_save_document',
         description:
-          'Save the active document to disk in PSD, JPEG, or PNG format.\n\n' +
-          'Use when: user requests export/save with a specific path and format.\n' +
+          'Save a non-interfering copy/checkpoint of the pinned or active document through the UXP bridge in PSD, JPEG, or PNG format.\n\n' +
+          'Use when: user requests export/save with a specific path and format, or the painting controller requires a PSD checkpoint.\n' +
           'Do NOT use when: web-optimized resize+sharpen pipeline is needed — use photoshop_recipe_prepare_for_web.\n\n' +
-          'Returns: confirmation with saved path and format.\n' +
-          'Preconditions: active document; path required. Side effects: writes file to disk.',
+          'Returns: saved path/format plus UXP pre/post persistence invariants.\n' +
+          'Preconditions: Photoshop UXP companion loaded; path required. Side effects: writes a copy to disk. It must not switch the active document, working-file association, active layer/tool, or selection, and it never falls back to foreground-prone COM persistence.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -159,13 +171,14 @@ export function createDocumentTools(connection: PhotoshopConnection): ToolDefini
           },
         },
       },
-      handler: async (args) => closeDocument(connection, args),
+      handler: async (args) => closeDocument(connection, backendRouter, args),
     },
   ];
 }
 
 async function createDocument(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const width = args.width as number;
@@ -173,53 +186,93 @@ async function createDocument(
   const resolution = (args.resolution as number) || 72;
   const colorMode = (args.colorMode as string) || 'RGB';
 
-  try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
+  const guardOperationId =
+    typeof args._guard_operation_id === 'string' && args._guard_operation_id.trim().length > 0
+      ? args._guard_operation_id.trim()
+      : null;
+  const commandId = guardOperationId ?? `direct-create-document-${randomUUID()}`;
 
+  try {
+    const backend = await backendRouter.backendFor('document.create');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpCreateDocument(
+        {
+          width,
+          height,
+          resolution,
+          colorMode: (['RGB', 'CMYK', 'Grayscale'].includes(colorMode) ? colorMode : 'RGB') as
+            | 'RGB'
+            | 'CMYK'
+            | 'Grayscale',
+        },
+        commandId
+      );
+      if (!result.ok) {
+        const durableNotExecuted =
+          result.pre_dispatch_rejected || result.receipt?.state === 'not-claimed';
+        const body = {
+          ok: false,
+          code:
+            result.error?.includes('revision') || result.error?.includes('plugin_not_connected')
+              ? 'uxp_bridge_unavailable'
+              : 'unknown',
+          message: `UXP create_document failed: ${result.error ?? 'unknown error'}`,
+          command_id: commandId,
+          uxp_command_receipt: result.receipt,
+          ...(durableNotExecuted
+            ? {
+                execution: 'not-executed',
+                next_required_action:
+                  'The UXP command was not claimed by Photoshop. A retry may use the same stable command identity.',
+              }
+            : {}),
+        };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(body, null, 2) }],
+          isError: true,
+        };
+      }
+
+      return atomicSuccess(
+        `Document created via UXP: ${width}x${height}px at ${resolution}dpi (${colorMode})`,
+        {
+          transport: 'uxp',
+          command_id: commandId,
+          uxp_command_receipt: result.receipt,
+          ...(result.data ?? {}),
+        },
+        'photoshop_get_document_info'
+      );
+    }
+
+    const api = await new PhotoshopAPIFactory(connection).createAPI();
     const colorModeMap: Record<string, string> = {
       RGB: 'NewDocumentMode.RGB',
       CMYK: 'NewDocumentMode.CMYK',
       Grayscale: 'NewDocumentMode.GRAYSCALE',
     };
-
-    const script = ExtendScriptSnippets.newDocument(
-      width,
-      height,
-      resolution,
-      colorModeMap[colorMode] || 'NewDocumentMode.RGB'
+    await api.executeScript(
+      ExtendScriptSnippets.newDocument(
+        width,
+        height,
+        resolution,
+        colorModeMap[colorMode] || 'NewDocumentMode.RGB'
+      )
     );
-
-    await api.executeScript(script);
-
     return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Document created: ${width}x${height}px at ${resolution}dpi (${colorMode})`,
-        },
-      ],
+      content: [{
+        type: 'text' as const,
+        text: `Document created: ${width}x${height}px at ${resolution}dpi (${colorMode})`,
+      }],
     };
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error creating document: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
-async function listDocuments(connection: PhotoshopConnection): Promise<ToolResult> {
+async function listDocuments(backendRouter: PhotoshopBackendRouter): Promise<ToolResult> {
   try {
-    const raw = await runSnippet(connection, ExtendScriptSnippets.listDocuments());
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Snippet returned unparseable payload: ${String(raw)}`));
-    }
+    const parsed = await backendRouter.listDocuments();
 
     if (parsed.ok === false) {
       return atomicFailure({
@@ -260,6 +313,7 @@ function countSetActiveIdentifiers(args: Record<string, unknown>): number {
 
 async function setActiveDocument(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const identifierCount = countSetActiveIdentifiers(args);
@@ -283,6 +337,50 @@ async function setActiveDocument(
   }
 
   try {
+    const backend = await backendRouter.backendFor('document.activate');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'set_active_document',
+        {
+          ...(params.documentId !== undefined ? { document_id: params.documentId } : {}),
+          ...(params.index !== undefined ? { index: params.index } : {}),
+          ...(params.documentName !== undefined ? { document_name: params.documentName } : {}),
+        },
+        'uxp_set_active_document_failed'
+      );
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? 'uxp_set_active_document_failed');
+      }
+
+      if (result.data.ok === false) {
+        const code =
+          result.data.code === 'document_not_found' || result.data.code === 'ambiguous_name'
+            ? result.data.code
+            : 'unknown';
+        return atomicFailure({
+          ok: false,
+          code,
+          message: String(result.data.message || 'Failed to set active document'),
+          suggested_next_tool: 'photoshop_list_documents',
+          ...(Array.isArray(result.data.matching_document_ids)
+            ? { suggested_args: { matching_document_ids: result.data.matching_document_ids } }
+            : {}),
+        });
+      }
+
+      const activated = result.data.activated as { id?: number; name?: string } | undefined;
+      const details: Record<string, unknown> = {};
+      if (activated) details.activated = activated;
+      if (result.data.context !== undefined) details.context = result.data.context;
+      return atomicSuccess(
+        activated?.name
+          ? `Active document set to \"${activated.name}\"`
+          : 'Active document switched',
+        details,
+        'photoshop_get_document_info'
+      );
+    }
+
     const raw = await runSnippet(connection, ExtendScriptSnippets.setActiveDocument(params));
     const parsed = parseSnippetResult(raw);
     if (!parsed) {
@@ -326,13 +424,9 @@ async function setActiveDocument(
   }
 }
 
-async function getDocumentInfo(connection: PhotoshopConnection): Promise<ToolResult> {
+async function getDocumentInfo(backendRouter: PhotoshopBackendRouter): Promise<ToolResult> {
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.getDocumentInfo();
-    const result = await api.executeScript(script);
+    const result = await backendRouter.readDocumentInfo();
 
     return {
       content: [
@@ -360,58 +454,134 @@ async function saveDocument(
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const path = args.path as string;
-  const format = (args.format as string) || 'PSD';
+  const format = ((args.format as string) || 'PSD').toUpperCase() as UxpSaveFormat;
   const quality = (args.quality as number) || 8;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    let script;
-    switch (format.toUpperCase()) {
-      case 'JPEG':
-        script = ExtendScriptSnippets.saveAsJPEG(path, quality);
-        break;
-      case 'PNG':
-        script = ExtendScriptSnippets.saveAsPNG(path);
-        break;
-      default:
-        script = ExtendScriptSnippets.saveAsPSD(path);
+    void connection;
+    if (typeof path !== 'string' || path.trim().length === 0) {
+      return atomicFailure({
+        ok: false,
+        code: 'invalid_arguments',
+        message: 'path is required for photoshop_save_document',
+      });
     }
-    await api.executeScript(script);
 
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Document saved as ${format} to: ${path}`,
+    const result = await invokeUxpSaveDocument({
+      path,
+      format,
+      quality,
+      ...(typeof args.document_id === 'number' ? { document_id: args.document_id } : {}),
+    });
+    if (!result.ok) {
+      const unavailable = result.error === 'uxp_bridge_unavailable';
+      return atomicFailure({
+        ok: false,
+        code: unavailable ? 'uxp_bridge_unavailable' : 'unknown',
+        message:
+          unavailable
+            ? 'Non-interfering persistence requires the Photoshop MCP UXP Bridge; COM/ExtendScript fallback is intentionally disabled for save/checkpoint.'
+            : `UXP save failed: ${result.error ?? 'unknown error'}`,
+        suggested_next_tool: unavailable ? 'photoshop_get_capabilities' : 'photoshop_get_state',
+      });
+    }
+
+    if (result.data?.invariants_ok === false) {
+      return atomicFailure({
+        ok: false,
+        code: 'unknown',
+        message: `UXP save completed but persistence invariants changed: ${JSON.stringify(result.data.invariants ?? {})}`,
+        suggested_next_tool: 'photoshop_get_state',
+      });
+    }
+
+    return atomicSuccess(
+      `Document copy saved as ${format} via UXP to: ${path}`,
+      {
+        persistence: {
+          transport: 'uxp',
+          as_copy: true,
+          path,
+          format,
+          invariants_ok: result.data?.invariants_ok ?? null,
+          invariants: result.data?.invariants ?? null,
+          before: result.data?.before ?? null,
+          after: result.data?.after ?? null,
         },
-      ],
-    };
+      },
+      'photoshop_get_state'
+    );
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error saving document: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
 async function closeDocument(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const save = (args.save as boolean) || false;
+  const hasDocumentId = Object.prototype.hasOwnProperty.call(args, 'document_id');
+  const documentId =
+    hasDocumentId &&
+    typeof args.document_id === 'number' &&
+    Number.isSafeInteger(args.document_id) &&
+    args.document_id > 0
+      ? args.document_id
+      : undefined;
+
+  if (hasDocumentId && documentId === undefined) {
+    return atomicFailure({
+      ok: false,
+      code: 'invalid_arguments',
+      message: 'document_id must be a positive integer',
+      suggested_next_tool: 'photoshop_list_documents',
+    });
+  }
 
   try {
+    const backend = await backendRouter.backendFor('document.close');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'close_document',
+        {
+          save,
+          ...(documentId !== undefined ? { document_id: documentId } : {}),
+        },
+        'uxp_close_document_failed'
+      );
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? 'uxp_close_document_failed');
+      }
+      if (result.data.ok === false) {
+        const code = result.data.code === 'document_not_found' ? 'document_not_found' : 'unknown';
+        return atomicFailure({
+          ok: false,
+          code,
+          message: String(result.data.message || 'Failed to close document'),
+          suggested_next_tool:
+            code === 'document_not_found' ? 'photoshop_list_documents' : 'photoshop_get_state',
+        });
+      }
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: save ? 'Document closed and saved' : 'Document closed without saving',
+          },
+        ],
+      };
+    }
+
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 
-    const script = ExtendScriptSnippets.closeDocument(save);
+    const closeScript = ExtendScriptSnippets.closeDocument(save);
+    const script =
+      documentId !== undefined
+        ? `${documentGuardScript(documentId)}\n${closeScript}`
+        : closeScript;
     await api.executeScript(script);
 
     return {

@@ -1,7 +1,10 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
+import { documentGuardScript } from '../core/document-target.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets, type CurvesPreset } from '../api/extendscript.js';
+import { PhotoshopBackendRouter, type PhotoshopPrimitive } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 import {
   atomicFailureFromError,
   atomicSuccess,
@@ -18,7 +21,25 @@ function parseCurvesPreset(value: unknown): CurvesPreset {
   return 'auto_tone';
 }
 
-export function createAdjustmentTools(connection: PhotoshopConnection): ToolDefinition[] {
+function documentIdParams(args: Record<string, unknown>): Record<string, unknown> {
+  return typeof args.document_id === 'number' &&
+    Number.isSafeInteger(args.document_id) &&
+    args.document_id > 0
+    ? { document_id: args.document_id }
+    : {};
+}
+
+function guardLegacyScript(args: Record<string, unknown>, script: string): string {
+  const documentId = documentIdParams(args).document_id;
+  return typeof documentId === 'number'
+    ? `${documentGuardScript(documentId)}\n${script}`
+    : script;
+}
+
+export function createAdjustmentTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -45,7 +66,7 @@ export function createAdjustmentTools(connection: PhotoshopConnection): ToolDefi
           required: ['brightness', 'contrast'],
         },
       },
-      handler: async (args) => adjustBrightnessContrast(connection, args),
+      handler: async (args) => adjustBrightnessContrast(connection, backendRouter, args),
     },
     {
       tool: {
@@ -76,7 +97,7 @@ export function createAdjustmentTools(connection: PhotoshopConnection): ToolDefi
           required: ['hue', 'saturation', 'lightness'],
         },
       },
-      handler: async (args) => adjustHueSaturation(connection, args),
+      handler: async (args) => adjustHueSaturation(connection, backendRouter, args),
     },
     {
       tool: {
@@ -89,7 +110,7 @@ export function createAdjustmentTools(connection: PhotoshopConnection): ToolDefi
           properties: {},
         },
       },
-      handler: async () => autoLevels(connection),
+      handler: async (args) => autoLevels(connection, backendRouter, args),
     },
     {
       tool: {
@@ -100,7 +121,7 @@ export function createAdjustmentTools(connection: PhotoshopConnection): ToolDefi
           properties: {},
         },
       },
-      handler: async () => autoContrast(connection),
+      handler: async (args) => autoContrast(connection, backendRouter, args),
     },
     {
       tool: {
@@ -124,7 +145,7 @@ export function createAdjustmentTools(connection: PhotoshopConnection): ToolDefi
           },
         },
       },
-      handler: async (args) => adjustCurves(connection, args),
+      handler: async (args) => adjustCurves(connection, backendRouter, args),
     },
     {
       tool: {
@@ -135,7 +156,7 @@ export function createAdjustmentTools(connection: PhotoshopConnection): ToolDefi
           properties: {},
         },
       },
-      handler: async () => desaturate(connection),
+      handler: async (args) => desaturate(connection, backendRouter, args),
     },
     {
       tool: {
@@ -146,122 +167,135 @@ export function createAdjustmentTools(connection: PhotoshopConnection): ToolDefi
           properties: {},
         },
       },
-      handler: async () => invert(connection),
+      handler: async (args) => invert(connection, backendRouter, args),
     },
   ];
 }
 
-async function adjustBrightnessContrast(
+async function runSimpleAdjustment(
   connection: PhotoshopConnection,
-  args: Record<string, unknown>
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>,
+  primitive: PhotoshopPrimitive,
+  action: string,
+  params: Record<string, unknown>,
+  legacyScript: string,
+  successText: string,
+  errorPrefix: string
 ): Promise<ToolResult> {
-  const brightness = args.brightness as number;
-  const contrast = args.contrast as number;
-
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.adjustBrightnessContrast(brightness, contrast);
-    await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Brightness/Contrast adjusted: brightness ${brightness}, contrast ${contrast}`,
-        },
-      ],
-    };
+    const backend = await backendRouter.backendFor(primitive);
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        action,
+        { ...params, ...documentIdParams(args) },
+        `uxp_${action}_failed`
+      );
+      if (!result.ok) throw new Error(result.error ?? `uxp_${action}_failed`);
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      await api.executeScript(guardLegacyScript(args, legacyScript));
+    }
+    return { content: [{ type: 'text' as const, text: successText }] };
   } catch (error) {
     return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error adjusting brightness/contrast: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
+      content: [{
+        type: 'text' as const,
+        text: `${errorPrefix}: ${error instanceof Error ? error.message : String(error)}`,
+      }],
       isError: true,
     };
   }
 }
 
+async function adjustBrightnessContrast(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  const brightness = args.brightness as number;
+  const contrast = args.contrast as number;
+  return runSimpleAdjustment(
+    connection,
+    backendRouter,
+    args,
+    'adjustment.brightness_contrast',
+    'adjust_brightness_contrast',
+    { brightness, contrast },
+    ExtendScriptSnippets.adjustBrightnessContrast(brightness, contrast),
+    `Brightness/Contrast adjusted: brightness ${brightness}, contrast ${contrast}`,
+    'Error adjusting brightness/contrast'
+  );
+}
+
 async function adjustHueSaturation(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const hue = args.hue as number;
   const saturation = args.saturation as number;
   const lightness = args.lightness as number;
-
-  try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.adjustHueSaturation(hue, saturation, lightness);
-    await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Hue/Saturation adjusted: hue ${hue}, saturation ${saturation}, lightness ${lightness}`,
-        },
-      ],
-    };
-  } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error adjusting hue/saturation: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
-  }
+  return runSimpleAdjustment(
+    connection,
+    backendRouter,
+    args,
+    'adjustment.hue_saturation',
+    'adjust_hue_saturation',
+    { hue, saturation, lightness },
+    ExtendScriptSnippets.adjustHueSaturation(hue, saturation, lightness),
+    `Hue/Saturation adjusted: hue ${hue}, saturation ${saturation}, lightness ${lightness}`,
+    'Error adjusting hue/saturation'
+  );
 }
 
-async function autoLevels(connection: PhotoshopConnection): Promise<ToolResult> {
-  try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.autoLevels();
-    await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: 'Auto Levels applied',
-        },
-      ],
-    };
-  } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error applying auto levels: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
-  }
+async function autoLevels(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  return runSimpleAdjustment(
+    connection,
+    backendRouter,
+    args,
+    'adjustment.auto_levels',
+    'auto_levels',
+    {},
+    ExtendScriptSnippets.autoLevels(),
+    'Auto Levels applied',
+    'Error applying auto levels'
+  );
 }
 
 async function adjustCurves(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const preset = parseCurvesPreset(args.preset);
 
   try {
-    const raw = await runSnippet(connection, ExtendScriptSnippets.adjustCurves(preset));
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Snippet returned unparseable payload: ${String(raw)}`));
+    const backend = await backendRouter.backendFor('adjustment.curves');
+    let parsed: Record<string, unknown>;
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'adjust_curves',
+        { preset, ...documentIdParams(args) },
+        'uxp_adjust_curves_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_adjust_curves_failed');
+      parsed = result.data;
+    } else {
+      const raw = await runSnippet(
+        connection,
+        guardLegacyScript(args, ExtendScriptSnippets.adjustCurves(preset))
+      );
+      const legacyParsed = parseSnippetResult(raw);
+      if (!legacyParsed) {
+        return atomicFailureFromError(new Error(`Snippet returned unparseable payload: ${String(raw)}`));
+      }
+      parsed = legacyParsed;
     }
 
     const layerName =
@@ -276,89 +310,56 @@ async function adjustCurves(
   }
 }
 
-async function autoContrast(connection: PhotoshopConnection): Promise<ToolResult> {
-  try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.autoContrast();
-    await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: 'Auto Contrast applied',
-        },
-      ],
-    };
-  } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error applying auto contrast: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
-  }
+async function autoContrast(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  return runSimpleAdjustment(
+    connection,
+    backendRouter,
+    args,
+    'adjustment.auto_contrast',
+    'auto_contrast',
+    {},
+    ExtendScriptSnippets.autoContrast(),
+    'Auto Contrast applied',
+    'Error applying auto contrast'
+  );
 }
 
-async function desaturate(connection: PhotoshopConnection): Promise<ToolResult> {
-  try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.desaturate();
-    await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: 'Layer desaturated (converted to grayscale)',
-        },
-      ],
-    };
-  } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error desaturating layer: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
-  }
+async function desaturate(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  return runSimpleAdjustment(
+    connection,
+    backendRouter,
+    args,
+    'adjustment.desaturate',
+    'desaturate',
+    {},
+    ExtendScriptSnippets.desaturate(),
+    'Layer desaturated (converted to grayscale)',
+    'Error desaturating layer'
+  );
 }
 
-async function invert(connection: PhotoshopConnection): Promise<ToolResult> {
-  try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.invert();
-    await api.executeScript(script);
-
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: 'Colors inverted',
-        },
-      ],
-    };
-  } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error inverting colors: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
-  }
+async function invert(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  return runSimpleAdjustment(
+    connection,
+    backendRouter,
+    args,
+    'adjustment.invert',
+    'invert',
+    {},
+    ExtendScriptSnippets.invert(),
+    'Colors inverted',
+    'Error inverting colors'
+  );
 }

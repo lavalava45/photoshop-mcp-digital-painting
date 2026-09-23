@@ -12,10 +12,6 @@ export interface PhotoshopCapabilities {
   version: string;
   features: {
     select_subject_v2: boolean;
-    generative_fill: boolean;
-    generative_remove: boolean;
-    generative_expand: boolean;
-    generative_upscale: boolean;
     sky_replacement_native: boolean;
     neural_filters: boolean;
     uxp_bridge_reachable: boolean;
@@ -56,21 +52,13 @@ export function getPhotoshopCapabilities(version: string): PhotoshopCapabilities
   const year = parsed.year ?? (major >= 13 ? 1990 + major : undefined);
 
   const selectSubjectV2 = major >= 23 || (year !== undefined && year >= 2020);
-  const generativeFill = major >= 25 || (year !== undefined && year >= 2024);
-  const generativeRemove = generativeFill;
-  const generativeExpand = generativeFill;
-  const generativeUpscale = major >= 27 || (year !== undefined && year >= 2025);
-  const skyReplacementNative = generativeFill;
-  const executeAsModal = generativeFill;
+  const skyReplacementNative = major >= 22 || (year !== undefined && year >= 2021);
+  const executeAsModal = major >= 23 || (year !== undefined && year >= 2022);
 
   return {
     version,
     features: {
       select_subject_v2: selectSubjectV2,
-      generative_fill: generativeFill,
-      generative_remove: generativeRemove,
-      generative_expand: generativeExpand,
-      generative_upscale: generativeUpscale,
       sky_replacement_native: skyReplacementNative,
       neural_filters: false,
       uxp_bridge_reachable: false,

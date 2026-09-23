@@ -1,6 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { access, constants } from 'fs/promises';
+import { access, constants, readdir } from 'fs/promises';
 import { Logger } from '../utils/logger.js';
 import { PhotoshopInfo } from './connection.js';
 
@@ -38,7 +38,7 @@ export class WindowsDetector {
     }
 
     // Try common installation paths
-    const commonPaths = this.getCommonPaths();
+    const commonPaths = await this.getCommonPaths();
     for (const path of commonPaths) {
       const info = await this.checkPath(path);
       if (info) return info;
@@ -131,14 +131,25 @@ export class WindowsDetector {
     return null;
   }
 
-  private getCommonPaths(): string[] {
+  private async getCommonPaths(): Promise<string[]> {
     const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
     const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
 
     const paths: string[] = [];
+
+    // Enumerate only Adobe's immediate product directories. A frozen year list
+    // silently excluded Photoshop 2026 and would fail again with each new release.
+    for (const base of [programFiles, programFilesX86]) {
+      try {
+        const entries = await readdir(`${base}\\Adobe`, { withFileTypes: true });
+        const installed = entries.filter(e => e.isDirectory() && /^Adobe Photoshop(?: CC)?(?: \d{4})?$/i.test(e.name))
+          .sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true })).slice(0, 64);
+        paths.push(...installed.map(e => `${base}\\Adobe\\${e.name}\\Photoshop.exe`));
+      } catch { /* Missing/inaccessible Adobe directory: use conventional paths. */ }
+    }
     
-    // Generate paths for versions 2012-2025
-    for (let year = 2025; year >= 2012; year--) {
+    // Also support releases installed under a non-enumerable parent directory.
+    for (let year = new Date().getFullYear() + 1; year >= 2012; year--) {
       paths.push(
         `${programFiles}\\Adobe\\Adobe Photoshop ${year}\\Photoshop.exe`,
         `${programFilesX86}\\Adobe\\Adobe Photoshop ${year}\\Photoshop.exe`,

@@ -1,5 +1,15 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import {
+  invokeUxpSelectBrushPreset,
+  invokeUxpSetBrush,
+  invokeUxpSetForegroundColor,
+  invokeUxpPaintRegions,
+  invokeUxpPaintStrokes,
+  invokeUxpPaintDabs,
+} from '../platform/uxp-bridge-client.js';
 import { PhotoshopConnection } from '../platform/connection.js';
+import { currentToolExecutionContext } from '../core/execution-context.js';
 import {
   atomicFailureFromError,
   atomicSuccess,
@@ -45,6 +55,28 @@ interface PaintDabGroup {
   opacity?: number;
   flow?: number;
   points: Array<{ x: number; y: number }>;
+}
+
+type PaintRegionOperation = 'ADD' | 'SUBTRACT';
+
+interface PaintRegionContour {
+  operation: PaintRegionOperation;
+  points: PaintPoint[];
+}
+
+interface PaintRegion {
+  id?: string;
+  contours: PaintRegionContour[];
+  color: { red: number; green: number; blue: number };
+  opacity: number;
+  layerId?: number;
+}
+
+interface PaintClipBounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }
 
 type DynamicsEasing = 'LINEAR' | 'EASE_IN' | 'EASE_OUT' | 'EASE_IN_OUT';
@@ -200,6 +232,13 @@ function parseStroke(value: unknown, index: number): PaintStroke {
   };
 }
 
+function optionalPositiveLayerId(value: unknown, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  const n = finiteNumber(value, name);
+  if (!Number.isSafeInteger(n) || n <= 0) throw new Error(`${name} must be a positive integer`);
+  return n;
+}
+
 function parseDab(value: unknown, index: number): PaintDab {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`dabs[${index}] must be an object`);
@@ -230,49 +269,185 @@ function parseDab(value: unknown, index: number): PaintDab {
   };
 }
 
+function parseRegionPoint(value: unknown, regionIndex: number, contourIndex: number, pointIndex: number): PaintPoint {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`regions[${regionIndex}].contours[${contourIndex}].points[${pointIndex}] must be an object`);
+  }
+  const rec = value as Record<string, unknown>;
+  const prefix = `regions[${regionIndex}].contours[${contourIndex}].points[${pointIndex}]`;
+  return {
+    x: finiteNumber(rec.x, `${prefix}.x`),
+    y: finiteNumber(rec.y, `${prefix}.y`),
+    left: parsePair(rec.left, `${prefix}.left`),
+    right: parsePair(rec.right, `${prefix}.right`),
+    smooth: rec.smooth === true,
+  };
+}
+
+function parseRegion(value: unknown, regionIndex: number): PaintRegion {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`regions[${regionIndex}] must be an object`);
+  }
+  const rec = value as Record<string, unknown>;
+  if (!Array.isArray(rec.contours) || rec.contours.length < 1 || rec.contours.length > 16) {
+    throw new Error(`regions[${regionIndex}].contours must contain 1-16 closed contours`);
+  }
+  const contours = rec.contours.map((rawContour, contourIndex): PaintRegionContour => {
+    if (!rawContour || typeof rawContour !== 'object' || Array.isArray(rawContour)) {
+      throw new Error(`regions[${regionIndex}].contours[${contourIndex}] must be an object`);
+    }
+    const contour = rawContour as Record<string, unknown>;
+    const operationRaw = typeof contour.operation === 'string' ? contour.operation.toUpperCase() : 'ADD';
+    if (operationRaw !== 'ADD' && operationRaw !== 'SUBTRACT') {
+      throw new Error(`regions[${regionIndex}].contours[${contourIndex}].operation must be ADD or SUBTRACT`);
+    }
+    if (!Array.isArray(contour.points) || contour.points.length < 3 || contour.points.length > 500) {
+      throw new Error(`regions[${regionIndex}].contours[${contourIndex}].points must contain 3-500 points`);
+    }
+    return {
+      operation: operationRaw,
+      points: contour.points.map((point, pointIndex) =>
+        parseRegionPoint(point, regionIndex, contourIndex, pointIndex)
+      ),
+    };
+  });
+  if (contours[0].operation !== 'ADD') {
+    throw new Error(`regions[${regionIndex}] first contour must use operation=ADD`);
+  }
+
+  if (!rec.color || typeof rec.color !== 'object' || Array.isArray(rec.color)) {
+    throw new Error(`regions[${regionIndex}].color is required`);
+  }
+  const rawColor = rec.color as Record<string, unknown>;
+  const color = {
+    red: finiteNumber(rawColor.red, `regions[${regionIndex}].color.red`),
+    green: finiteNumber(rawColor.green, `regions[${regionIndex}].color.green`),
+    blue: finiteNumber(rawColor.blue, `regions[${regionIndex}].color.blue`),
+  };
+  for (const [channel, n] of Object.entries(color)) {
+    if (n < 0 || n > 255) throw new Error(`regions[${regionIndex}].color.${channel} must be between 0 and 255`);
+  }
+
+  const opacity = optionalNumber(rec.opacity, `regions[${regionIndex}].opacity`, 0, 100) ?? 100;
+  let layerId: number | undefined;
+  if (rec.layer_id !== undefined) {
+    const value = finiteNumber(rec.layer_id, `regions[${regionIndex}].layer_id`);
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      throw new Error(`regions[${regionIndex}].layer_id must be a positive integer`);
+    }
+    layerId = value;
+  }
+  const id = typeof rec.id === 'string' && rec.id.trim() ? rec.id.trim() : undefined;
+  return { id, contours, color, opacity, layerId };
+}
+
+function parseClipBounds(value: unknown): PaintClipBounds | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('clip_bounds must be an object');
+  }
+  const rec = value as Record<string, unknown>;
+  const bounds = {
+    left: finiteNumber(rec.left, 'clip_bounds.left'),
+    top: finiteNumber(rec.top, 'clip_bounds.top'),
+    right: finiteNumber(rec.right, 'clip_bounds.right'),
+    bottom: finiteNumber(rec.bottom, 'clip_bounds.bottom'),
+  };
+  if (bounds.right <= bounds.left || bounds.bottom <= bounds.top) {
+    throw new Error('clip_bounds must have positive width and height');
+  }
+  return bounds;
+}
+
+function paintDabStyleKey(dab: Pick<PaintDab, 'color' | 'size' | 'opacity' | 'flow'>): string {
+  return JSON.stringify([
+    dab.color?.red ?? null,
+    dab.color?.green ?? null,
+    dab.color?.blue ?? null,
+    dab.size ?? null,
+    dab.opacity ?? null,
+    dab.flow ?? null,
+  ]);
+}
+
+/**
+ * Collapse only adjacent dabs with identical effective style.
+ *
+ * Brush marks are order-dependent when they overlap or use opacity/flow/texture.
+ * A previous implementation grouped equal styles globally with a Map, which could
+ * turn red -> blue -> red into red -> red -> blue and therefore render a different
+ * image. Consecutive runs retain the exact caller order while still amortizing the
+ * expensive Photoshop path setup for locally compatible marks.
+ */
 function groupPaintDabs(dabs: PaintDab[]): PaintDabGroup[] {
-  const groups = new Map<string, PaintDabGroup>();
+  const groups: PaintDabGroup[] = [];
+  let previousKey: string | undefined;
+  let current: PaintDabGroup | undefined;
+
   for (const dab of dabs) {
-    const key = JSON.stringify([
-      dab.color?.red ?? null,
-      dab.color?.green ?? null,
-      dab.color?.blue ?? null,
-      dab.size ?? null,
-      dab.opacity ?? null,
-      dab.flow ?? null,
-    ]);
-    let group = groups.get(key);
-    if (!group) {
-      group = {
+    const key = paintDabStyleKey(dab);
+    if (!current || key !== previousKey) {
+      current = {
         color: dab.color,
         size: dab.size,
         opacity: dab.opacity,
         flow: dab.flow,
         points: [],
       };
-      groups.set(key, group);
+      groups.push(current);
+      previousKey = key;
     }
-    group.points.push({ x: dab.x, y: dab.y });
+    current.points.push({ x: dab.x, y: dab.y });
   }
-  return [...groups.values()];
+
+  return groups;
 }
 
-function chunkPaintDabGroups(groups: PaintDabGroup[], maxPointsPerScript = 12): PaintDabGroup[][] {
+const PAINT_DABS_MAX_POINTS_PER_SCRIPT = 12;
+
+function chunkPaintDabGroups(
+  groups: PaintDabGroup[],
+  maxPointsPerScript = PAINT_DABS_MAX_POINTS_PER_SCRIPT
+): PaintDabGroup[][] {
   const batches: PaintDabGroup[][] = [];
+  let currentBatch: PaintDabGroup[] = [];
+  let currentPoints = 0;
+
+  const flush = () => {
+    if (currentBatch.length === 0) return;
+    batches.push(currentBatch);
+    currentBatch = [];
+    currentPoints = 0;
+  };
+
   for (const group of groups) {
     for (let i = 0; i < group.points.length; i += maxPointsPerScript) {
-      batches.push([
-        {
-          color: group.color,
-          size: group.size,
-          opacity: group.opacity,
-          flow: group.flow,
-          points: group.points.slice(i, i + maxPointsPerScript),
-        },
-      ]);
+      const piece: PaintDabGroup = {
+        color: group.color,
+        size: group.size,
+        opacity: group.opacity,
+        flow: group.flow,
+        points: group.points.slice(i, i + maxPointsPerScript),
+      };
+      if (currentBatch.length > 0 && currentPoints + piece.points.length > maxPointsPerScript) {
+        flush();
+      }
+      currentBatch.push(piece);
+      currentPoints += piece.points.length;
+      if (currentPoints >= maxPointsPerScript) flush();
     }
   }
+  flush();
   return batches;
+}
+
+function paintDabCenterBounds(dabs: PaintDab[]): { left: number; top: number; right: number; bottom: number } {
+  return {
+    left: Math.min(...dabs.map((dab) => dab.x)),
+    top: Math.min(...dabs.map((dab) => dab.y)),
+    right: Math.max(...dabs.map((dab) => dab.x)),
+    bottom: Math.max(...dabs.map((dab) => dab.y)),
+  };
 }
 
 function ease(t: number, mode: DynamicsEasing): number {
@@ -579,10 +754,6 @@ function __paint_setBrush(v) {
 `;
 }
 
-function getBrushScript(): string {
-  return `${paintRuntime()} return { ok: true, settings: __paint_readBrush() };`;
-}
-
 function setBrushScript(values: Record<string, number | boolean | undefined>): string {
   const overrides = JSON.stringify(values);
   return `${paintRuntime()}
@@ -593,35 +764,6 @@ for (var key in overrides) {
 }
 __paint_setBrush(current);
 return { ok: true, settings: __paint_readBrush() };`;
-}
-
-function brushPresetsScript(query: string | undefined, limit: number): string {
-  const q = JSON.stringify((query ?? '').toLowerCase());
-  return `
-function __paint_sTID(s) { return app.stringIDToTypeID(s); }
-var ref = new ActionReference();
-ref.putProperty(__paint_sTID('property'), __paint_sTID('presetManager'));
-ref.putEnumerated(__paint_sTID('application'), __paint_sTID('ordinal'), __paint_sTID('targetEnum'));
-var desc = executeActionGet(ref);
-var managers = desc.getList(__paint_sTID('presetManager'));
-var names = [];
-for (var i = 0; i < managers.count; i++) {
-  var className = '';
-  try { className = typeIDToStringID(managers.getObjectType(i)); } catch (eClass) {}
-  if (className !== 'brush') continue;
-  var brushManager = managers.getObjectValue(i);
-  var brushNames = brushManager.getList(__paint_sTID('name'));
-  for (var j = 0; j < brushNames.count; j++) names.push(brushNames.getString(j));
-  break;
-}
-var q = ${q};
-var filtered = [];
-for (var n = 0; n < names.length; n++) {
-  if (!q || String(names[n]).toLowerCase().indexOf(q) >= 0) filtered.push(names[n]);
-}
-var visible = filtered.slice(0, ${limit});
-return { ok: true, total: names.length, matched: filtered.length, truncated: filtered.length > visible.length, presets: visible };
-`;
 }
 
 function selectBrushPresetScript(name: string): string {
@@ -647,12 +789,42 @@ return { ok: true, red: ${red}, green: ${green}, blue: ${blue} };
 `;
 }
 
-function paintStrokesScript(strokes: PaintStroke[]): string {
+function paintStrokesScript(strokes: PaintStroke[], layerId?: number): string {
   const payload = JSON.stringify(strokes);
+  const layerIdPayload = JSON.stringify(layerId ?? null);
   return `
 ${paintRuntime()}
 if (app.documents.length === 0) throw new Error('No active document');
 var doc = app.activeDocument;
+var __paint_requestedLayerId = ${layerIdPayload};
+function __paint_findLayerById(container, id) {
+  for (var li = 0; li < container.layers.length; li++) {
+    var layer = container.layers[li];
+    try { if (layer.id === id) return layer; } catch (eId) {}
+    if (layer.typename === 'LayerSet') {
+      var nested = __paint_findLayerById(layer, id);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+function __paint_layerId(layer) { try { return layer.id; } catch (e) { return null; } }
+var __paint_originalActive = doc.activeLayer;
+var __paint_targetLayer = __paint_requestedLayerId ? __paint_findLayerById(doc, __paint_requestedLayerId) : __paint_originalActive;
+if (!__paint_targetLayer) throw new Error('paint_strokes target layer not found: ' + __paint_requestedLayerId);
+if (__paint_targetLayer.typename === 'LayerSet') throw new Error('paint_strokes target must be an ArtLayer, not a LayerSet');
+try {
+  if (__paint_targetLayer.kind !== LayerKind.NORMAL) throw new Error('paint_strokes target must be a normal raster ArtLayer: ' + __paint_targetLayer.name);
+} catch (eKind) { if (String(eKind).indexOf('paint_strokes target') >= 0) throw eKind; }
+try {
+  if (__paint_targetLayer.allLocked) throw new Error('paint_strokes target layer is locked: ' + __paint_targetLayer.name);
+} catch (eLocked) { if (String(eLocked).indexOf('paint_strokes target layer is locked') >= 0) throw eLocked; }
+doc.activeLayer = __paint_targetLayer;
+// Photoshop PathPointInfo coordinates are point-based. Public MCP painting
+// coordinates are canvas pixels, so normalize them here at execution time.
+// 72 dpi remains identity; higher/lower DPI documents keep identical pixel geometry.
+var __paint_pathScale = 72 / Number(doc.resolution || 72);
+function __paint_canvasPx(v) { return Number(v) * __paint_pathScale; }
 var strokes = ${payload};
 function __paint_setForeground(c) {
   var color = new SolidColor();
@@ -702,18 +874,22 @@ function __paint_applyStrokes() {
       var src = stroke.points[i];
       var p = new PathPointInfo();
       p.kind = src.smooth ? PointKind.SMOOTHPOINT : PointKind.CORNERPOINT;
-      p.anchor = [src.x, src.y];
-      p.leftDirection = src.left ? src.left : [src.x, src.y];
-      p.rightDirection = src.right ? src.right : [src.x, src.y];
+      p.anchor = [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
+      p.leftDirection = src.left
+        ? [__paint_canvasPx(src.left[0]), __paint_canvasPx(src.left[1])]
+        : [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
+      p.rightDirection = src.right
+        ? [__paint_canvasPx(src.right[0]), __paint_canvasPx(src.right[1])]
+        : [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
       pts.push(p);
     }
     if (pts.length === 1) {
       var src0 = stroke.points[0];
       var p2 = new PathPointInfo();
       p2.kind = PointKind.CORNERPOINT;
-      p2.anchor = [src0.x, src0.y];
-      p2.leftDirection = [src0.x, src0.y];
-      p2.rightDirection = [src0.x, src0.y];
+      p2.anchor = [__paint_canvasPx(src0.x), __paint_canvasPx(src0.y)];
+      p2.leftDirection = [__paint_canvasPx(src0.x), __paint_canvasPx(src0.y)];
+      p2.rightDirection = [__paint_canvasPx(src0.x), __paint_canvasPx(src0.y)];
       pts.push(p2);
     }
     var sub = new SubPathInfo();
@@ -728,17 +904,56 @@ function __paint_applyStrokes() {
     }
   }
 }
-doc.suspendHistory('MCP Digital Painting', '__paint_applyStrokes()');
-return { ok: true, stroke_count: strokes.length, layer_name: doc.activeLayer.name };
+try {
+  doc.suspendHistory('MCP Digital Painting', '__paint_applyStrokes()');
+  return {
+    ok: true,
+    stroke_count: strokes.length,
+    layer_id: __paint_layerId(__paint_targetLayer),
+    layer_name: __paint_targetLayer.name,
+    coordinate_space: 'canvas_pixels',
+    document_resolution_dpi: Number(doc.resolution),
+    path_coordinate_scale: __paint_pathScale
+  };
+} finally {
+  try { doc.activeLayer = __paint_originalActive; } catch (eRestore) {}
+}
 `;
 }
 
-function paintDabsScript(groups: PaintDabGroup[]): string {
+function paintDabsScript(groups: PaintDabGroup[], layerId?: number): string {
   const payload = JSON.stringify(groups);
+  const layerIdPayload = JSON.stringify(layerId ?? null);
   return `
 ${paintRuntime()}
 if (app.documents.length === 0) throw new Error('No active document');
 var doc = app.activeDocument;
+var __paint_requestedLayerId = ${layerIdPayload};
+function __paint_findLayerById(container, id) {
+  for (var li = 0; li < container.layers.length; li++) {
+    var layer = container.layers[li];
+    try { if (layer.id === id) return layer; } catch (eId) {}
+    if (layer.typename === 'LayerSet') {
+      var nested = __paint_findLayerById(layer, id);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+function __paint_layerId(layer) { try { return layer.id; } catch (e) { return null; } }
+var __paint_originalActive = doc.activeLayer;
+var __paint_targetLayer = __paint_requestedLayerId ? __paint_findLayerById(doc, __paint_requestedLayerId) : __paint_originalActive;
+if (!__paint_targetLayer) throw new Error('paint_dabs target layer not found: ' + __paint_requestedLayerId);
+if (__paint_targetLayer.typename === 'LayerSet') throw new Error('paint_dabs target must be an ArtLayer, not a LayerSet');
+try {
+  if (__paint_targetLayer.kind !== LayerKind.NORMAL) throw new Error('paint_dabs target must be a normal raster ArtLayer: ' + __paint_targetLayer.name);
+} catch (eKind) { if (String(eKind).indexOf('paint_dabs target') >= 0) throw eKind; }
+try {
+  if (__paint_targetLayer.allLocked) throw new Error('paint_dabs target layer is locked: ' + __paint_targetLayer.name);
+} catch (eLocked) { if (String(eLocked).indexOf('paint_dabs target layer is locked') >= 0) throw eLocked; }
+doc.activeLayer = __paint_targetLayer;
+var __paint_pathScale = 72 / Number(doc.resolution || 72);
+function __paint_canvasPx(v) { return Number(v) * __paint_pathScale; }
 var groups = ${payload};
 function __paint_dabsSetForeground(c) {
   var color = new SolidColor();
@@ -776,14 +991,14 @@ function __paint_applyDabGroups() {
       var src = group.points[i];
       var p1 = new PathPointInfo();
       p1.kind = PointKind.CORNERPOINT;
-      p1.anchor = [src.x, src.y];
-      p1.leftDirection = [src.x, src.y];
-      p1.rightDirection = [src.x, src.y];
+      p1.anchor = [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
+      p1.leftDirection = [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
+      p1.rightDirection = [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
       var p2 = new PathPointInfo();
       p2.kind = PointKind.CORNERPOINT;
-      p2.anchor = [src.x, src.y];
-      p2.leftDirection = [src.x, src.y];
-      p2.rightDirection = [src.x, src.y];
+      p2.anchor = [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
+      p2.leftDirection = [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
+      p2.rightDirection = [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
       var sub = new SubPathInfo();
       sub.closed = false;
       sub.operation = ShapeOperation.SHAPEADD;
@@ -798,8 +1013,167 @@ function __paint_applyDabGroups() {
     }
   }
 }
-doc.suspendHistory('MCP Paint Dabs', '__paint_applyDabGroups()');
-return { ok: true, group_count: groups.length, layer_name: doc.activeLayer.name };
+try {
+  doc.suspendHistory('MCP Paint Dabs', '__paint_applyDabGroups()');
+  return {
+    ok: true,
+    group_count: groups.length,
+    layer_id: __paint_layerId(__paint_targetLayer),
+    layer_name: __paint_targetLayer.name,
+    coordinate_space: 'canvas_pixels',
+    document_resolution_dpi: Number(doc.resolution),
+    path_coordinate_scale: __paint_pathScale
+  };
+} finally {
+  try { doc.activeLayer = __paint_originalActive; } catch (eRestore) {}
+}
+`;
+}
+
+function paintRegionsScript(regions: PaintRegion[], clipBounds?: PaintClipBounds): string {
+  const regionPayload = JSON.stringify(regions);
+  const clipPayload = JSON.stringify(clipBounds ?? null);
+  return `
+if (app.documents.length === 0) throw new Error('No active document');
+var doc = app.activeDocument;
+var regions = ${regionPayload};
+var clipBounds = ${clipPayload};
+var __paint_pathScale = 72 / Number(doc.resolution || 72);
+function __paint_canvasPx(v) { return Number(v) * __paint_pathScale; }
+function __paint_findLayerById(container, id) {
+  for (var i = 0; i < container.layers.length; i++) {
+    var layer = container.layers[i];
+    try { if (layer.id === id) return layer; } catch (eId) {}
+    if (layer.typename === 'LayerSet') {
+      var nested = __paint_findLayerById(layer, id);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+function __paint_layerId(layer) {
+  try { return layer.id; } catch (e) { return null; }
+}
+function __paint_assertPoint(p, label) {
+  var w = doc.width.as('px');
+  var h = doc.height.as('px');
+  function assertXY(x, y, suffix) {
+    if (x < 0 || x > w || y < 0 || y > h) {
+      throw new Error(label + suffix + ' lies outside document canvas');
+    }
+    if (clipBounds && (x < clipBounds.left || x > clipBounds.right || y < clipBounds.top || y > clipBounds.bottom)) {
+      throw new Error(label + suffix + ' lies outside clip_bounds');
+    }
+  }
+  assertXY(Number(p.x), Number(p.y), '.anchor');
+  if (p.left) assertXY(Number(p.left[0]), Number(p.left[1]), '.left');
+  if (p.right) assertXY(Number(p.right[0]), Number(p.right[1]), '.right');
+}
+function __paint_makeSubPath(contour, regionIndex, contourIndex) {
+  var pts = [];
+  for (var i = 0; i < contour.points.length; i++) {
+    var src = contour.points[i];
+    __paint_assertPoint(src, 'regions[' + regionIndex + '].contours[' + contourIndex + '].points[' + i + ']');
+    var p = new PathPointInfo();
+    p.kind = src.smooth ? PointKind.SMOOTHPOINT : PointKind.CORNERPOINT;
+    p.anchor = [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
+    p.leftDirection = src.left
+      ? [__paint_canvasPx(src.left[0]), __paint_canvasPx(src.left[1])]
+      : [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
+    p.rightDirection = src.right
+      ? [__paint_canvasPx(src.right[0]), __paint_canvasPx(src.right[1])]
+      : [__paint_canvasPx(src.x), __paint_canvasPx(src.y)];
+    pts.push(p);
+  }
+  var sub = new SubPathInfo();
+  sub.closed = true;
+  sub.operation = contour.operation === 'SUBTRACT'
+    ? ShapeOperation.SHAPESUBTRACT
+    : ShapeOperation.SHAPEADD;
+  sub.entireSubPath = pts;
+  return sub;
+}
+function __paint_preflightRegions(originalActive) {
+  var targets = [];
+  for (var r = 0; r < regions.length; r++) {
+    var region = regions[r];
+    var target = region.layerId ? __paint_findLayerById(doc, region.layerId) : originalActive;
+    if (!target) throw new Error('Target layer not found for region ' + (region.id || r));
+    if (target.typename === 'LayerSet') throw new Error('paint_regions target must be an ArtLayer, not a LayerSet');
+    try {
+      if (target.kind !== LayerKind.NORMAL) {
+        throw new Error('paint_regions target must be a normal raster ArtLayer: ' + target.name);
+      }
+    } catch (eKind) {
+      if (String(eKind).indexOf('paint_regions target') >= 0) throw eKind;
+    }
+    try {
+      if (target.allLocked) throw new Error('paint_regions target layer is locked: ' + target.name);
+    } catch (eLocked) {
+      if (String(eLocked).indexOf('paint_regions target layer is locked') >= 0) throw eLocked;
+    }
+    for (var c = 0; c < region.contours.length; c++) {
+      var contour = region.contours[c];
+      for (var i = 0; i < contour.points.length; i++) {
+        __paint_assertPoint(
+          contour.points[i],
+          'regions[' + r + '].contours[' + c + '].points[' + i + ']'
+        );
+      }
+    }
+    targets.push(target);
+  }
+  return targets;
+}
+var __paint_originalActive = doc.activeLayer;
+var __paint_regionTargets = __paint_preflightRegions(__paint_originalActive);
+function __paint_applyRegions() {
+  var originalActive = __paint_originalActive;
+  var painted = [];
+  try {
+    for (var r = 0; r < regions.length; r++) {
+      var region = regions[r];
+      var target = __paint_regionTargets[r];
+      doc.activeLayer = target;
+      var subpaths = [];
+      for (var c = 0; c < region.contours.length; c++) {
+        subpaths.push(__paint_makeSubPath(region.contours[c], r, c));
+      }
+      var path = doc.pathItems.add('__MCP_REGION_' + r, subpaths);
+      var fillColor = new SolidColor();
+      fillColor.rgb.red = region.color.red;
+      fillColor.rgb.green = region.color.green;
+      fillColor.rgb.blue = region.color.blue;
+      try {
+        path.fillPath(fillColor, ColorBlendMode.NORMAL, region.opacity, false, 0, true, true);
+      } finally {
+        try { path.remove(); } catch (eRemove) {}
+      }
+      painted.push({
+        id: region.id || String(r),
+        layer_id: __paint_layerId(target),
+        layer_name: target.name,
+        contour_count: region.contours.length,
+        opacity: region.opacity
+      });
+    }
+  } finally {
+    try { doc.activeLayer = originalActive; } catch (eRestore) {}
+  }
+  return painted;
+}
+var paintedRegions = null;
+function __paint_regions_history() { paintedRegions = __paint_applyRegions(); }
+doc.suspendHistory('MCP Paint Regions', '__paint_regions_history()');
+return {
+  ok: true,
+  region_count: regions.length,
+  painted_regions: paintedRegions,
+  coordinate_space: 'canvas_pixels',
+  document_resolution_dpi: Number(doc.resolution),
+  path_coordinate_scale: __paint_pathScale,
+  clip_bounds: clipBounds
+};
 `;
 }
 
@@ -829,7 +1203,10 @@ function chunkPaintStrokes(strokes: PaintStroke[], maxCost = 24): PaintStroke[][
   return batches;
 }
 
-export function createPaintingTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createPaintingTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -850,7 +1227,7 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
           },
         },
       },
-      handler: async (args) => listBrushPresets(connection, args),
+      handler: async (args) => listBrushPresets(backendRouter, args),
     },
     {
       tool: {
@@ -865,7 +1242,7 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
           required: ['name'],
         },
       },
-      handler: async (args) => selectBrushPreset(connection, args),
+      handler: async (args) => selectBrushPreset(connection, backendRouter, args),
     },
     {
       tool: {
@@ -874,7 +1251,7 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
           'Read active Photoshop paint-brush settings used for digital painting, including geometry, opacity/flow, pressure overrides, airbrush and smoothing.',
         inputSchema: { type: 'object', properties: {} },
       },
-      handler: async () => getBrushSettings(connection),
+      handler: async () => getBrushSettings(backendRouter),
     },
     {
       tool: {
@@ -948,7 +1325,7 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
           },
         },
       },
-      handler: async (args) => setBrush(connection, args),
+      handler: async (args) => setBrush(connection, backendRouter, args),
     },
     {
       tool: {
@@ -964,7 +1341,7 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
           required: ['red', 'green', 'blue'],
         },
       },
-      handler: async (args) => setForegroundColor(connection, args),
+      handler: async (args) => setForegroundColor(connection, backendRouter, args),
     },
     {
       tool: {
@@ -1070,11 +1447,104 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
               description:
                 'AUTO proactively chunks expensive batches for reliability. SINGLE_HISTORY preserves the legacy one-history-step behavior but can time out on large heterogeneous batches.',
             },
+            layer_id: {
+              type: 'number',
+              minimum: 1,
+              description:
+                'Optional stable target raster layer id. When supplied, painting is pinned to that layer and the previously active layer is restored afterward.',
+            },
           },
           required: ['strokes'],
         },
       },
-      handler: async (args) => paintStrokes(connection, args),
+      handler: async (args) => paintStrokes(connection, backendRouter, args),
+    },
+    {
+      tool: {
+        name: 'photoshop_paint_regions',
+        description:
+          'Fill one or more ordered raster color regions from closed Bezier contours. Intended for fast block-in, silhouettes and large color/value masses before brush modelling. Each region may target a stable layer_id; array order is paint/overlap order. Optional clip_bounds is an executable safety envelope: every anchor and Bezier handle must remain inside it. Coordinates are canvas pixels independent of document DPI.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            regions: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 32,
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', description: 'Optional semantic id for diagnostics/results' },
+                  layer_id: {
+                    type: 'number',
+                    minimum: 1,
+                    description: 'Optional stable target raster layer id. Defaults to the layer active when the call starts.',
+                  },
+                  color: {
+                    type: 'object',
+                    properties: {
+                      red: { type: 'number', minimum: 0, maximum: 255 },
+                      green: { type: 'number', minimum: 0, maximum: 255 },
+                      blue: { type: 'number', minimum: 0, maximum: 255 },
+                    },
+                    required: ['red', 'green', 'blue'],
+                  },
+                  opacity: { type: 'number', minimum: 0, maximum: 100, default: 100 },
+                  contours: {
+                    type: 'array',
+                    minItems: 1,
+                    maxItems: 16,
+                    description: 'Closed contours. The first must be ADD; later SUBTRACT contours create holes/cutouts.',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        operation: { type: 'string', enum: ['ADD', 'SUBTRACT'], default: 'ADD' },
+                        points: {
+                          type: 'array',
+                          minItems: 3,
+                          maxItems: 500,
+                          items: {
+                            type: 'object',
+                            properties: {
+                              x: { type: 'number' },
+                              y: { type: 'number' },
+                              left: {
+                                type: 'array', minItems: 2, maxItems: 2,
+                                items: { type: 'number' },
+                              },
+                              right: {
+                                type: 'array', minItems: 2, maxItems: 2,
+                                items: { type: 'number' },
+                              },
+                              smooth: { type: 'boolean', default: false },
+                            },
+                            required: ['x', 'y'],
+                          },
+                        },
+                      },
+                      required: ['points'],
+                    },
+                  },
+                },
+                required: ['color', 'contours'],
+              },
+            },
+            clip_bounds: {
+              type: 'object',
+              description: 'Optional canvas-pixel safety bounds. All contour anchors and Bezier handles must lie inside.',
+              properties: {
+                left: { type: 'number' },
+                top: { type: 'number' },
+                right: { type: 'number' },
+                bottom: { type: 'number' },
+              },
+              required: ['left', 'top', 'right', 'bottom'],
+            },
+          },
+          required: ['regions'],
+        },
+      },
+      handler: async (args) => paintRegions(connection, backendRouter, args),
     },
     {
       tool: {
@@ -1109,26 +1579,30 @@ export function createPaintingTools(connection: PhotoshopConnection): ToolDefini
                 required: ['x', 'y'],
               },
             },
+            layer_id: {
+              type: 'number',
+              minimum: 1,
+              description:
+                'Optional stable target raster layer id. When supplied, painting is pinned to that layer and the previously active layer is restored afterward.',
+            },
           },
           required: ['dabs'],
         },
       },
-      handler: async (args) => paintDabs(connection, args),
+      handler: async (args) => paintDabs(connection, backendRouter, args),
     },
   ];
 }
 
 async function listBrushPresets(
-  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   try {
     const query = typeof args.query === 'string' ? args.query : undefined;
     const limitRaw = optionalNumber(args.limit, 'limit', 1, 1000);
     const limit = limitRaw === undefined ? 200 : Math.round(limitRaw);
-    const raw = await runSnippet(connection, brushPresetsScript(query, limit));
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) throw new Error(`Unparseable brush preset list: ${String(raw)}`);
+    const parsed = await backendRouter.listBrushPresets(query ?? '', limit);
     return atomicSuccess('Brush presets listed', {
       total: parsed.total,
       matched: parsed.matched,
@@ -1142,6 +1616,7 @@ async function listBrushPresets(
 
 async function selectBrushPreset(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   try {
@@ -1149,23 +1624,46 @@ async function selectBrushPreset(
       throw new Error('name is required');
     }
     const name = args.name.trim();
-    const raw = await runSnippet(connection, selectBrushPresetScript(name));
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) throw new Error(`Unparseable brush preset selection: ${String(raw)}`);
-    return atomicSuccess(`Brush preset selected: ${name}`, {
+    const backend = await backendRouter.backendFor('brush.presets.select');
+    let parsed: Record<string, unknown>;
+    const guardOperationId = currentToolExecutionContext()?.guardOperationId;
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpSelectBrushPreset(name, guardOperationId);
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? 'uxp_select_brush_preset_failed');
+      }
+      parsed = result.data;
+    } else {
+      const raw = await runSnippet(connection, selectBrushPresetScript(name));
+      const legacy = parseSnippetResult(raw);
+      if (!legacy) throw new Error(`Unparseable brush preset selection: ${String(raw)}`);
+      parsed = legacy;
+    }
+    const effectivePreset = typeof parsed.preset === 'string' ? parsed.preset.trim() : '';
+    const setterOutcome = effectivePreset === name ? 'applied' : effectivePreset ? 'not-applied' : 'uncertain';
+    return atomicSuccess(
+      setterOutcome === 'applied'
+        ? `Brush preset selected: ${name}`
+        : setterOutcome === 'not-applied'
+          ? `Brush preset setter completed but effective preset is ${effectivePreset}`
+          : `Brush preset setter outcome is uncertain`,
+      {
+      setter_outcome: setterOutcome,
+      requested_preset: name,
+      effective_preset: effectivePreset || null,
       preset: parsed.preset,
       settings: parsed.settings,
+      ...(parsed.setter_recovery ? { setter_recovery: parsed.setter_recovery } : {}),
+      ...(guardOperationId ? { stable_command_id: guardOperationId } : {}),
     });
   } catch (error) {
     return atomicFailureFromError(error);
   }
 }
 
-async function getBrushSettings(connection: PhotoshopConnection): Promise<ToolResult> {
+async function getBrushSettings(backendRouter: PhotoshopBackendRouter): Promise<ToolResult> {
   try {
-    const raw = await runSnippet(connection, getBrushScript());
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) throw new Error(`Unparseable brush settings: ${String(raw)}`);
+    const parsed = await backendRouter.readBrushSettings();
     return atomicSuccess('Brush settings read', { settings: parsed.settings });
   } catch (error) {
     return atomicFailureFromError(error);
@@ -1174,6 +1672,7 @@ async function getBrushSettings(connection: PhotoshopConnection): Promise<ToolRe
 
 async function setBrush(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   try {
@@ -1196,10 +1695,49 @@ async function setBrush(
         typeof args.smoothing_enabled === 'boolean' ? args.smoothing_enabled : undefined,
       smoothing: optionalNumber(args.smoothing, 'smoothing', 0, 100),
     };
-    const raw = await runSnippet(connection, setBrushScript(values));
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) throw new Error(`Unparseable set-brush result: ${String(raw)}`);
-    return atomicSuccess('Brush settings updated', { settings: parsed.settings });
+    const backend = await backendRouter.backendFor('brush.settings.write');
+    let parsed: Record<string, unknown>;
+    const guardOperationId = currentToolExecutionContext()?.guardOperationId;
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpSetBrush(values, guardOperationId);
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_set_brush_failed');
+      parsed = result.data;
+    } else {
+      const raw = await runSnippet(connection, setBrushScript(values));
+      const legacy = parseSnippetResult(raw);
+      if (!legacy) throw new Error(`Unparseable set-brush result: ${String(raw)}`);
+      parsed = legacy;
+    }
+    const effective = parsed.settings && typeof parsed.settings === 'object' && !Array.isArray(parsed.settings)
+      ? parsed.settings as Record<string, unknown>
+      : {};
+    const requested = Object.fromEntries(
+      Object.entries(values).filter(([, value]) => value !== undefined)
+    );
+    const mismatches = Object.entries(requested).flatMap(([key, expected]) => {
+      const actual = effective[key];
+      if (typeof expected === 'number' && typeof actual === 'number') {
+        return Math.abs(expected - actual) <= 1e-6
+          ? []
+          : [{ key, expected, actual }];
+      }
+      return expected === actual ? [] : [{ key, expected, actual }];
+    });
+    const setterOutcome = mismatches.length === 0 ? 'applied' : 'not-applied';
+    return atomicSuccess(
+      setterOutcome === 'applied'
+        ? 'Brush settings updated and verified'
+        : 'Brush settings completed but effective readback does not match every requested field',
+      {
+        setter_outcome: setterOutcome,
+        requested_settings: requested,
+        effective_settings: effective,
+        mismatches,
+        settings: effective,
+        ...(parsed.setter_recovery ? { setter_recovery: parsed.setter_recovery } : {}),
+        ...(guardOperationId ? { stable_command_id: guardOperationId } : {}),
+      }
+    );
   } catch (error) {
     return atomicFailureFromError(error);
   }
@@ -1207,6 +1745,7 @@ async function setBrush(
 
 async function setForegroundColor(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   try {
@@ -1215,10 +1754,24 @@ async function setForegroundColor(
     const blue = optionalNumber(args.blue, 'blue', 0, 255);
     if (red === undefined || green === undefined || blue === undefined)
       throw new Error('red, green and blue are required');
-    const raw = await runSnippet(connection, foregroundColorScript(red, green, blue));
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) throw new Error(`Unparseable color result: ${String(raw)}`);
-    return atomicSuccess('Foreground color updated', { red, green, blue });
+    const backend = await backendRouter.backendFor('foreground.write');
+    const guardOperationId = currentToolExecutionContext()?.guardOperationId;
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpSetForegroundColor({ red, green, blue }, guardOperationId);
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? 'uxp_set_foreground_color_failed');
+      }
+    } else {
+      const raw = await runSnippet(connection, foregroundColorScript(red, green, blue));
+      const parsed = parseSnippetResult(raw);
+      if (!parsed) throw new Error(`Unparseable color result: ${String(raw)}`);
+    }
+    return atomicSuccess('Foreground color updated', {
+      red,
+      green,
+      blue,
+      ...(guardOperationId ? { stable_command_id: guardOperationId } : {}),
+    });
   } catch (error) {
     return atomicFailureFromError(error);
   }
@@ -1226,6 +1779,7 @@ async function setForegroundColor(
 
 async function paintStrokes(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   try {
@@ -1234,6 +1788,7 @@ async function paintStrokes(
     if (args.strokes.length > 250)
       throw new Error('strokes may contain at most 250 strokes per call');
     const inputStrokes = args.strokes.map((stroke, index) => parseStroke(stroke, index));
+    const layerId = optionalPositiveLayerId(args.layer_id, 'layer_id');
     const renderStrokes = inputStrokes.flatMap((stroke) => expandDynamicStroke(stroke));
     if (renderStrokes.length > 1000) {
       throw new Error(`Dynamics expansion produced ${renderStrokes.length} render strokes; maximum is 1000 per call`);
@@ -1244,14 +1799,39 @@ async function paintStrokes(
       throw new Error('batch_mode must be AUTO or SINGLE_HISTORY');
     }
     const batches = rawMode === 'SINGLE_HISTORY' ? [renderStrokes] : chunkPaintStrokes(renderStrokes);
+    const backend = await backendRouter.backendFor('painting.strokes');
+    const documentId =
+      typeof args.document_id === 'number' &&
+      Number.isSafeInteger(args.document_id) &&
+      args.document_id > 0
+        ? args.document_id
+        : undefined;
     let layerName: unknown;
+    let coordinateSpace: unknown;
+    let documentResolutionDpi: unknown;
+    let pathCoordinateScale: unknown;
     let completed = 0;
     for (let i = 0; i < batches.length; i++) {
       try {
-        const raw = await runSnippet(connection, paintStrokesScript(batches[i]));
-        const parsed = parseSnippetResult(raw);
-        if (!parsed) throw new Error(`Unparseable paint result: ${String(raw)}`);
+        let parsed: Record<string, unknown>;
+        if (backend.kind === 'uxp') {
+          const result = await invokeUxpPaintStrokes({
+            ...(documentId !== undefined ? { document_id: documentId } : {}),
+            ...(layerId !== undefined ? { layer_id: layerId } : {}),
+            strokes: batches[i],
+          });
+          if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_paint_strokes_failed');
+          parsed = result.data;
+        } else {
+          const raw = await runSnippet(connection, paintStrokesScript(batches[i], layerId));
+          const legacy = parseSnippetResult(raw);
+          if (!legacy) throw new Error(`Unparseable paint result: ${String(raw)}`);
+          parsed = legacy;
+        }
         layerName = parsed.layer_name;
+        coordinateSpace = parsed.coordinate_space;
+        documentResolutionDpi = parsed.document_resolution_dpi;
+        pathCoordinateScale = parsed.path_coordinate_scale;
         completed += batches[i].length;
       } catch (error) {
         throw new Error(
@@ -1270,14 +1850,68 @@ async function paintStrokes(
       history_steps: batches.length,
       auto_chunked: rawMode === 'AUTO' && batches.length > 1,
       layer_name: layerName,
+      layer_id: layerId ?? null,
+      coordinate_space: coordinateSpace ?? 'canvas_pixels',
+      document_resolution_dpi: documentResolutionDpi,
+      path_coordinate_scale: pathCoordinateScale,
     });
   } catch (error) {
     return atomicFailureFromError(error);
   }
 }
 
+async function paintRegions(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  try {
+    if (!Array.isArray(args.regions) || args.regions.length === 0) {
+      throw new Error('regions must be a non-empty array');
+    }
+    if (args.regions.length > 32) throw new Error('regions may contain at most 32 entries per call');
+    const regions = args.regions.map((region, index) => parseRegion(region, index));
+    const clipBounds = parseClipBounds(args.clip_bounds);
+    const startedAt = Date.now();
+    const backend = await backendRouter.backendFor('painting.regions');
+    let parsed: Record<string, unknown>;
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' &&
+        Number.isSafeInteger(args.document_id) &&
+        args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpPaintRegions({
+        ...(documentId !== undefined ? { document_id: documentId } : {}),
+        regions,
+        ...(clipBounds ? { clip_bounds: clipBounds } : {}),
+      });
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_paint_regions_failed');
+      parsed = result.data;
+    } else {
+      const raw = await runSnippet(connection, paintRegionsScript(regions, clipBounds));
+      const legacy = parseSnippetResult(raw);
+      if (!legacy) throw new Error(`Unparseable paint regions result: ${String(raw)}`);
+      parsed = legacy;
+    }
+    return atomicSuccess(`Painted ${regions.length} region${regions.length === 1 ? '' : 's'}`, {
+      region_count: parsed.region_count ?? regions.length,
+      painted_regions: parsed.painted_regions ?? [],
+      coordinate_space: parsed.coordinate_space ?? 'canvas_pixels',
+      document_resolution_dpi: parsed.document_resolution_dpi,
+      path_coordinate_scale: parsed.path_coordinate_scale,
+      clip_bounds: parsed.clip_bounds ?? clipBounds ?? null,
+      execution_duration_ms: Date.now() - startedAt,
+      history_steps: 1,
+    });
+  } catch (error) {
+    return atomicFailureFromError(error);
+  }
+}
 async function paintDabs(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   try {
@@ -1286,20 +1920,53 @@ async function paintDabs(
     }
     if (args.dabs.length > 5000) throw new Error('dabs may contain at most 5000 entries per call');
     const dabs = args.dabs.map((dab, index) => parseDab(dab, index));
+    const layerId = optionalPositiveLayerId(args.layer_id, 'layer_id');
     const groups = groupPaintDabs(dabs);
     const batches = chunkPaintDabGroups(groups);
+    const uniqueStyleCount = new Set(dabs.map((dab) => paintDabStyleKey(dab))).size;
+    const centerBounds = paintDabCenterBounds(dabs);
+    const backend = await backendRouter.backendFor('painting.dabs');
+    const documentId =
+      typeof args.document_id === 'number' &&
+      Number.isSafeInteger(args.document_id) &&
+      args.document_id > 0
+        ? args.document_id
+        : undefined;
+    const batchDurationsMs: number[] = [];
+    const startedAt = Date.now();
     let layerName: unknown;
+    let coordinateSpace: unknown;
+    let documentResolutionDpi: unknown;
+    let pathCoordinateScale: unknown;
     let completed = 0;
     for (let i = 0; i < batches.length; i++) {
       try {
-        const raw = await runSnippet(connection, paintDabsScript(batches[i]));
-        const parsed = parseSnippetResult(raw);
-        if (!parsed) throw new Error(`Unparseable paint dabs result: ${String(raw)}`);
+        const batchStartedAt = Date.now();
+        let parsed: Record<string, unknown>;
+        if (backend.kind === 'uxp') {
+          const result = await invokeUxpPaintDabs({
+            ...(documentId !== undefined ? { document_id: documentId } : {}),
+            ...(layerId !== undefined ? { layer_id: layerId } : {}),
+            groups: batches[i],
+          });
+          if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_paint_dabs_failed');
+          parsed = result.data;
+        } else {
+          const raw = await runSnippet(connection, paintDabsScript(batches[i], layerId));
+          const legacy = parseSnippetResult(raw);
+          if (!legacy) throw new Error(`Unparseable paint dabs result: ${String(raw)}`);
+          parsed = legacy;
+        }
+        batchDurationsMs.push(Date.now() - batchStartedAt);
         layerName = parsed.layer_name;
+        coordinateSpace = parsed.coordinate_space;
+        documentResolutionDpi = parsed.document_resolution_dpi;
+        pathCoordinateScale = parsed.path_coordinate_scale;
         completed += batches[i].reduce((sum, group) => sum + group.points.length, 0);
       } catch (error) {
         throw new Error(
-          `Paint-dabs batch ${i + 1}/${batches.length} failed after ${completed}/${dabs.length} dabs completed. ` +
+          `Paint-dabs batch ${i + 1}/${batches.length} failed after ${completed}/${dabs.length} dabs completed ` +
+            `(planned internal batches=${batches.length}, ordered style runs=${groups.length}, unique styles=${uniqueStyleCount}). ` +
             `Earlier batches remain applied as separate history steps. ${error instanceof Error ? error.message : String(error)}`
         );
       }
@@ -1307,10 +1974,21 @@ async function paintDabs(
     return atomicSuccess(`Painted ${dabs.length} dab${dabs.length === 1 ? '' : 's'}`, {
       dab_count: dabs.length,
       group_count: groups.length,
+      style_run_count: groups.length,
+      unique_style_count: uniqueStyleCount,
+      planned_batch_count: batches.length,
       batch_count: batches.length,
       history_steps: batches.length,
       auto_chunked: batches.length > 1,
+      points_per_script_limit: PAINT_DABS_MAX_POINTS_PER_SCRIPT,
+      center_bounds: centerBounds,
+      execution_duration_ms: Date.now() - startedAt,
+      batch_durations_ms: batchDurationsMs,
       layer_name: layerName,
+      layer_id: layerId ?? null,
+      coordinate_space: coordinateSpace ?? 'canvas_pixels',
+      document_resolution_dpi: documentResolutionDpi,
+      path_coordinate_scale: pathCoordinateScale,
     });
   } catch (error) {
     return atomicFailureFromError(error);

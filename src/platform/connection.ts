@@ -1,7 +1,7 @@
-import { platform } from 'os';
+import { platform } from 'node:os';
 import { Logger } from '../utils/logger.js';
 import { PhotoshopDetector } from './detector.js';
-import { ScriptExecutor } from './script-executor.js';
+import type { ScriptExecutor } from './script-executor.js';
 import { WindowsExecutor } from './windows-executor.js';
 import { MacOSExecutor } from './macos-executor.js';
 
@@ -12,47 +12,59 @@ export interface PhotoshopInfo {
   appName?: string;
 }
 
+interface PhotoshopDetectorLike {
+  detect(forceRefresh?: boolean): Promise<PhotoshopInfo>;
+}
+
+export interface PhotoshopConnectionOptions {
+  detector?: PhotoshopDetectorLike;
+  executor?: ScriptExecutor;
+  platformType?: NodeJS.Platform;
+}
+
+/**
+ * Legacy external-script connection retained strictly as the pre-dispatch
+ * fallback backend. Backend selection happens before any Photoshop mutation.
+ * Callers must never catch a possibly-dispatched UXP command and replay it here.
+ */
 export class PhotoshopConnection {
   private logger: Logger;
-  private detector: PhotoshopDetector;
-  private executor: ScriptExecutor | null = null;
+  private detector: PhotoshopDetectorLike;
+  private executor: ScriptExecutor | null;
+  private platformType: NodeJS.Platform;
   private photoshopInfo: PhotoshopInfo | null = null;
   private macosExecutor?: MacOSExecutor;
 
-  constructor() {
+  constructor(options: PhotoshopConnectionOptions = {}) {
     this.logger = new Logger('PhotoshopConnection');
-    this.detector = new PhotoshopDetector();
-    // Executor is initialized lazily on first use so that constructing a
-    // PhotoshopConnection on an unsupported platform (e.g. the Linux CI runner
-    // used for the verify-photoshop-prompts script) does not throw immediately.
+    this.detector = options.detector ?? new PhotoshopDetector();
+    this.executor = options.executor ?? null;
+    this.platformType = options.platformType ?? platform();
+    if (this.executor instanceof MacOSExecutor) this.macosExecutor = this.executor;
   }
 
-  /** Returns the platform executor, initializing it on first call. */
   private getExecutor(): ScriptExecutor {
     if (this.executor) return this.executor;
-
-    const platformType = platform();
-    if (platformType === 'win32') {
+    if (this.platformType === 'win32') {
       this.executor = new WindowsExecutor();
-    } else if (platformType === 'darwin') {
+    } else if (this.platformType === 'darwin') {
       this.macosExecutor = new MacOSExecutor();
       this.executor = this.macosExecutor;
     } else {
-      throw new Error(`Unsupported platform: ${platformType}`);
+      throw new Error(`Unsupported platform: ${this.platformType}`);
     }
     return this.executor;
   }
 
+  private applyMacOSAppName(): void {
+    if (this.macosExecutor && this.photoshopInfo?.appName) {
+      this.macosExecutor.setAppName(this.photoshopInfo.appName);
+    }
+  }
+
   async ping(): Promise<boolean> {
     try {
-      this.logger.debug('Pinging Photoshop...');
-      
-      // Try to detect Photoshop if not already detected
-      if (!this.photoshopInfo) {
-        this.photoshopInfo = await this.detector.detect();
-      }
-
-      // For now, just check if Photoshop is detected
+      if (!this.photoshopInfo) this.photoshopInfo = await this.detector.detect();
       return this.photoshopInfo !== null;
     } catch (error) {
       this.logger.error('Ping failed:', error);
@@ -62,10 +74,7 @@ export class PhotoshopConnection {
 
   async getVersion(): Promise<string> {
     try {
-      if (!this.photoshopInfo) {
-        this.photoshopInfo = await this.detector.detect();
-      }
-
+      if (!this.photoshopInfo) this.photoshopInfo = await this.detector.detect();
       return this.photoshopInfo?.version || 'Unknown';
     } catch (error) {
       this.logger.error('Failed to get version:', error);
@@ -75,24 +84,15 @@ export class PhotoshopConnection {
 
   async executeScript(script: string, timeout?: number): Promise<unknown> {
     try {
-      // Ensure Photoshop is detected
-      if (!this.photoshopInfo) {
-        this.photoshopInfo = await this.detector.detect();
-      }
-
+      if (!this.photoshopInfo) this.photoshopInfo = await this.detector.detect();
       const executor = this.getExecutor();
       this.applyMacOSAppName();
-
-      // Check if Photoshop is running, launch if needed
       const isRunning = await executor.isPhotoshopRunning();
       if (!isRunning) {
         this.logger.info('Photoshop not running, launching...');
         await executor.launchPhotoshop(this.photoshopInfo.path);
       }
-
-      // Execute the script
-      const result = await executor.execute(script, timeout);
-      return result;
+      return await executor.execute(script, timeout);
     } catch (error) {
       this.logger.error('Script execution failed:', error);
       throw error;
@@ -104,30 +104,12 @@ export class PhotoshopConnection {
   }
 
   async ensurePhotoshopRunning(): Promise<void> {
-    if (!this.photoshopInfo) {
-      this.photoshopInfo = await this.detector.detect();
-    }
-
+    if (!this.photoshopInfo) this.photoshopInfo = await this.detector.detect();
     const executor = this.getExecutor();
     this.applyMacOSAppName();
-    const isRunning = await executor.isPhotoshopRunning();
-    if (!isRunning) {
+    if (!(await executor.isPhotoshopRunning())) {
       this.logger.info('Launching Photoshop...');
       await executor.launchPhotoshop(this.photoshopInfo.path);
-    }
-  }
-
-  /**
-   * Point the macOS executor at the detected app bundle name. Must run after
-   * getExecutor(): the executor is created lazily, and before this ordering fix
-   * the first script of every session ran against the hard-coded default
-   * ("Adobe Photoshop 2025"), so on any other version pgrep reported Photoshop
-   * as not running, launchPhotoshop() stole focus for 5s, and osascript failed
-   * to compile `do javascript` (-2741) because the app name did not resolve.
-   */
-  private applyMacOSAppName(): void {
-    if (this.macosExecutor && this.photoshopInfo?.appName) {
-      this.macosExecutor.setAppName(this.photoshopInfo.appName);
     }
   }
 }

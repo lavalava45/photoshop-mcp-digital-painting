@@ -2,6 +2,8 @@ import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 import {
   atomicFailureFromError,
   atomicSuccess,
@@ -14,7 +16,10 @@ const SMART_BLUR_QUALITIES = ['LOW', 'MEDIUM', 'HIGH'] as const;
 type SmartBlurMode = (typeof SMART_BLUR_MODES)[number];
 type SmartBlurQuality = (typeof SMART_BLUR_QUALITIES)[number];
 
-export function createFilterTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createFilterTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -33,7 +38,7 @@ export function createFilterTools(connection: PhotoshopConnection): ToolDefiniti
           required: ['radius'],
         },
       },
-      handler: async (args) => applyGaussianBlur(connection, args),
+      handler: async (args) => applyGaussianBlur(connection, backendRouter, args),
     },
     {
       tool: {
@@ -65,7 +70,7 @@ export function createFilterTools(connection: PhotoshopConnection): ToolDefiniti
           required: ['amount', 'radius'],
         },
       },
-      handler: async (args) => applySharpen(connection, args),
+      handler: async (args) => applySharpen(connection, backendRouter, args),
     },
     {
       tool: {
@@ -95,7 +100,7 @@ export function createFilterTools(connection: PhotoshopConnection): ToolDefiniti
           required: ['amount'],
         },
       },
-      handler: async (args) => applyNoise(connection, args),
+      handler: async (args) => applyNoise(connection, backendRouter, args),
     },
     {
       tool: {
@@ -120,7 +125,7 @@ export function createFilterTools(connection: PhotoshopConnection): ToolDefiniti
           required: ['angle', 'radius'],
         },
       },
-      handler: async (args) => applyMotionBlur(connection, args),
+      handler: async (args) => applyMotionBlur(connection, backendRouter, args),
     },
     {
       tool: {
@@ -145,7 +150,7 @@ export function createFilterTools(connection: PhotoshopConnection): ToolDefiniti
           required: ['radius'],
         },
       },
-      handler: async (args) => applyHighPass(connection, args),
+      handler: async (args) => applyHighPass(connection, backendRouter, args),
     },
     {
       tool: {
@@ -189,7 +194,7 @@ export function createFilterTools(connection: PhotoshopConnection): ToolDefiniti
           required: ['radius', 'threshold'],
         },
       },
-      handler: async (args) => applySmartBlur(connection, args),
+      handler: async (args) => applySmartBlur(connection, backendRouter, args),
     },
   ];
 }
@@ -253,11 +258,18 @@ function validateSmartBlurThreshold(threshold: unknown): number | ToolResult {
 
 async function applyGaussianBlur(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const radius = args.radius as number;
 
   try {
+    const backend = await backendRouter.backendFor('filter.gaussian_blur' as Parameters<PhotoshopBackendRouter['backendFor']>[0]);
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation('apply_gaussian_blur', { radius }, 'uxp_apply_gaussian_blur_failed');
+      if (!result.ok) throw new Error(result.error ?? 'uxp_apply_gaussian_blur_failed');
+      return { content: [{ type: 'text' as const, text: `Gaussian Blur applied with radius ${radius}px` }] };
+    }
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 
@@ -287,6 +299,7 @@ async function applyGaussianBlur(
 
 async function applySharpen(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const amount = args.amount as number;
@@ -294,6 +307,12 @@ async function applySharpen(
   const threshold = (args.threshold as number) || 0;
 
   try {
+    const backend = await backendRouter.backendFor('filter.sharpen' as Parameters<PhotoshopBackendRouter['backendFor']>[0]);
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation('apply_sharpen', { amount, radius, threshold }, 'uxp_apply_sharpen_failed');
+      if (!result.ok) throw new Error(result.error ?? 'uxp_apply_sharpen_failed');
+      return { content: [{ type: 'text' as const, text: `Unsharp Mask applied: amount ${amount}%, radius ${radius}px, threshold ${threshold}` }] };
+    }
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 
@@ -323,6 +342,7 @@ async function applySharpen(
 
 async function applyNoise(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const amount = args.amount as number;
@@ -330,6 +350,12 @@ async function applyNoise(
   const monochromatic = (args.monochromatic as boolean) || false;
 
   try {
+    const backend = await backendRouter.backendFor('filter.noise' as Parameters<PhotoshopBackendRouter['backendFor']>[0]);
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation('apply_noise', { amount, distribution, monochromatic }, 'uxp_apply_noise_failed');
+      if (!result.ok) throw new Error(result.error ?? 'uxp_apply_noise_failed');
+      return { content: [{ type: 'text' as const, text: `Add Noise applied: ${amount}% (${distribution}${monochromatic ? ', monochromatic' : ''})` }] };
+    }
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 
@@ -359,12 +385,19 @@ async function applyNoise(
 
 async function applyMotionBlur(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const angle = args.angle as number;
   const radius = args.radius as number;
 
   try {
+    const backend = await backendRouter.backendFor('filter.motion_blur' as Parameters<PhotoshopBackendRouter['backendFor']>[0]);
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation('apply_motion_blur', { angle, radius }, 'uxp_apply_motion_blur_failed');
+      if (!result.ok) throw new Error(result.error ?? 'uxp_apply_motion_blur_failed');
+      return { content: [{ type: 'text' as const, text: `Motion Blur applied: angle ${angle}°, radius ${radius}px` }] };
+    }
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 
@@ -394,11 +427,26 @@ async function applyMotionBlur(
 
 async function applyHighPass(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const radiusResult = validateHighPassRadius(args.radius);
   if (typeof radiusResult !== 'number') return radiusResult;
 
+  try {
+    const backend = await backendRouter.backendFor('filter.high_pass' as Parameters<PhotoshopBackendRouter['backendFor']>[0]);
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation('apply_high_pass', { radius: radiusResult }, 'uxp_apply_high_pass_failed');
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_apply_high_pass_failed');
+      return atomicSuccess(`High Pass filter applied (radius ${radiusResult}px)`, {
+        filter: result.data.filter,
+        radius: result.data.radius,
+        ...(result.data.context !== undefined ? { context: result.data.context } : {}),
+      });
+    }
+  } catch (error) {
+    return atomicFailureFromError(error);
+  }
   return runFilterSnippet(
     connection,
     ExtendScriptSnippets.applyHighPass(radiusResult),
@@ -409,6 +457,7 @@ async function applyHighPass(
 
 async function applySmartBlur(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const radiusResult = validateSmartBlurRadius(args.radius);
@@ -427,6 +476,25 @@ async function applySmartBlur(
       ? (args.quality as SmartBlurQuality)
       : 'MEDIUM';
 
+  try {
+    const backend = await backendRouter.backendFor('filter.smart_blur' as Parameters<PhotoshopBackendRouter['backendFor']>[0]);
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'apply_smart_blur',
+        { radius: radiusResult, threshold: thresholdResult, mode, quality },
+        'uxp_apply_smart_blur_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_apply_smart_blur_failed');
+      const details: Record<string, unknown> = {};
+      for (const key of ['filter', 'radius', 'threshold', 'mode', 'quality']) {
+        if (result.data[key] !== undefined) details[key] = result.data[key];
+      }
+      if (result.data.context !== undefined) details.context = result.data.context;
+      return atomicSuccess(`Smart Blur applied (radius ${radiusResult}px, threshold ${thresholdResult})`, details);
+    }
+  } catch (error) {
+    return atomicFailureFromError(error);
+  }
   return runFilterSnippet(
     connection,
     ExtendScriptSnippets.applySmartBlur(radiusResult, thresholdResult, mode, quality),

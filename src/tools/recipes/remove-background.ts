@@ -38,12 +38,6 @@ export function bindRemoveBackground(connection: PhotoshopConnection): ToolDefin
               'Reserved for a future iteration; currently recorded in the response but no shadow layer is created yet.',
             default: false,
           },
-          use_generative: {
-            type: 'boolean',
-            description:
-              'After masking, run generative edge cleanup on inverted background selection (default false)',
-            default: false,
-          },
         },
       },
     },

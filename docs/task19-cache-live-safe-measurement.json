@@ -1,0 +1,53 @@
+{
+  "schema": "photoshop.task19.live_safe_cache_measurement.v1",
+  "captured_at": "2026-09-22T01:39:00Z",
+  "scope": "read/preparation-safe only; no artwork mutation",
+  "photoshop": {
+    "ready": true,
+    "document_id": 73,
+    "uxp_bridge_revision": "compact-v2-20260922",
+    "revision_match": true
+  },
+  "readiness_cache_pairs": [
+    {
+      "pair": 1,
+      "cold": { "wall_ms": 842, "cache_hit": false, "cache_age_ms": 62, "ttl_ms": 2000 },
+      "warm": { "wall_ms": 712, "cache_hit": true, "cache_age_ms": 768, "ttl_ms": 2000 }
+    },
+    {
+      "pair": 2,
+      "cold": { "wall_ms": 544, "cache_hit": false, "cache_age_ms": 10, "ttl_ms": 2000 },
+      "warm": { "wall_ms": 473, "cache_hit": true, "cache_age_ms": 586, "ttl_ms": 2000 }
+    },
+    {
+      "pair": 3,
+      "cold": { "wall_ms": 1495, "cache_hit": false, "cache_age_ms": 7, "ttl_ms": 2000 },
+      "warm": { "wall_ms": 495, "cache_hit": true, "cache_age_ms": 529, "ttl_ms": 2000 }
+    }
+  ],
+  "readiness_cache_medians": {
+    "cold_wall_ms": 842,
+    "warm_wall_ms": 495
+  },
+  "capability_snapshot_observations": [
+    {
+      "call": 1,
+      "wall_ms": 1053,
+      "cache_reused": true,
+      "dependency_key": "38953e3334454bcb185fda3d39cf01b0b11e6fe0da03593eb8ab7b6dee0a71b8",
+      "active_document_matches": true
+    },
+    {
+      "call": 2,
+      "wall_ms": 1255,
+      "cache_reused": true,
+      "dependency_key": "38953e3334454bcb185fda3d39cf01b0b11e6fe0da03593eb8ab7b6dee0a71b8",
+      "active_document_matches": true
+    }
+  ],
+  "limitations": [
+    "The live calls exercise readiness and capability-snapshot reuse only; they do not dispatch a VisualMicroPlan or mutate Photoshop.",
+    "The live plugin child was not restarted between pairs, so this file is not evidence for a literal compact-v2 child-process cold preparation-cache reset.",
+    "Task19.4 therefore remains pending a mutation-safe or disposable-document compact-v2 VisualMicroPlan cold/warm measurement if literal live preparation-cache proof is required."
+  ]
+}

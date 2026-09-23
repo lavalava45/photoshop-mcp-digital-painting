@@ -2,8 +2,13 @@ import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 
-export function createTextTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createTextTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -31,7 +36,7 @@ export function createTextTools(connection: PhotoshopConnection): ToolDefinition
           },
         },
       },
-      handler: async (args) => listFonts(connection, args),
+      handler: async (args) => listFonts(connection, backendRouter, args),
     },
     {
       tool: {
@@ -56,7 +61,7 @@ export function createTextTools(connection: PhotoshopConnection): ToolDefinition
           required: ['fontName'],
         },
       },
-      handler: async (args) => setTextFont(connection, args),
+      handler: async (args) => setTextFont(connection, backendRouter, args),
     },
     {
       tool: {
@@ -87,7 +92,7 @@ export function createTextTools(connection: PhotoshopConnection): ToolDefinition
           required: ['red', 'green', 'blue'],
         },
       },
-      handler: async (args) => setTextColor(connection, args),
+      handler: async (args) => setTextColor(connection, backendRouter, args),
     },
     {
       tool: {
@@ -105,7 +110,7 @@ export function createTextTools(connection: PhotoshopConnection): ToolDefinition
           required: ['alignment'],
         },
       },
-      handler: async (args) => setTextAlignment(connection, args),
+      handler: async (args) => setTextAlignment(connection, backendRouter, args),
     },
     {
       tool: {
@@ -122,24 +127,41 @@ export function createTextTools(connection: PhotoshopConnection): ToolDefinition
           required: ['text'],
         },
       },
-      handler: async (args) => updateTextContent(connection, args),
+      handler: async (args) => updateTextContent(connection, backendRouter, args),
     },
   ];
 }
 
 async function listFonts(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const query = args.query as string | undefined;
   const limit = (args.limit as number | undefined) ?? 200;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.listFonts(query, limit);
-    const result = await api.executeScript(script);
+    const backend = await backendRouter.backendFor('text.fonts.list');
+    let result: unknown;
+    if (backend.kind === 'uxp') {
+      const uxpResult = await invokeUxpOperation(
+        'list_fonts',
+        {
+          ...(query !== undefined ? { query } : {}),
+          limit,
+        },
+        'uxp_list_fonts_failed'
+      );
+      if (!uxpResult.ok || !uxpResult.data) {
+        throw new Error(uxpResult.error ?? 'uxp_list_fonts_failed');
+      }
+      result = uxpResult.data;
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      const script = ExtendScriptSnippets.listFonts(query, limit);
+      result = await api.executeScript(script);
+    }
 
     return {
       content: [
@@ -164,17 +186,35 @@ async function listFonts(
 
 async function setTextFont(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const fontName = args.fontName as string;
   const fontSize = args.fontSize as number | undefined;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.setTextFont(fontName, fontSize);
-    const result = await api.executeScript(script);
+    const backend = await backendRouter.backendFor('text.font.write');
+    let result: unknown;
+    if (backend.kind === 'uxp') {
+      const uxpResult = await invokeUxpOperation(
+        'set_text_font',
+        {
+          ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+          fontName,
+          ...(fontSize !== undefined ? { fontSize } : {}),
+        },
+        'uxp_set_text_font_failed'
+      );
+      if (!uxpResult.ok || !uxpResult.data) {
+        throw new Error(uxpResult.error ?? 'uxp_set_text_font_failed');
+      }
+      result = uxpResult.data;
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      const script = ExtendScriptSnippets.setTextFont(fontName, fontSize);
+      result = await api.executeScript(script);
+    }
 
     return {
       content: [
@@ -199,6 +239,7 @@ async function setTextFont(
 
 async function setTextColor(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const red = args.red as number;
@@ -206,11 +247,25 @@ async function setTextColor(
   const blue = args.blue as number;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.setTextColor(red, green, blue);
-    await api.executeScript(script);
+    const backend = await backendRouter.backendFor('text.color.write');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'set_text_color',
+        {
+          ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+          red,
+          green,
+          blue,
+        },
+        'uxp_set_text_color_failed'
+      );
+      if (!result.ok) throw new Error(result.error ?? 'uxp_set_text_color_failed');
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      const script = ExtendScriptSnippets.setTextColor(red, green, blue);
+      await api.executeScript(script);
+    }
 
     return {
       content: [
@@ -235,16 +290,29 @@ async function setTextColor(
 
 async function setTextAlignment(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const alignment = args.alignment as string;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.setTextAlignment(alignment);
-    await api.executeScript(script);
+    const backend = await backendRouter.backendFor('text.alignment.write');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'set_text_alignment',
+        {
+          ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+          alignment,
+        },
+        'uxp_set_text_alignment_failed'
+      );
+      if (!result.ok) throw new Error(result.error ?? 'uxp_set_text_alignment_failed');
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      const script = ExtendScriptSnippets.setTextAlignment(alignment);
+      await api.executeScript(script);
+    }
 
     return {
       content: [
@@ -269,16 +337,29 @@ async function setTextAlignment(
 
 async function updateTextContent(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const text = args.text as string;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.updateTextContent(text);
-    await api.executeScript(script);
+    const backend = await backendRouter.backendFor('text.content.write');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'update_text_content',
+        {
+          ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+          text,
+        },
+        'uxp_update_text_content_failed'
+      );
+      if (!result.ok) throw new Error(result.error ?? 'uxp_update_text_content_failed');
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      const script = ExtendScriptSnippets.updateTextContent(text);
+      await api.executeScript(script);
+    }
 
     return {
       content: [
@@ -299,4 +380,12 @@ async function updateTextContent(
       isError: true,
     };
   }
+}
+
+function documentIdFromArgs(args: Record<string, unknown>): number | undefined {
+  return typeof args.document_id === 'number' &&
+    Number.isSafeInteger(args.document_id) &&
+    args.document_id > 0
+    ? args.document_id
+    : undefined;
 }

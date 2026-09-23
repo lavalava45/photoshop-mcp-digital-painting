@@ -1,9 +1,23 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
+import { documentGuardScript } from '../core/document-target.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 
-export function createImageTools(connection: PhotoshopConnection): ToolDefinition[] {
+function documentIdParams(args: Record<string, unknown>): Record<string, unknown> {
+  return typeof args.document_id === 'number' &&
+    Number.isSafeInteger(args.document_id) &&
+    args.document_id > 0
+    ? { document_id: args.document_id }
+    : {};
+}
+
+export function createImageTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -26,7 +40,7 @@ export function createImageTools(connection: PhotoshopConnection): ToolDefinitio
           required: ['width', 'height'],
         },
       },
-      handler: async (args) => resizeImage(connection, args),
+      handler: async (args) => resizeImage(connection, backendRouter, args),
     },
     {
       tool: {
@@ -59,24 +73,38 @@ export function createImageTools(connection: PhotoshopConnection): ToolDefinitio
           required: ['left', 'top', 'right', 'bottom'],
         },
       },
-      handler: async (args) => cropDocument(connection, args),
+      handler: async (args) => cropDocument(connection, backendRouter, args),
     },
   ];
 }
 
 async function resizeImage(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const width = args.width as number;
   const height = args.height as number;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.resizeImage(width, height);
-    await api.executeScript(script);
+    const backend = await backendRouter.backendFor('document.resize');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'resize_image',
+        { width, height, ...documentIdParams(args) },
+        'uxp_resize_image_failed'
+      );
+      if (!result.ok) throw new Error(result.error ?? 'uxp_resize_image_failed');
+    } else {
+      const api = await new PhotoshopAPIFactory(connection).createAPI();
+      const script = ExtendScriptSnippets.resizeImage(width, height);
+      const documentId = documentIdParams(args).document_id;
+      await api.executeScript(
+        typeof documentId === 'number'
+          ? `${documentGuardScript(documentId)}\n${script}`
+          : script
+      );
+    }
 
     return {
       content: [
@@ -101,6 +129,7 @@ async function resizeImage(
 
 async function cropDocument(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const left = args.left as number;
@@ -109,11 +138,26 @@ async function cropDocument(
   const bottom = args.bottom as number;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.cropDocument(left, top, right, bottom);
-    const result = await api.executeScript(script);
+    const backend = await backendRouter.backendFor('document.crop');
+    let result: unknown;
+    if (backend.kind === 'uxp') {
+      const uxpResult = await invokeUxpOperation(
+        'crop_document',
+        { left, top, right, bottom, ...documentIdParams(args) },
+        'uxp_crop_document_failed'
+      );
+      if (!uxpResult.ok) throw new Error(uxpResult.error ?? 'uxp_crop_document_failed');
+      result = uxpResult.data;
+    } else {
+      const api = await new PhotoshopAPIFactory(connection).createAPI();
+      const script = ExtendScriptSnippets.cropDocument(left, top, right, bottom);
+      const documentId = documentIdParams(args).document_id;
+      result = await api.executeScript(
+        typeof documentId === 'number'
+          ? `${documentGuardScript(documentId)}\n${script}`
+          : script
+      );
+    }
 
     return {
       content: [

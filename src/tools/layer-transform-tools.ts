@@ -2,8 +2,13 @@ import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 
-export function createLayerTransformTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createLayerTransformTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -22,7 +27,7 @@ export function createLayerTransformTools(connection: PhotoshopConnection): Tool
           },
         },
       },
-      handler: async (args) => fitLayerToDocument(connection, args),
+      handler: async (args) => fitLayerToDocument(connection, backendRouter, args),
     },
     {
       tool: {
@@ -45,7 +50,7 @@ export function createLayerTransformTools(connection: PhotoshopConnection): Tool
           required: ['scalePercent'],
         },
       },
-      handler: async (args) => scaleLayer(connection, args),
+      handler: async (args) => scaleLayer(connection, backendRouter, args),
     },
     {
       tool: {
@@ -66,7 +71,7 @@ export function createLayerTransformTools(connection: PhotoshopConnection): Tool
           required: ['deltaX', 'deltaY'],
         },
       },
-      handler: async (args) => moveLayer(connection, args),
+      handler: async (args) => moveLayer(connection, backendRouter, args),
     },
     {
       tool: {
@@ -83,23 +88,40 @@ export function createLayerTransformTools(connection: PhotoshopConnection): Tool
           required: ['degrees'],
         },
       },
-      handler: async (args) => rotateLayer(connection, args),
+      handler: async (args) => rotateLayer(connection, backendRouter, args),
     },
   ];
 }
 
 async function fitLayerToDocument(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const fillDocument = (args.fillDocument as boolean) || false;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.fitLayerToDocument(fillDocument);
-    const result = await api.executeScript(script);
+    const backend = await backendRouter.backendFor('layer.fit');
+    let result: unknown;
+    if (backend.kind === 'uxp') {
+      const uxpResult = await invokeUxpOperation(
+        'fit_layer_to_document',
+        {
+          ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+          fillDocument,
+        },
+        'uxp_fit_layer_to_document_failed'
+      );
+      if (!uxpResult.ok || !uxpResult.data) {
+        throw new Error(uxpResult.error ?? 'uxp_fit_layer_to_document_failed');
+      }
+      result = uxpResult.data;
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      const script = ExtendScriptSnippets.fitLayerToDocument(fillDocument);
+      result = await api.executeScript(script);
+    }
 
     return {
       content: [
@@ -124,17 +146,35 @@ async function fitLayerToDocument(
 
 async function scaleLayer(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const scalePercent = args.scalePercent as number;
   const centerAnchor = args.centerAnchor !== undefined ? (args.centerAnchor as boolean) : true;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.scaleLayer(scalePercent, centerAnchor);
-    const result = await api.executeScript(script);
+    const backend = await backendRouter.backendFor('layer.scale');
+    let result: unknown;
+    if (backend.kind === 'uxp') {
+      const uxpResult = await invokeUxpOperation(
+        'scale_layer',
+        {
+          ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+          scalePercent,
+          centerAnchor,
+        },
+        'uxp_scale_layer_failed'
+      );
+      if (!uxpResult.ok || !uxpResult.data) {
+        throw new Error(uxpResult.error ?? 'uxp_scale_layer_failed');
+      }
+      result = uxpResult.data;
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      const script = ExtendScriptSnippets.scaleLayer(scalePercent, centerAnchor);
+      result = await api.executeScript(script);
+    }
 
     return {
       content: [
@@ -159,17 +199,35 @@ async function scaleLayer(
 
 async function moveLayer(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const deltaX = args.deltaX as number;
   const deltaY = args.deltaY as number;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.moveLayer(deltaX, deltaY);
-    const result = await api.executeScript(script);
+    const backend = await backendRouter.backendFor('layer.move_pixels');
+    let result: unknown;
+    if (backend.kind === 'uxp') {
+      const uxpResult = await invokeUxpOperation(
+        'move_layer_pixels',
+        {
+          ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+          deltaX,
+          deltaY,
+        },
+        'uxp_move_layer_pixels_failed'
+      );
+      if (!uxpResult.ok || !uxpResult.data) {
+        throw new Error(uxpResult.error ?? 'uxp_move_layer_pixels_failed');
+      }
+      result = uxpResult.data;
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      const script = ExtendScriptSnippets.moveLayer(deltaX, deltaY);
+      result = await api.executeScript(script);
+    }
 
     return {
       content: [
@@ -194,16 +252,33 @@ async function moveLayer(
 
 async function rotateLayer(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const degrees = args.degrees as number;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.rotateLayer(degrees);
-    const result = await api.executeScript(script);
+    const backend = await backendRouter.backendFor('layer.rotate');
+    let result: unknown;
+    if (backend.kind === 'uxp') {
+      const uxpResult = await invokeUxpOperation(
+        'rotate_layer',
+        {
+          ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+          degrees,
+        },
+        'uxp_rotate_layer_failed'
+      );
+      if (!uxpResult.ok || !uxpResult.data) {
+        throw new Error(uxpResult.error ?? 'uxp_rotate_layer_failed');
+      }
+      result = uxpResult.data;
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      const script = ExtendScriptSnippets.rotateLayer(degrees);
+      result = await api.executeScript(script);
+    }
 
     return {
       content: [
@@ -224,4 +299,12 @@ async function rotateLayer(
       isError: true,
     };
   }
+}
+
+function documentIdFromArgs(args: Record<string, unknown>): number | undefined {
+  return typeof args.document_id === 'number' &&
+    Number.isSafeInteger(args.document_id) &&
+    args.document_id > 0
+    ? args.document_id
+    : undefined;
 }

@@ -1,0 +1,6 @@
+{
+  "schema": "photoshop.subject-selection-memory.v1",
+  "purpose": "Negative recency memory only; never an inspiration list or artistic allowlist.",
+  "max_entries": 12,
+  "recent_feature_signatures": []
+}

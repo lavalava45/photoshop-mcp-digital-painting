@@ -16,9 +16,6 @@ import { gradientBlendTemplate } from './templates/gradient-blend.js';
 import { colorCorrectTemplate } from './templates/color-correct.js';
 import { dodgeBurnGuideTemplate } from './templates/dodge-burn-guide.js';
 import { compositeBlendTemplate } from './templates/composite-blend.js';
-import { generativeFillTemplate } from './templates/generative-fill.js';
-import { generativeRemoveTemplate } from './templates/generative-remove.js';
-import { generativeExpandTemplate } from './templates/generative-expand.js';
 import { splitCarouselTemplate } from './templates/split-carousel.js';
 import { batchWatermarkTemplate } from './templates/batch-watermark.js';
 import { passportPhotoTemplate } from './templates/passport-photo.js';
@@ -30,9 +27,6 @@ export const PHOTOSHOP_GUIDE_PROMPT_NAMES = [
   'ps.color_correct',
   'ps.dodge_burn_guide',
   'ps.composite_blend',
-  'ps.generative_fill',
-  'ps.generative_remove',
-  'ps.generative_expand',
   'ps.digital_painting_control',
 ] as const;
 
@@ -53,9 +47,6 @@ export const PHOTOSHOP_PROMPT_TEMPLATES = [
   colorCorrectTemplate,
   compositeBlendTemplate,
   dodgeBurnGuideTemplate,
-  generativeFillTemplate,
-  generativeRemoveTemplate,
-  generativeExpandTemplate,
   splitCarouselTemplate,
   batchWatermarkTemplate,
   passportPhotoTemplate,

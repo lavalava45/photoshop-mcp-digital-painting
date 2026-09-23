@@ -813,48 +813,172 @@ export const ExtendScriptSnippets = {
   /**
    * Create a new layer
    */
-  newLayer: (name?: string) => `
+  newLayer: (
+    name?: string,
+    placement?: { aboveLayerId?: number; belowLayerId?: number }
+  ) => `
     ${getContextInfo}
+    ${layerLookupHelpers}
     
     if (app.documents.length === 0) {
       throw new Error('No active document');
     }
     var doc = app.activeDocument;
+    var requestedAboveId = ${placement?.aboveLayerId !== undefined ? placement.aboveLayerId : 'null'};
+    var requestedBelowId = ${placement?.belowLayerId !== undefined ? placement.belowLayerId : 'null'};
+    var originalActive = null;
+    try { originalActive = doc.activeLayer; } catch (eActive) {}
+    var targetLayer = null;
+    var requestedPlacement = null;
+    if (requestedAboveId !== null) {
+      targetLayer = __mcp_findLayerById(doc, requestedAboveId);
+      requestedPlacement = 'ABOVE';
+      if (!targetLayer) throw new Error('Layer not found: id=' + requestedAboveId);
+    } else if (requestedBelowId !== null) {
+      targetLayer = __mcp_findLayerById(doc, requestedBelowId);
+      requestedPlacement = 'BELOW';
+      if (!targetLayer) throw new Error('Layer not found: id=' + requestedBelowId);
+    } else if (originalActive) {
+      targetLayer = originalActive;
+      requestedPlacement = 'ABOVE_ACTIVE';
+    }
     var layer = doc.artLayers.add();
     ${name ? `layer.name = "${jsString(name)}";` : ''}
+    if (targetLayer && targetLayer !== layer) {
+      if (requestedPlacement === 'BELOW') {
+        layer.move(targetLayer, ElementPlacement.PLACEAFTER);
+      } else {
+        layer.move(targetLayer, ElementPlacement.PLACEBEFORE);
+      }
+    }
+
+    var stack = layer.parent.layers;
+    var actualIndex = -1;
+    for (var i = 0; i < stack.length; i++) {
+      if (stack[i] === layer) {
+        actualIndex = i;
+        break;
+      }
+    }
+    var aboveNeighbor = actualIndex > 0 ? stack[actualIndex - 1] : null;
+    var belowNeighbor = actualIndex >= 0 && actualIndex < stack.length - 1 ? stack[actualIndex + 1] : null;
     
     var result = { 
       created: true,
       layerName: layer.name,
+      path: __mcp_layerPath(layer),
+      requestedPlacement: requestedPlacement,
+      actualIndex: actualIndex,
+      aboveLayerId: aboveNeighbor ? __mcp_layerId(aboveNeighbor) : null,
+      belowLayerId: belowNeighbor ? __mcp_layerId(belowNeighbor) : null,
       context: getContextInfo()
     };
     try { result.layerId = layer.id; } catch (eId) {}
+    try {
+      result.parentPath = layer.parent && layer.parent.typename !== 'Document'
+        ? __mcp_layerPath(layer.parent)
+        : '';
+    } catch (eParentPath) {}
+    if (targetLayer) {
+      result.relativeToId = __mcp_layerId(targetLayer);
+      result.relativeToPath = __mcp_layerPath(targetLayer);
+    }
     return result;
   `,
 
   /**
    * Delete active layer
    */
-  deleteLayer: () => `
+  deleteLayer: (layerId?: number) => `
     ${getContextInfo}
+    ${layerLookupHelpers}
     if (app.documents.length === 0) {
       throw new Error('No active document');
     }
     var doc = app.activeDocument;
-    if (doc.activeLayer) {
-      var layer = doc.activeLayer;
-      var deletedName = layer.name;
-      var deletedId = null;
-      try { deletedId = layer.id; } catch (eId) {}
-      layer.remove();
-      return {
-        deleted: true,
-        layerName: deletedName,
-        layerId: deletedId,
-        context: getContextInfo()
-      };
+    var requestedLayerId = ${JSON.stringify(layerId ?? null)};
+    var originalActive = doc.activeLayer;
+    var originalActiveId = null;
+    try { originalActiveId = originalActive ? originalActive.id : null; } catch (eOriginalId) {}
+    var layer = requestedLayerId !== null ? __mcp_findLayerById(doc, requestedLayerId) : doc.activeLayer;
+    if (!layer) throw new Error(requestedLayerId !== null ? 'Target layer id not found: ' + requestedLayerId : 'No active layer');
+    var deletedName = layer.name;
+    var deletedId = null;
+    try { deletedId = layer.id; } catch (eId) {}
+    var deletedPath = __mcp_layerPath(layer);
+    var deletingOriginalActive = originalActive === layer;
+    layer.remove();
+    if (!deletingOriginalActive && originalActiveId !== null) {
+      try {
+        var restored = __mcp_findLayerById(doc, originalActiveId);
+        if (restored) doc.activeLayer = restored;
+      } catch (eRestore) {}
     }
-    throw new Error('No active layer');
+    return {
+      deleted: true,
+      layerName: deletedName,
+      layerId: deletedId,
+      path: deletedPath,
+      requestedLayerId: requestedLayerId,
+      originalActiveLayerId: originalActiveId,
+      activeLayerRestored: !deletingOriginalActive,
+      context: getContextInfo()
+    };
+  `,
+
+  /** Merge one exact raster layer into the exact immediately-below sibling. */
+  mergeLayerDown: (layerId: number, targetLayerId: number) => `
+    ${getContextInfo}
+    ${layerLookupHelpers}
+    if (app.documents.length === 0) throw new Error('No active document');
+    var doc = app.activeDocument;
+    var sourceId = ${JSON.stringify(layerId)};
+    var targetId = ${JSON.stringify(targetLayerId)};
+    var source = __mcp_findLayerById(doc, sourceId);
+    var target = __mcp_findLayerById(doc, targetId);
+    if (!source) throw new Error('Source layer id not found: ' + sourceId);
+    if (!target) throw new Error('Merge target layer id not found: ' + targetId);
+    if (!source.parent || source.parent !== target.parent) throw new Error('Merge requires source and target to share the same parent');
+    var stack = source.parent.layers;
+    var sourceIndex = -1;
+    var targetIndex = -1;
+    for (var i = 0; i < stack.length; i++) {
+      if (stack[i] === source) sourceIndex = i;
+      if (stack[i] === target) targetIndex = i;
+    }
+    if (sourceIndex < 0 || targetIndex !== sourceIndex + 1) {
+      throw new Error('Merge target must be the immediately-below sibling layer');
+    }
+    if (source.typename !== 'ArtLayer' || target.typename !== 'ArtLayer') {
+      throw new Error('Merge requires raster/art layers');
+    }
+    var originalActive = doc.activeLayer;
+    var originalActiveId = null;
+    try { originalActiveId = originalActive ? originalActive.id : null; } catch (eOriginalId) {}
+    var sourceName = source.name;
+    var targetName = target.name;
+    doc.activeLayer = source;
+    var merged = source.merge();
+    var mergedId = null;
+    try { mergedId = merged.id; } catch (eMergedId) {}
+    var mergedName = merged.name;
+    if (originalActiveId !== null && originalActiveId !== sourceId && originalActiveId !== targetId) {
+      try {
+        var restored = __mcp_findLayerById(doc, originalActiveId);
+        if (restored) doc.activeLayer = restored;
+      } catch (eRestore) {}
+    }
+    return {
+      merged: true,
+      sourceLayerId: sourceId,
+      sourceLayerName: sourceName,
+      targetLayerId: targetId,
+      targetLayerName: targetName,
+      mergedLayerId: mergedId,
+      mergedLayerName: mergedName,
+      originalActiveLayerId: originalActiveId,
+      context: getContextInfo()
+    };
   `,
 
   /**
@@ -865,47 +989,62 @@ export const ExtendScriptSnippets = {
    * selection, otherwise select the whole canvas, fill, then deselect.
    * Background / fully-locked layers cannot be filled, so fail clearly.
    */
-  fillLayer: (red: number, green: number, blue: number) => `
+  fillLayer: (red: number, green: number, blue: number, layerId?: number) => `
     ${getContextInfo}
+    ${layerLookupHelpers}
     if (app.documents.length === 0) {
       throw new Error('No active document');
     }
     var doc = app.activeDocument;
-    var layer = doc.activeLayer;
-
-    if (layer.allLocked) {
-      throw new Error('Cannot fill a fully locked layer: ' + layer.name);
+    var originalActive = doc.activeLayer;
+    var requestedLayerId = ${JSON.stringify(layerId ?? null)};
+    var layer = requestedLayerId ? __mcp_findLayerById(doc, requestedLayerId) : originalActive;
+    if (!layer) {
+      throw new Error('Fill target layer not found: ' + requestedLayerId);
     }
-    if (layer.kind === LayerKind.TEXT) {
-      throw new Error('Cannot fill a text layer. Rasterize it first.');
+    if (layer.typename === 'LayerSet') {
+      throw new Error('Cannot fill a LayerSet; target must be an ArtLayer');
     }
+    doc.activeLayer = layer;
 
-    var color = new SolidColor();
-    color.rgb.red = ${red};
-    color.rgb.green = ${green};
-    color.rgb.blue = ${blue};
-
-    var hadSelection = false;
     try {
-      hadSelection = doc.selection.bounds != null;
-    } catch (e) {
-      hadSelection = false;
-    }
+      if (layer.allLocked) {
+        throw new Error('Cannot fill a fully locked layer: ' + layer.name);
+      }
+      if (layer.kind === LayerKind.TEXT) {
+        throw new Error('Cannot fill a text layer. Rasterize it first.');
+      }
 
-    if (!hadSelection) {
-      doc.selection.selectAll();
-    }
-    doc.selection.fill(color);
-    if (!hadSelection) {
-      doc.selection.deselect();
-    }
+      var color = new SolidColor();
+      color.rgb.red = ${red};
+      color.rgb.green = ${green};
+      color.rgb.blue = ${blue};
 
-    return {
-      filled: true,
-      layerName: layer.name,
-      color: { red: ${red}, green: ${green}, blue: ${blue} },
-      context: getContextInfo()
-    };
+      var hadSelection = false;
+      try {
+        hadSelection = doc.selection.bounds != null;
+      } catch (e) {
+        hadSelection = false;
+      }
+
+      if (!hadSelection) {
+        doc.selection.selectAll();
+      }
+      doc.selection.fill(color);
+      if (!hadSelection) {
+        doc.selection.deselect();
+      }
+
+      return {
+        filled: true,
+        layerName: layer.name,
+        layerId: __mcp_layerId(layer),
+        color: { red: ${red}, green: ${green}, blue: ${blue} },
+        context: getContextInfo()
+      };
+    } finally {
+      try { doc.activeLayer = originalActive; } catch (eRestore) {}
+    }
   `,
 
   /**
@@ -979,6 +1118,205 @@ export const ExtendScriptSnippets = {
     };
     return result;
   `,
+
+  /**
+   * Read the current Brush Tool settings. This preserves the historical
+   * ExtendScript fallback behavior, including selecting the Brush Tool before
+   * reading currentToolOptions.
+   */
+  getBrushSettings: () => `
+    function __mcp_cTID(s) { return app.charIDToTypeID(s); }
+    function __mcp_sTID(s) { return app.stringIDToTypeID(s); }
+    function __mcp_selectBrushTool() {
+      var d = new ActionDescriptor();
+      var r = new ActionReference();
+      r.putClass(__mcp_sTID('paintbrushTool'));
+      d.putReference(__mcp_cTID('null'), r);
+      executeAction(__mcp_cTID('slct'), d, DialogModes.NO);
+    }
+    function __mcp_readBrush() {
+      __mcp_selectBrushTool();
+      var ref = new ActionReference();
+      ref.putEnumerated(__mcp_cTID('capp'), __mcp_cTID('Ordn'), __mcp_cTID('Trgt'));
+      var appDesc = executeActionGet(ref);
+      var opts = appDesc.getObjectValue(__mcp_sTID('currentToolOptions'));
+      var brush = opts.getObjectValue(__mcp_sTID('brush'));
+      function optUnit(obj, key, fallback) {
+        try { return obj.getUnitDoubleValue(__mcp_sTID(key)); } catch (e) {}
+        try { return obj.getDouble(__mcp_sTID(key)); } catch (e2) {}
+        try { return obj.getInteger(__mcp_sTID(key)); } catch (e3) {}
+        return fallback;
+      }
+      function optBool(obj, key, fallback) {
+        try { return obj.getBoolean(__mcp_sTID(key)); } catch (e) { return fallback; }
+      }
+      function optDouble(obj, key, fallback) {
+        try { return obj.getDouble(__mcp_sTID(key)); } catch (e) {}
+        try { return obj.getInteger(__mcp_sTID(key)); } catch (e2) {}
+        return fallback;
+      }
+      return {
+        size: optUnit(brush, 'diameter', 1),
+        hardness: optUnit(brush, 'hardness', 100),
+        angle: optUnit(brush, 'angle', 0),
+        roundness: optUnit(brush, 'roundness', 100),
+        spacing: optUnit(brush, 'spacing', 25),
+        opacity: optUnit(opts, 'opacity', 100),
+        flow: optUnit(opts, 'flow', 100),
+        flip_x: optBool(brush, 'flipX', false),
+        flip_y: optBool(brush, 'flipY', false),
+        use_pressure_size: optBool(opts, 'usePressureOverridesSize', false),
+        use_pressure_opacity: optBool(opts, 'usePressureOverridesOpacity', false),
+        airbrush: optBool(opts, 'repeat', false),
+        smoothing_enabled: optBool(opts, 'smoothing', false),
+        smoothing: optDouble(opts, 'smooth', 10)
+      };
+    }
+    return { ok: true, settings: __mcp_readBrush() };
+  `,
+
+  sampleColor: (x: number, y: number, radius: number) => `
+    var __mcpSourceDoc = app.activeDocument;
+    var __mcpTempDoc = null;
+    var __mcpSampler = null;
+    try {
+      var __mcpW = __mcpSourceDoc.width.as('px');
+      var __mcpH = __mcpSourceDoc.height.as('px');
+      var __mcpX = ${x};
+      var __mcpY = ${y};
+      var __mcpRadius = ${radius};
+      if (__mcpX < 0 || __mcpY < 0 || __mcpX >= __mcpW || __mcpY >= __mcpH) {
+        throw new Error('sample_out_of_bounds: point (' + __mcpX + ', ' + __mcpY + ') is outside ' + __mcpW + 'x' + __mcpH);
+      }
+      __mcpTempDoc = __mcpSourceDoc.duplicate('__MCP_COLOR_SAMPLE__' + (new Date().getTime()), true);
+      app.activeDocument = __mcpTempDoc;
+      var __mcpSampleX = __mcpX;
+      var __mcpSampleY = __mcpY;
+      var __mcpBounds = null;
+      if (__mcpRadius > 0) {
+        var __mcpLeft = Math.max(0, __mcpX - __mcpRadius);
+        var __mcpTop = Math.max(0, __mcpY - __mcpRadius);
+        var __mcpRight = Math.min(__mcpW, __mcpX + __mcpRadius + 1);
+        var __mcpBottom = Math.min(__mcpH, __mcpY + __mcpRadius + 1);
+        __mcpBounds = {
+          left: __mcpLeft,
+          top: __mcpTop,
+          right: __mcpRight,
+          bottom: __mcpBottom,
+          width: __mcpRight - __mcpLeft,
+          height: __mcpBottom - __mcpTop
+        };
+        __mcpTempDoc.crop([
+          UnitValue(__mcpLeft, 'px'),
+          UnitValue(__mcpTop, 'px'),
+          UnitValue(__mcpRight, 'px'),
+          UnitValue(__mcpBottom, 'px')
+        ]);
+        if (__mcpTempDoc.layers.length > 1) __mcpTempDoc.flatten();
+        __mcpTempDoc.activeLayer.applyAverage();
+        __mcpSampleX = Math.max(0, (__mcpTempDoc.width.as('px') - 1) / 2);
+        __mcpSampleY = Math.max(0, (__mcpTempDoc.height.as('px') - 1) / 2);
+      }
+      __mcpSampler = __mcpTempDoc.colorSamplers.add([
+        UnitValue(__mcpSampleX, 'px'),
+        UnitValue(__mcpSampleY, 'px')
+      ]);
+      var __mcpRgb = __mcpSampler.color.rgb;
+      var __mcpRed = Number(__mcpRgb.red);
+      var __mcpGreen = Number(__mcpRgb.green);
+      var __mcpBlue = Number(__mcpRgb.blue);
+      var __mcpR8 = Math.max(0, Math.min(255, Math.round(__mcpRed)));
+      var __mcpG8 = Math.max(0, Math.min(255, Math.round(__mcpGreen)));
+      var __mcpB8 = Math.max(0, Math.min(255, Math.round(__mcpBlue)));
+      function __mcpHex2(v) {
+        var h = v.toString(16).toUpperCase();
+        return h.length < 2 ? '0' + h : h;
+      }
+      return {
+        ok: true,
+        document: {
+          id: __mcpSourceDoc.id,
+          name: __mcpSourceDoc.name,
+          width: __mcpW,
+          height: __mcpH
+        },
+        point: { x: __mcpX, y: __mcpY },
+        mode: __mcpRadius > 0 ? 'AVERAGE' : 'POINT',
+        radius: __mcpRadius,
+        bounds: __mcpBounds,
+        rgb: { red: __mcpRed, green: __mcpGreen, blue: __mcpBlue },
+        rgb_8bit: { red: __mcpR8, green: __mcpG8, blue: __mcpB8 },
+        hex: '#' + __mcpHex2(__mcpR8) + __mcpHex2(__mcpG8) + __mcpHex2(__mcpB8)
+      };
+    } finally {
+      try { if (__mcpSampler) __mcpSampler.remove(); } catch (e) {}
+      try { if (__mcpTempDoc) __mcpTempDoc.close(SaveOptions.DONOTSAVECHANGES); } catch (e) {}
+      try { app.activeDocument = __mcpSourceDoc; } catch (e) {}
+    }
+  `,
+
+  sampleColors: (points: Array<{ id?: string; x: number; y: number }>) => {
+    const payload = JSON.stringify(points);
+    return `
+      var __mcpSourceDoc = app.activeDocument;
+      var __mcpTempDoc = null;
+      var __mcpSampler = null;
+      try {
+        var __mcpW = __mcpSourceDoc.width.as('px');
+        var __mcpH = __mcpSourceDoc.height.as('px');
+        var __mcpPoints = ${payload};
+        __mcpTempDoc = __mcpSourceDoc.duplicate('__MCP_COLOR_SAMPLES__' + (new Date().getTime()), true);
+        app.activeDocument = __mcpTempDoc;
+        function __mcpHex2(v) {
+          var h = v.toString(16).toUpperCase();
+          return h.length < 2 ? '0' + h : h;
+        }
+        var __mcpSamples = [];
+        for (var i = 0; i < __mcpPoints.length; i++) {
+          var p = __mcpPoints[i];
+          if (p.x < 0 || p.y < 0 || p.x >= __mcpW || p.y >= __mcpH) {
+            throw new Error('sample_out_of_bounds: point (' + p.x + ', ' + p.y + ') is outside ' + __mcpW + 'x' + __mcpH);
+          }
+          __mcpSampler = __mcpTempDoc.colorSamplers.add([
+            UnitValue(p.x, 'px'),
+            UnitValue(p.y, 'px')
+          ]);
+          var rgb = __mcpSampler.color.rgb;
+          var red = Number(rgb.red);
+          var green = Number(rgb.green);
+          var blue = Number(rgb.blue);
+          var r8 = Math.max(0, Math.min(255, Math.round(red)));
+          var g8 = Math.max(0, Math.min(255, Math.round(green)));
+          var b8 = Math.max(0, Math.min(255, Math.round(blue)));
+          __mcpSamples.push({
+            id: p.id === undefined ? null : p.id,
+            point: { x: p.x, y: p.y },
+            rgb: { red: red, green: green, blue: blue },
+            rgb_8bit: { red: r8, green: g8, blue: b8 },
+            hex: '#' + __mcpHex2(r8) + __mcpHex2(g8) + __mcpHex2(b8)
+          });
+          try { __mcpSampler.remove(); } catch (eRemove) {}
+          __mcpSampler = null;
+        }
+        return {
+          ok: true,
+          document: {
+            id: __mcpSourceDoc.id,
+            name: __mcpSourceDoc.name,
+            width: __mcpW,
+            height: __mcpH
+          },
+          mode: 'POINT_BATCH',
+          count: __mcpSamples.length,
+          samples: __mcpSamples
+        };
+      } finally {
+        try { if (__mcpSampler) __mcpSampler.remove(); } catch (e) {}
+        try { if (__mcpTempDoc) __mcpTempDoc.close(SaveOptions.DONOTSAVECHANGES); } catch (e) {}
+        try { app.activeDocument = __mcpSourceDoc; } catch (e) {}
+      }
+    `;
+  },
 
   /**
    * Select layer by name (recursive search including layer groups)
@@ -2990,305 +3328,143 @@ export const ExtendScriptSnippets = {
       path: tmpFile.fsName,
       width: Math.round(w * scale),
       height: Math.round(h * scale),
-      mimeType: 'image/jpeg'
+      mimeType: 'image/jpeg',
+      canvasWidth: w,
+      canvasHeight: h
+    };
+  `,
+
+  /** Export one document-space crop as a JPEG preview without modifying the source. */
+  exportPreviewRegion: (
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+    maxDimension = 1024,
+    jpegQuality = 8
+  ) => `
+    if (app.documents.length === 0) throw new Error('No active document');
+    var doc = app.activeDocument;
+    var w = doc.width.as('px');
+    var h = doc.height.as('px');
+    var l = Math.max(0, Math.min(w, ${left}));
+    var t = Math.max(0, Math.min(h, ${top}));
+    var r = Math.max(0, Math.min(w, ${right}));
+    var b = Math.max(0, Math.min(h, ${bottom}));
+    if (r <= l || b <= t) throw new Error('Preview focus region is empty after clamping');
+    var cropW = r - l;
+    var cropH = b - t;
+    var maxDim = ${maxDimension};
+    var scale = (cropW > maxDim || cropH > maxDim) ? maxDim / Math.max(cropW, cropH) : 1;
+    var dup = doc.duplicate('__mcp_preview_focus__', true);
+    dup.crop([UnitValue(l, 'px'), UnitValue(t, 'px'), UnitValue(r, 'px'), UnitValue(b, 'px')]);
+    if (scale < 1) {
+      dup.resizeImage(UnitValue(Math.round(cropW * scale), 'px'), UnitValue(Math.round(cropH * scale), 'px'), doc.resolution, ResampleMethod.BICUBIC);
+    }
+    var tmpFile = new File(Folder.temp.fsName + '/ps-preview-focus-' + (new Date().getTime()) + '.jpg');
+    var saveOptions = new JPEGSaveOptions();
+    saveOptions.quality = ${jpegQuality};
+    saveOptions.embedColorProfile = true;
+    saveOptions.formatOptions = FormatOptions.STANDARDBASELINE;
+    dup.flatten();
+    dup.saveAs(tmpFile, saveOptions, true);
+    dup.close(SaveOptions.DONOTSAVECHANGES);
+    return {
+      path: tmpFile.fsName,
+      width: Math.round(cropW * scale),
+      height: Math.round(cropH * scale),
+      mimeType: 'image/jpeg',
+      region: { left: l, top: t, right: r, bottom: b },
+      canvasWidth: w,
+      canvasHeight: h
     };
   `,
 
   /**
-   * Shared helpers for Firefly generative actions via Action Manager.
-   * See docs/plans/2026-07-03-1149-photoshop-ai-features/ and scripts/spike-photoshop-actions.ts.
+   * Export the whole document and one document-space focus crop in a single JSX/COM round-trip.
+   * The source document is never modified; each output uses its own flattened duplicate.
    */
-  generativeHelpers: () => `
-    ${helperFunctions}
-
-    function __mcp_tryGenerativeAction(actionIds, buildDesc) {
-      var lastError = '';
-      for (var i = 0; i < actionIds.length; i++) {
-        var actionId = actionIds[i];
-        try {
-          var desc = buildDesc ? buildDesc(actionId) : new ActionDescriptor();
-          executeAction(sTID(actionId), desc, DialogModes.NO);
-          return { ok: true, action_id: actionId };
-        } catch (e) {
-          lastError = actionId + ': ' + (e.message || String(e));
-        }
-      }
-      return { ok: false, error: lastError || 'No generative action succeeded' };
-    }
-
-    function __mcp_waitGenerativeComplete(doc, baselineHist, maxWaitMs) {
-      var waited = 0;
-      var step = 500;
-      var maxMs = maxWaitMs || 90000;
-      var baseline = baselineHist;
-      while (waited < maxMs) {
-        try {
-          if (doc.historyStates.length > baseline + 1) {
-            return { completed: true, waited_ms: waited, history_states: doc.historyStates.length };
-          }
-        } catch (e) {}
-        $.sleep(step);
-        waited += step;
-      }
-      return { completed: false, waited_ms: waited, history_states: doc.historyStates.length };
-    }
-
-    function __mcp_hasSelection(doc) {
-      try { return doc.selection.bounds != null; } catch (e) { return false; }
-    }
-  `,
-
-  generativeFill: (prompt: string) => {
-    const escaped = jsStringLiteral(prompt);
-    return `
-      ${helperFunctions}
-      ${ExtendScriptSnippets.generativeHelpers()}
-
-      if (app.documents.length === 0) throw new Error('No active document');
-      var doc = app.activeDocument;
-      app.displayDialogs = DialogModes.NO;
-
-      if (!__mcp_hasSelection(doc)) {
-        return { ok: false, code: 'generative_no_selection', message: 'Active pixel selection required for generative fill' };
-      }
-
-      var baselineHist = doc.activeHistoryState.index;
-      var result = __mcp_tryGenerativeAction(
-        ['generativeFill', 'generativeLayerFill', 'firefly'],
-        function(actionId) {
-          var desc = new ActionDescriptor();
-          try { desc.putString(sTID('prompt'), ${escaped}); } catch (eP) {}
-          try { desc.putString(sTID('text'), ${escaped}); } catch (eT) {}
-          try { desc.putString(sTID('promptText'), ${escaped}); } catch (ePT) {}
-          return desc;
-        }
-      );
-
-      if (!result.ok) {
-        var msg = String(result.error || '');
-        if (/credit|quota|sign in|subscription/i.test(msg)) {
-          return { ok: false, code: 'generative_credits_exhausted', message: msg };
-        }
-        return { ok: false, code: 'generative_unavailable', message: msg };
-      }
-
-      var wait = __mcp_waitGenerativeComplete(doc, baselineHist, 90000);
-      try { doc.selection.deselect(); } catch (eDesel) {}
-
-      return {
-        ok: true,
-        summary: 'Generative fill invoked via ' + result.action_id,
-        details: { action_id: result.action_id, prompt: ${escaped}, wait },
-        next_suggested_tool: 'photoshop_get_preview'
-      };
-    `;
-  },
-
-  generativeRemove: (featherPx: number, autoSelectSubject: boolean) => `
-    ${helperFunctions}
-    ${ExtendScriptSnippets.generativeHelpers()}
-
+  exportPreviewBundle: (
+    maxDimension: number,
+    jpegQuality: number,
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+    focusMaxDimension: number
+  ) => `
     if (app.documents.length === 0) throw new Error('No active document');
     var doc = app.activeDocument;
-    app.displayDialogs = DialogModes.NO;
+    var sourceW = doc.width.as('px');
+    var sourceH = doc.height.as('px');
+    var stamp = String(new Date().getTime()) + '-' + String(Math.floor(Math.random() * 1000000));
+    var saveOptions = new JPEGSaveOptions();
+    saveOptions.quality = ${jpegQuality};
+    saveOptions.embedColorProfile = true;
+    saveOptions.formatOptions = FormatOptions.STANDARDBASELINE;
 
-    var hasSel = __mcp_hasSelection(doc);
-    if (!hasSel && ${autoSelectSubject ? 'true' : 'false'}) {
-      try {
-        doc.selection.selectSubject();
-        hasSel = __mcp_hasSelection(doc);
-      } catch (eSub) {}
+    var wholeScale = (sourceW > ${maxDimension} || sourceH > ${maxDimension})
+      ? ${maxDimension} / Math.max(sourceW, sourceH)
+      : 1;
+    var whole = doc.duplicate('__mcp_preview__', true);
+    if (wholeScale < 1) {
+      whole.resizeImage(
+        UnitValue(Math.round(sourceW * wholeScale), 'px'),
+        UnitValue(Math.round(sourceH * wholeScale), 'px'),
+        doc.resolution,
+        ResampleMethod.BICUBIC
+      );
     }
-    if (!hasSel) {
-      return { ok: false, code: 'generative_no_selection', message: 'Selection required for generative remove' };
+    var wholeFile = new File(Folder.temp.fsName + '/ps-preview-' + stamp + '.jpg');
+    whole.flatten();
+    whole.saveAs(wholeFile, saveOptions, true);
+    whole.close(SaveOptions.DONOTSAVECHANGES);
+
+    var l = Math.max(0, Math.min(sourceW, ${left}));
+    var t = Math.max(0, Math.min(sourceH, ${top}));
+    var r = Math.max(0, Math.min(sourceW, ${right}));
+    var b = Math.max(0, Math.min(sourceH, ${bottom}));
+    if (r <= l || b <= t) throw new Error('Preview focus region is empty after clamping');
+    var cropW = r - l;
+    var cropH = b - t;
+    var focusScale = (cropW > ${focusMaxDimension} || cropH > ${focusMaxDimension})
+      ? ${focusMaxDimension} / Math.max(cropW, cropH)
+      : 1;
+    var focus = doc.duplicate('__mcp_preview_focus__', true);
+    focus.crop([UnitValue(l, 'px'), UnitValue(t, 'px'), UnitValue(r, 'px'), UnitValue(b, 'px')]);
+    if (focusScale < 1) {
+      focus.resizeImage(
+        UnitValue(Math.round(cropW * focusScale), 'px'),
+        UnitValue(Math.round(cropH * focusScale), 'px'),
+        doc.resolution,
+        ResampleMethod.BICUBIC
+      );
     }
-
-    if (${featherPx} > 0) {
-      try { doc.selection.feather(${featherPx}); } catch (eF) {}
-    }
-
-    var baselineHist = doc.activeHistoryState.index;
-    var result = __mcp_tryGenerativeAction(
-      ['removeTool', 'generativeFill', 'spotHealingBrush'],
-      function(actionId) {
-        var desc = new ActionDescriptor();
-        if (actionId === 'generativeFill') {
-          try { desc.putString(sTID('prompt'), 'remove'); } catch (eP) {}
-        }
-        return desc;
-      }
-    );
-
-    if (!result.ok) {
-      return { ok: false, code: 'generative_unavailable', message: String(result.error || '') };
-    }
-
-    var wait = __mcp_waitGenerativeComplete(doc, baselineHist, 90000);
-    try { doc.selection.deselect(); } catch (eDesel) {}
+    var focusFile = new File(Folder.temp.fsName + '/ps-preview-focus-' + stamp + '.jpg');
+    focus.flatten();
+    focus.saveAs(focusFile, saveOptions, true);
+    focus.close(SaveOptions.DONOTSAVECHANGES);
 
     return {
-      ok: true,
-      summary: 'Generative remove invoked via ' + result.action_id,
-      details: { action_id: result.action_id, feather_px: ${featherPx}, wait },
-      next_suggested_tool: 'photoshop_get_preview'
+      whole: {
+        path: wholeFile.fsName,
+        width: Math.round(sourceW * wholeScale),
+        height: Math.round(sourceH * wholeScale),
+        mimeType: 'image/jpeg',
+        canvasWidth: sourceW,
+        canvasHeight: sourceH
+      },
+      focus: {
+        path: focusFile.fsName,
+        width: Math.round(cropW * focusScale),
+        height: Math.round(cropH * focusScale),
+        mimeType: 'image/jpeg',
+        region: { left: l, top: t, right: r, bottom: b },
+        canvasWidth: sourceW,
+        canvasHeight: sourceH
+      }
     };
   `,
-
-  generativeExpand: (direction: string, prompt: string) => {
-    const escaped = jsStringLiteral(prompt);
-    const dir = jsStringLiteral(direction);
-    return `
-      ${helperFunctions}
-      ${ExtendScriptSnippets.generativeHelpers()}
-
-      if (app.documents.length === 0) throw new Error('No active document');
-      var doc = app.activeDocument;
-      app.displayDialogs = DialogModes.NO;
-
-      var baselineHist = doc.activeHistoryState.index;
-      var result = __mcp_tryGenerativeAction(
-        ['generativeExpand', 'expandCanvas', 'generativeCanvasExpand'],
-        function(actionId) {
-          var desc = new ActionDescriptor();
-          try { desc.putString(sTID('prompt'), ${escaped}); } catch (eP) {}
-          try { desc.putString(sTID('direction'), ${dir}); } catch (eD) {}
-          return desc;
-        }
-      );
-
-      if (!result.ok) {
-        return { ok: false, code: 'generative_unavailable', message: String(result.error || '') };
-      }
-
-      var wait = __mcp_waitGenerativeComplete(doc, baselineHist, 120000);
-
-      return {
-        ok: true,
-        summary: 'Generative expand invoked via ' + result.action_id,
-        details: { action_id: result.action_id, direction: ${dir}, prompt: ${escaped}, wait },
-        next_suggested_tool: 'photoshop_get_preview'
-      };
-    `;
-  },
-
-  generativeUpscale: (targetScale: number) => `
-    ${helperFunctions}
-    ${ExtendScriptSnippets.generativeHelpers()}
-
-    if (app.documents.length === 0) throw new Error('No active document');
-    var doc = app.activeDocument;
-    app.displayDialogs = DialogModes.NO;
-
-    var baselineHist = doc.activeHistoryState.index;
-    var result = __mcp_tryGenerativeAction(
-      ['generativeUpscale', 'superResolution', 'enhanceDetail'],
-      function(actionId) {
-        var desc = new ActionDescriptor();
-        try { desc.putInteger(sTID('scale'), ${targetScale}); } catch (eS) {}
-        return desc;
-      }
-    );
-
-    if (!result.ok) {
-      return { ok: false, code: 'generative_unavailable', message: String(result.error || '') };
-    }
-
-    var wait = __mcp_waitGenerativeComplete(doc, baselineHist, 120000);
-
-    return {
-      ok: true,
-      summary: 'Generative upscale invoked via ' + result.action_id,
-      details: { action_id: result.action_id, target_scale: ${targetScale}, wait },
-      next_suggested_tool: 'photoshop_get_preview'
-    };
-  `,
-
-  skyReplacement: (skyImagePath: string) => {
-    const escaped = jsStringLiteral(skyImagePath);
-    return `
-      ${helperFunctions}
-      ${ExtendScriptSnippets.generativeHelpers()}
-
-      if (app.documents.length === 0) throw new Error('No active document');
-      var doc = app.activeDocument;
-      app.displayDialogs = DialogModes.NO;
-
-      var skyFile = new File(${escaped});
-      var baselineHist = doc.activeHistoryState.index;
-      var result = __mcp_tryGenerativeAction(
-        ['skyReplacement', 'replaceSky', 'replaceSkyBackground'],
-        function(actionId) {
-          var desc = new ActionDescriptor();
-          if (skyFile.exists) {
-            try { desc.putPath(sTID('skyImage'), skyFile); } catch (eP) {}
-            try { desc.putPath(sTID('null'), skyFile); } catch (eN) {}
-          }
-          return desc;
-        }
-      );
-
-      if (!result.ok) {
-        return { ok: false, code: 'generative_unavailable', message: String(result.error || '') };
-      }
-
-      var wait = __mcp_waitGenerativeComplete(doc, baselineHist, 120000);
-
-      return {
-        ok: true,
-        summary: 'Sky replacement invoked via ' + result.action_id,
-        details: { action_id: result.action_id, sky_image_path: ${escaped}, wait },
-        next_suggested_tool: 'photoshop_get_preview'
-      };
-    `;
-  },
-
-  generateImage: (prompt: string, width: number, height: number) => {
-    const escaped = jsStringLiteral(prompt);
-    return `
-      ${helperFunctions}
-      ${ExtendScriptSnippets.generativeHelpers()}
-
-      app.displayDialogs = DialogModes.NO;
-
-      var doc;
-      if (app.documents.length === 0) {
-        doc = app.documents.add(
-          UnitValue(${width}, 'px'),
-          UnitValue(${height}, 'px'),
-          72,
-          'Generated',
-          NewDocumentMode.RGB,
-          DocumentFill.WHITE
-        );
-      } else {
-        doc = app.activeDocument;
-      }
-
-      var baselineHist = doc.activeHistoryState.index;
-      var result = __mcp_tryGenerativeAction(
-        ['textToImage', 'generateImage', 'fireflyTextToImage', 'generativeFill'],
-        function(actionId) {
-          var desc = new ActionDescriptor();
-          try { desc.putString(sTID('prompt'), ${escaped}); } catch (eP) {}
-          try { desc.putString(sTID('text'), ${escaped}); } catch (eT) {}
-          return desc;
-        }
-      );
-
-      if (!result.ok) {
-        return { ok: false, code: 'generative_unavailable', message: String(result.error || '') };
-      }
-
-      var wait = __mcp_waitGenerativeComplete(doc, baselineHist, 120000);
-
-      return {
-        ok: true,
-        summary: 'Generate image invoked via ' + result.action_id,
-        details: { action_id: result.action_id, prompt: ${escaped}, width: ${width}, height: ${height}, wait },
-        next_suggested_tool: 'photoshop_get_preview'
-      };
-    `;
-  },
 
   /**
    * Apply a layer style (drop shadow / outer glow / stroke / bevel) via Action Manager layerEffects.
@@ -3899,7 +4075,11 @@ export const ExtendScriptSnippets = {
    * Classic "remove tourists with median stack" without any generative AI.
    */
   imageStackMode: (files: string[], mode: string) => {
-    const filesJson = JSON.stringify(files.map((f) => jsString(f)));
+    // jsStringLiteral already performs the one escaping pass required by the
+    // generated ExtendScript source. JSON.stringify(jsString(...)) would both
+    // double-escape Windows backslashes and, when wrapped in [] below, create a
+    // nested array ([[...]]) instead of the required flat list of paths.
+    const filesJson = files.map((f) => jsStringLiteral(f)).join(', ');
     const modeId = jsString(mode);
     return `
     ${helperFunctions}
@@ -4022,6 +4202,45 @@ export const ExtendScriptSnippets = {
       method: 'native_save_as'
     };
   `;
+  },
+
+  /**
+   * List installed Photoshop brush presets.
+   */
+  listBrushPresets: (query = '', limit = 200) => {
+    const q = JSON.stringify(String(query).toLowerCase());
+    const cappedLimit = Math.max(1, Math.min(1000, Math.round(limit)));
+    return `
+      function __mcp_sTID(s) { return app.stringIDToTypeID(s); }
+      var ref = new ActionReference();
+      ref.putProperty(__mcp_sTID('property'), __mcp_sTID('presetManager'));
+      ref.putEnumerated(__mcp_sTID('application'), __mcp_sTID('ordinal'), __mcp_sTID('targetEnum'));
+      var desc = executeActionGet(ref);
+      var managers = desc.getList(__mcp_sTID('presetManager'));
+      var names = [];
+      for (var i = 0; i < managers.count; i++) {
+        var className = '';
+        try { className = typeIDToStringID(managers.getObjectType(i)); } catch (eClass) {}
+        if (className !== 'brush') continue;
+        var brushManager = managers.getObjectValue(i);
+        var brushNames = brushManager.getList(__mcp_sTID('name'));
+        for (var j = 0; j < brushNames.count; j++) names.push(brushNames.getString(j));
+        break;
+      }
+      var q = ${q};
+      var filtered = [];
+      for (var n = 0; n < names.length; n++) {
+        if (!q || String(names[n]).toLowerCase().indexOf(q) >= 0) filtered.push(names[n]);
+      }
+      var visible = filtered.slice(0, ${cappedLimit});
+      return {
+        ok: true,
+        total: names.length,
+        matched: filtered.length,
+        truncated: filtered.length > visible.length,
+        presets: visible
+      };
+    `;
   },
 };
 

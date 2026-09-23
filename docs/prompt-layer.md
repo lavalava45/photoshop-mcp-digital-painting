@@ -1,7 +1,7 @@
 # AI / Prompt Layer for Photoshop
 
-The photoshop-mcp server exposes 118 atomic/non-recipe `photoshop_*` tools plus 16 recipe
-`photoshop_recipe_*` tools (134 total), along with a thin
+The photoshop-mcp server exposes 129 atomic/non-recipe `photoshop_*` tools plus 16 recipe
+`photoshop_recipe_*` tools (**145 total**), along with a thin
 AI/prompt layer ported from TTT: server-level instructions, MCP prompt templates,
 recipe tools, state/preview tools, version-aware capabilities, and structured
 error envelopes.
@@ -16,7 +16,7 @@ prompt discovery, `~/.photoshop-mcp/exports` conventions, and error recovery con
 
 ## 2. MCP `prompts` primitive
 
-Twenty-four templates in [`src/prompts/templates/`](../src/prompts/templates/), registered via
+Twenty-one templates in [`src/prompts/templates/`](../src/prompts/templates/), registered via
 [`src/prompts/registry.ts`](../src/prompts/registry.ts).
 
 ### Recipe prompts (16 — 1:1 with `photoshop_recipe_*`)
@@ -40,7 +40,7 @@ Twenty-four templates in [`src/prompts/templates/`](../src/prompts/templates/), 
 | `ps.passport_photo` | `photoshop_recipe_passport_photo` |
 | `ps.csv_to_cards` | `photoshop_recipe_csv_to_cards` |
 
-### Guide prompts (8 — no recipe pair)
+### Guide prompts (5 — no recipe pair)
 
 | Prompt | Purpose |
 |--------|---------|
@@ -48,10 +48,7 @@ Twenty-four templates in [`src/prompts/templates/`](../src/prompts/templates/), 
 | `ps.color_correct` | Tone / contrast fix chain |
 | `ps.dodge_burn_guide` | 50% gray overlay retouch setup |
 | `ps.composite_blend` | Place asset + mask + blend mode |
-| `ps.generative_fill` | Firefly generative fill workflow |
-| `ps.generative_remove` | AI Remove workflow |
-| `ps.generative_expand` | Generative Expand workflow |
-| `ps.digital_painting_control` | Subject-agnostic digital-painting discipline: shape → value → form → edge → material → detail, with checkpoints, cleanup, and state-based completion |
+| `ps.digital_painting_control` | Subject-agnostic digital-painting discipline: recognition block-in → structure/value/form → edge/material/detail, with semantic layers, guarded preview cadence, scene-relationship checks, commentary modes and state-based completion |
 
 Each template uses arg coercion helpers from [`src/prompts/_shared.ts`](../src/prompts/_shared.ts)
 and returns a `GetPromptResult` with `description` + structured Goal/Plan/End state text
@@ -84,5 +81,7 @@ Strict **16↔16** recipe/prompt parity plus separate guide prompt registration 
 
 ## Backwards compatibility
 
-All original `photoshop_*` tool names and schemas are unchanged; this expansion
-added 4 atomics + 4 recipes + 8 prompt templates (additive only).
+The prompt layer is additive to the Photoshop tool surface. Current parity is
+16 recipe prompts + 5 guide prompts (21 total); the server currently exposes 145
+tools, including the 11-tool public embedded Guard façade. Use `verify:photoshop-prompts`
+and `verify:tool-counts` rather than relying on historical hand-written deltas.

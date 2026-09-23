@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "instructions": "Complete only from independent human adjudication before viewing critic answers. Leave status pending until all fields for a case are decided.",
+  "references": {
+    "case-001": {
+      "status": "pending",
+      "finding_expected": null,
+      "ambiguity_expected": null,
+      "useful_action": null,
+      "human_note": "",
+      "adjudicated_by": "",
+      "adjudicated_at": null
+    },
+    "case-002": {
+      "status": "pending",
+      "finding_expected": null,
+      "ambiguity_expected": null,
+      "useful_action": null,
+      "human_note": "",
+      "adjudicated_by": "",
+      "adjudicated_at": null
+    },
+    "case-003": {
+      "status": "pending",
+      "finding_expected": null,
+      "ambiguity_expected": null,
+      "useful_action": null,
+      "human_note": "",
+      "adjudicated_by": "",
+      "adjudicated_at": null
+    },
+    "case-004": {
+      "status": "pending",
+      "finding_expected": null,
+      "ambiguity_expected": null,
+      "useful_action": null,
+      "human_note": "",
+      "adjudicated_by": "",
+      "adjudicated_at": null
+    },
+    "case-005": {
+      "status": "pending",
+      "finding_expected": null,
+      "ambiguity_expected": null,
+      "useful_action": null,
+      "human_note": "",
+      "adjudicated_by": "",
+      "adjudicated_at": null
+    },
+    "case-006": {
+      "status": "pending",
+      "finding_expected": null,
+      "ambiguity_expected": null,
+      "useful_action": null,
+      "human_note": "",
+      "adjudicated_by": "",
+      "adjudicated_at": null
+    },
+    "case-007": {
+      "status": "pending",
+      "finding_expected": null,
+      "ambiguity_expected": null,
+      "useful_action": null,
+      "human_note": "",
+      "adjudicated_by": "",
+      "adjudicated_at": null
+    },
+    "case-008": {
+      "status": "pending",
+      "finding_expected": null,
+      "ambiguity_expected": null,
+      "useful_action": null,
+      "human_note": "",
+      "adjudicated_by": "",
+      "adjudicated_at": null
+    },
+    "case-009": {
+      "status": "pending",
+      "finding_expected": null,
+      "ambiguity_expected": null,
+      "useful_action": null,
+      "human_note": "",
+      "adjudicated_by": "",
+      "adjudicated_at": null
+    },
+    "case-010": {
+      "status": "pending",
+      "finding_expected": null,
+      "ambiguity_expected": null,
+      "useful_action": null,
+      "human_note": "",
+      "adjudicated_by": "",
+      "adjudicated_at": null
+    }
+  }
+}

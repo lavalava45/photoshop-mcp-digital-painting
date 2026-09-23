@@ -1,111 +1,38 @@
-import { Logger } from '../utils/logger.js';
 import { PhotoshopConnection } from '../platform/connection.js';
-import { documentGuardScript, getTargetDocumentId } from '../core/document-target.js';
 
-export type APIType = 'UXP' | 'ExtendScript';
+export type APIType = 'ExtendScript';
 
 export interface PhotoshopAPI {
-  /**
-   * Execute a script using the appropriate API
-   */
   executeScript(script: string, timeoutMs?: number): Promise<unknown>;
-
-  /**
-   * Get the API type being used
-   */
   getAPIType(): APIType;
 }
 
+/**
+ * Adapter for the explicitly selected legacy fallback backend. UXP execution
+ * never enters this factory; semantic tool routing chooses UXP or ExtendScript
+ * before dispatch.
+ */
 export class PhotoshopAPIFactory {
-  private logger: Logger;
-  private connection: PhotoshopConnection;
-
-  constructor(connection: PhotoshopConnection) {
-    this.logger = new Logger('PhotoshopAPIFactory');
-    this.connection = connection;
-  }
+  constructor(private readonly connection: PhotoshopConnection) {}
 
   async createAPI(): Promise<PhotoshopAPI> {
-    const info = this.connection.getPhotoshopInfo();
-    
-    if (!info) {
-      throw new Error('Photoshop info not available. Please detect Photoshop first.');
-    }
-
-    // Determine which API to use based on version
-    const apiType = this.determineAPIType(info.version);
-    
-    this.logger.info(`Creating ${apiType} API for Photoshop version ${info.version}`);
-
-    if (apiType === 'UXP') {
-      return new UXPPhotoshopAPI(this.connection);
-    } else {
-      return new ExtendScriptPhotoshopAPI(this.connection);
-    }
-  }
-
-  private determineAPIType(version: string): APIType {
-    // IMPORTANT: When running scripts via AppleScript/COM, we can only use ExtendScript
-    // UXP is only available for plugins, not for external script execution
-    // Therefore, we always use ExtendScript for external automation
-    
-    this.logger.debug(`Using ExtendScript for version ${version} (UXP not available for external scripting)`);
-    return 'ExtendScript';
+    if (!this.connection.getPhotoshopInfo()) await this.connection.getVersion();
+    return new ExtendScriptPhotoshopAPI(this.connection);
   }
 }
 
-/**
- * UXP-based API for modern Photoshop (23.5+)
- * NOTE: UXP is not available for external script execution via AppleScript/COM
- * This class is kept for future plugin-based implementation
- */
-class UXPPhotoshopAPI implements PhotoshopAPI {
-  private connection: PhotoshopConnection;
-
-  constructor(connection: PhotoshopConnection) {
-    this.connection = connection;
-  }
+class ExtendScriptPhotoshopAPI implements PhotoshopAPI {
+  constructor(private readonly connection: PhotoshopConnection) {}
 
   async executeScript(script: string, timeoutMs?: number): Promise<unknown> {
-    // UXP cannot be executed externally via AppleScript/COM
-    // Fall back to ExtendScript
-    return await this.connection.executeScript(script, timeoutMs);
+    return this.connection.executeScript(this.wrapInErrorHandling(script), timeoutMs);
   }
 
   getAPIType(): APIType {
-    return 'UXP';
-  }
-}
-
-/**
- * ExtendScript-based API for legacy Photoshop (< 23.5)
- */
-class ExtendScriptPhotoshopAPI implements PhotoshopAPI {
-  private connection: PhotoshopConnection;
-
-  constructor(connection: PhotoshopConnection) {
-    this.connection = connection;
-  }
-
-  async executeScript(script: string, timeoutMs?: number): Promise<unknown> {
-    // Wrap script in error handling
-    const wrappedScript = this.wrapInErrorHandling(script);
-    return await this.connection.executeScript(wrappedScript, timeoutMs);
+    return 'ExtendScript';
   }
 
   private wrapInErrorHandling(script: string): string {
-    // ExtendScript has no JSON object, so the result is serialized via
-    // toSource()/String(). Errors are surfaced with an "ERROR:" prefix
-    // that platform executors translate back into thrown Errors.
-    //
-    // Ruler and type units are temporarily forced to pixels/points so that
-    // every DOM API that accepts plain numbers (translate, textItem.size,
-    // textItem.position, doc.crop bounds, etc.) behaves consistently
-    // regardless of the user's Photoshop preferences. The user's original
-    // preferences are restored in the finally block.
-    const targetId = getTargetDocumentId();
-    const documentGuard =
-      typeof targetId === 'number' ? documentGuardScript(targetId) : '';
     return `
 (function() {
   var __originalRulerUnits = null;
@@ -128,18 +55,11 @@ class ExtendScriptPhotoshopAPI implements PhotoshopAPI {
   }
   if (typeof prompt !== 'undefined') {
     __origPrompt = prompt;
-    prompt = function(msg, def) {
-      $.writeln('[MCP] prompt suppressed: ' + msg);
-      return def || '';
-    };
+    prompt = function(msg, def) { $.writeln('[MCP] prompt suppressed: ' + msg); return def || ''; };
   }
-
   try {
     try { app.preferences.rulerUnits = Units.PIXELS; } catch (e) {}
     try { app.preferences.typeUnits = TypeUnits.POINTS; } catch (e) {}
-
-    ${documentGuard}
-
     var result = (function() {
       ${script}
     })();
@@ -157,11 +77,6 @@ class ExtendScriptPhotoshopAPI implements PhotoshopAPI {
     if (__origConfirm !== null) { confirm = __origConfirm; }
     if (__origPrompt !== null) { prompt = __origPrompt; }
   }
-})();
-    `.trim();
-  }
-
-  getAPIType(): APIType {
-    return 'ExtendScript';
+})();`.trim();
   }
 }

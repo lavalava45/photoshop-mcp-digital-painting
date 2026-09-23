@@ -2,8 +2,14 @@ import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation, invokeUxpUndo } from '../platform/uxp-bridge-client.js';
+import { atomicFailureFromError } from './atomic-shared.js';
 
-export function createHistoryTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createHistoryTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -21,7 +27,7 @@ export function createHistoryTools(connection: PhotoshopConnection): ToolDefinit
           },
         },
       },
-      handler: async (args) => undo(connection, args),
+      handler: async (args) => undo(connection, backendRouter, args),
     },
     {
       tool: {
@@ -39,7 +45,7 @@ export function createHistoryTools(connection: PhotoshopConnection): ToolDefinit
           },
         },
       },
-      handler: async (args) => redo(connection, args),
+      handler: async (args) => redo(connection, backendRouter, args),
     },
     {
       tool: {
@@ -50,52 +56,88 @@ export function createHistoryTools(connection: PhotoshopConnection): ToolDefinit
           properties: {},
         },
       },
-      handler: async () => getHistory(connection),
+      handler: async () => getHistory(backendRouter),
     },
   ];
 }
 
 async function undo(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const steps = (args.steps as number) || 1;
 
   try {
+    const backend = await backendRouter.backendFor('history.undo');
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' &&
+        Number.isSafeInteger(args.document_id) &&
+        args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpUndo({
+        ...(documentId !== undefined ? { document_id: documentId } : {}),
+        steps,
+      });
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_undo_failed');
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Undo successful (${steps} step${steps > 1 ? 's' : ''})\nResult: ${JSON.stringify(result.data)}`,
+        }],
+      };
+    }
+
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
-
     const script = ExtendScriptSnippets.undo(steps);
     const result = await api.executeScript(script);
-
     return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Undo successful (${steps} step${steps > 1 ? 's' : ''})\nResult: ${JSON.stringify(result)}`,
-        },
-      ],
+      content: [{
+        type: 'text' as const,
+        text: `Undo successful (${steps} step${steps > 1 ? 's' : ''})\nResult: ${JSON.stringify(result)}`,
+      }],
     };
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error undoing: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
 async function redo(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const steps = (args.steps as number) || 1;
 
   try {
+    const backend = await backendRouter.backendFor(
+      'history.redo' as Parameters<PhotoshopBackendRouter['backendFor']>[0]
+    );
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' && Number.isSafeInteger(args.document_id) && args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'redo',
+        {
+          steps,
+          ...(documentId !== undefined ? { document_id: documentId } : {}),
+        },
+        'uxp_redo_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_redo_failed');
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Redo successful (${steps} step${steps > 1 ? 's' : ''})\nResult: ${JSON.stringify(result.data)}`,
+        }],
+      };
+    }
+
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 
@@ -123,13 +165,9 @@ async function redo(
   }
 }
 
-async function getHistory(connection: PhotoshopConnection): Promise<ToolResult> {
+async function getHistory(backendRouter: PhotoshopBackendRouter): Promise<ToolResult> {
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.getHistoryStates();
-    const result = await api.executeScript(script);
+    const result = await backendRouter.readHistory();
 
     return {
       content: [

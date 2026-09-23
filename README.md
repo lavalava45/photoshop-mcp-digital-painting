@@ -21,7 +21,7 @@ Community-maintained fork of [alisaitteke/photoshop-mcp](https://github.com/alis
 
 The mascot image is not an upstream Photoshop MCP asset and does not represent Adobe branding.
 
-See [docs/mascot.md](docs/mascot.md) for the story of the holdout run that produced him.
+See [`docs/mascot.md`](docs/mascot.md) for the story of the holdout run that produced him.
 
 ## What this fork adds
 
@@ -31,6 +31,7 @@ The upstream project already provides a broad Photoshop automation MCP. This edi
 - brush size, hardness, opacity, flow, spacing, angle, roundness, flip, pressure, airbrush, and smoothing controls;
 - batched raster painting with Brush, Pencil, Eraser, and Smudge;
 - straight, polyline, and Bezier strokes;
+- ordered closed Bezier region fills for fast silhouettes and broad color/value block-ins;
 - one-point dabs/stamps;
 - per-stroke color, size, opacity, and flow overrides;
 - automatic cost-aware batching for large heterogeneous paint passes;
@@ -40,12 +41,17 @@ The upstream project already provides a broad Photoshop automation MCP. This edi
 - explicit measurement, landmark, and guide tools for reference/proportion work;
 - reusable landmark-frame transforms and normalized landmark-set comparison;
 - a materialized preview pipeline for direct stdio/COS workflows without a second Photoshop export;
+- background-safe Windows execution: when Photoshop is already running, the fork attaches to the existing COM application with `GetObject` instead of recreating it with `CreateObject`, avoiding repeated foreground/focus stealing during MCP calls;
 - more reliable nested-layer targeting and ordering with recursive lookup and stable layer IDs;
-- strict optional `document_id` pinning for document-bound tools, with fail-closed validation and returned target metadata;
+- strict optional `document_id` pinning for document-bound tools, with fail-closed validation, no automatic active-tab switching, and returned target metadata;
 - `photoshop_execute_visual_microplan` to collapse setup/read calls + one atomic visual mutation + its mandatory preview into one MCP round-trip without crossing the preview barrier;
+- an embedded durable Guard surface (`photoshop_guard_*`) that moves operation journaling, receipt/ack gates, preview/verdict barriers, uncertainty recovery, checkpoints, workflow metrics and async jobs into the MCP server itself;
+- a Photoshop-side UXP companion on localhost long-poll for Neural Filters, foreground-safe `asCopy` PSD/JPEG/PNG persistence, and low-latency fast-lane development/diagnostics;
 - an agent visual-control workflow with semantic passes, previews, measurement checkpoints, occlusion reasoning, cleanup, sticky Photoshop routing, and a state-based Definition of Done.
 
-The current build exposes **134 tools** (**118 atomic/non-recipe + 16 recipes**) and **24 prompts**.
+The current build exposes **145 tools** (**129 atomic/non-recipe + 16 recipes**) and **21 prompts**.
+
+The dedicated Chat On Steroids entry point is `dist/cos-plugin.js`. It starts the same MCP server with `PHOTOSHOP_GUARD_MODE=required`, so read-only tools remain directly callable while raw mutating tools fail closed and must be dispatched through `photoshop_guard_cycle_auto`. This native Plugins route has passed dedicated live acceptance and is the canonical Chat On Steroids path. The older `scripts/photoshop-session.mjs` route remains available for dev/debug/recovery compatibility and regression coverage.
 
 ## Digital-painting tools
 
@@ -57,6 +63,7 @@ photoshop_set_brush
 photoshop_set_foreground_color
 photoshop_sample_color
 photoshop_paint_strokes
+photoshop_paint_regions
 photoshop_paint_dabs
 photoshop_execute_visual_microplan
 photoshop_measure_points
@@ -78,7 +85,7 @@ ps.digital_painting_control
 That guide is intended for iterative drawing rather than one-shot stroke dumping:
 
 ```text
-plan → shape/block-in → preview → value → preview → form → preview
+recognition block-in → preview → shape/value → preview → form → preview
 → edge/material → preview → detail → preview → cleanup → final preview
 ```
 
@@ -126,7 +133,31 @@ Point your MCP host directly at that file over stdio. Example:
 
 `PHOTOSHOP_PATH` is only required when Photoshop is not detected automatically.
 
-For Chat On Steroids, this project uses **Chat On Steroids Core + direct stdio MCP**. The shared Plugins connector is not the execution path or health check for this fork.
+### Windows: background-safe Photoshop control
+
+On Windows, this fork is intentionally **background-safe by default**. When Photoshop is already running, MCP script execution attaches to the existing `Photoshop.Application` COM object instead of creating a new one for every request. In addition, each background-safe `DoJavaScript` call is wrapped by a short-lived foreground guard because Photoshop itself can still raise its window from inside COM execution even after a safe `GetObject` attach. If that happens without an explicit user window-switch gesture, the guard immediately restores the user's most recent non-Photoshop foreground window. `PHOTOSHOP_MCP_ALLOW_UI_ACTIVATION=1` opts out of both protections when foreground activation is intentionally allowed.
+
+By default, the server also will **not** launch Photoshop automatically if it is closed. If an integration explicitly wants to allow UI activation / automatic Photoshop launch, opt in with:
+
+```text
+PHOTOSHOP_MCP_ALLOW_UI_ACTIVATION=1
+```
+
+Leave that variable unset for normal background workflows.
+
+This transport behavior is separate from document targeting. `document_id` is now a fail-closed guard, not an automatic tab switch: a pinned call proceeds only when that document is already active; if another Photoshop document is active, the call stops instead of changing the user's tab.
+
+For Chat On Steroids, the canonical production path is **Plugins → `dist/cos-plugin.js` → embedded Guard → Photoshop**. It has passed the dedicated live acceptance sequence. The older **Core → `photoshop-session.mjs` → persistent daemon → `dist/index.js`** route is retained only for dev/debug/recovery compatibility and regression/live-test coverage.
+
+For local development after `npm run build:server`, restart only the custom MCP child with
+**Chat On Steroids app → Plugins → Photoshop MCP Digital Painting Fork → … → Restart**.
+ChatGPT-side Plugins **Refresh** updates the schema/connector view but does not guarantee
+that a running `cos-plugin.js` process has reloaded new code. Do not restart the entire CoS
+application or use legacy restart-helper scripts. The UXP companion is reloaded separately
+in Adobe UXP Developer Tool (`Reload` for `main.js`; `Unload → Load` for manifest changes).
+`photoshop_save_document` is intentionally UXP-only: it verifies that document/layer/tool/
+selection state remains unchanged and never falls back to COM persistence if the companion
+is offline.
 
 See [`INSTALL.md`](INSTALL.md) for the full clean-machine setup.
 
@@ -156,7 +187,7 @@ npm run test:document-targeting-live
 The current verified tool-count result is:
 
 ```text
-tool counts consistent: 134 = 118 atomic + 16 recipes
+tool counts consistent: 145 = 129 atomic + 16 recipes
 ```
 
 The fork has been live-tested primarily on **Photoshop 2026 for Windows**. During the current validation, 123 installed brush presets were enumerated and the painting smoke test completed with `PAINTING_TEST_OK`.
@@ -164,6 +195,7 @@ The fork has been live-tested primarily on **Photoshop 2026 for Windows**. Durin
 ## Documentation
 
 - [`INSTALL.md`](INSTALL.md) — installation and MCP host configuration
+- [`docs/photoshop-guard-architecture.md`](docs/photoshop-guard-architecture.md) — current Guard/gateway architecture, host boundary, upstream COS requests, and proxy fallback
 - [`docs/digital-painting.md`](docs/digital-painting.md) — painting API and design notes
 - [`docs/digital-painting-agent-skill.md`](docs/digital-painting-agent-skill.md) — visual-control workflow, checkpoints, cleanup, and Definition of Done
 - [`docs/available-tools.md`](docs/available-tools.md) — complete tool reference

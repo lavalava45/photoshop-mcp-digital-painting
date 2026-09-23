@@ -1,6 +1,9 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
+import { documentGuardScript } from '../core/document-target.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 import {
   atomicFailureFromError,
   atomicSuccess,
@@ -11,7 +14,25 @@ import {
 const EXPORT_FORMATS = ['JPEG', 'PNG', 'PSD'] as const;
 type DatasetExportFormat = (typeof EXPORT_FORMATS)[number];
 
-export function createDataTools(connection: PhotoshopConnection): ToolDefinition[] {
+function documentIdParams(args: Record<string, unknown>): Record<string, unknown> {
+  return typeof args.document_id === 'number' &&
+    Number.isSafeInteger(args.document_id) &&
+    args.document_id > 0
+    ? { document_id: args.document_id }
+    : {};
+}
+
+function guardLegacyScript(args: Record<string, unknown>, script: string): string {
+  const documentId = documentIdParams(args).document_id;
+  return typeof documentId === 'number'
+    ? `${documentGuardScript(documentId)}\n${script}`
+    : script;
+}
+
+export function createDataTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -23,7 +44,7 @@ export function createDataTools(connection: PhotoshopConnection): ToolDefinition
           'Preconditions: active document with variables/data sets defined.',
         inputSchema: { type: 'object', properties: {} },
       },
-      handler: async () => listDataSets(connection),
+      handler: async (args) => listDataSets(connection, backendRouter, args),
     },
     {
       tool: {
@@ -43,7 +64,7 @@ export function createDataTools(connection: PhotoshopConnection): ToolDefinition
           required: ['xml_path'],
         },
       },
-      handler: async (args) => importDataSets(connection, args),
+      handler: async (args) => importDataSets(connection, backendRouter, args),
     },
     {
       tool: {
@@ -68,18 +89,39 @@ export function createDataTools(connection: PhotoshopConnection): ToolDefinition
           required: ['output_dir'],
         },
       },
-      handler: async (args) => generateFromDataSets(connection, args),
+      handler: async (args) => generateFromDataSets(connection, backendRouter, args),
     },
   ];
 }
 
-async function listDataSets(connection: PhotoshopConnection): Promise<ToolResult> {
+async function readDataSets(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const backend = await backendRouter.backendFor('datasets.list');
+  if (backend.kind === 'uxp') {
+    const result = await invokeUxpOperation(
+      'list_datasets',
+      documentIdParams(args),
+      'uxp_list_datasets_failed'
+    );
+    if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_list_datasets_failed');
+    return result.data;
+  }
+  const raw = await runSnippet(connection, guardLegacyScript(args, ExtendScriptSnippets.listDataSets()));
+  const parsed = parseSnippetResult(raw);
+  if (!parsed) throw new Error(`Unparseable datasets result: ${String(raw)}`);
+  return parsed;
+}
+
+async function listDataSets(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   try {
-    const raw = await runSnippet(connection, ExtendScriptSnippets.listDataSets());
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Unparseable datasets result: ${String(raw)}`));
-    }
+    const parsed = await readDataSets(connection, backendRouter, args);
     const count = typeof parsed.count === 'number' ? parsed.count : 0;
     return atomicSuccess(`${count} data set(s) on active document`, parsed, 'photoshop_generate_from_datasets');
   } catch (error) {
@@ -89,6 +131,7 @@ async function listDataSets(connection: PhotoshopConnection): Promise<ToolResult
 
 async function importDataSets(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const xmlPath = typeof args.xml_path === 'string' ? args.xml_path.trim() : '';
@@ -96,10 +139,26 @@ async function importDataSets(
     return atomicFailureFromError(new Error('xml_path parameter is required'));
   }
   try {
-    const raw = await runSnippet(connection, ExtendScriptSnippets.importDataSets(xmlPath));
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Unparseable import result: ${String(raw)}`));
+    const backend = await backendRouter.backendFor('datasets.import');
+    let parsed: Record<string, unknown>;
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'import_datasets',
+        { xml_path: xmlPath, ...documentIdParams(args) },
+        'uxp_import_datasets_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_import_datasets_failed');
+      parsed = result.data;
+    } else {
+      const raw = await runSnippet(
+        connection,
+        guardLegacyScript(args, ExtendScriptSnippets.importDataSets(xmlPath))
+      );
+      const legacyParsed = parseSnippetResult(raw);
+      if (!legacyParsed) {
+        return atomicFailureFromError(new Error(`Unparseable import result: ${String(raw)}`));
+      }
+      parsed = legacyParsed;
     }
     const count = typeof parsed.count === 'number' ? parsed.count : 0;
     return atomicSuccess(`Imported ${count} data set(s)`, parsed, 'photoshop_generate_from_datasets');
@@ -110,6 +169,7 @@ async function importDataSets(
 
 async function generateFromDataSets(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const outputDir = typeof args.output_dir === 'string' ? args.output_dir.trim() : '';
@@ -124,10 +184,13 @@ async function generateFromDataSets(
   if (Array.isArray(args.dataset_names)) {
     names = args.dataset_names.filter((n): n is string => typeof n === 'string');
   } else {
-    const listed = await runSnippet(connection, ExtendScriptSnippets.listDataSets());
-    const parsed = parseSnippetResult(listed);
-    if (parsed && Array.isArray(parsed.datasets)) {
-      names = parsed.datasets.filter((n): n is string => typeof n === 'string');
+    try {
+      const listed = await readDataSets(connection, backendRouter, args);
+      if (Array.isArray(listed.datasets)) {
+        names = listed.datasets.filter((n): n is string => typeof n === 'string');
+      }
+    } catch (error) {
+      return atomicFailureFromError(error);
     }
   }
   if (names.length === 0) {
@@ -135,13 +198,34 @@ async function generateFromDataSets(
   }
 
   try {
-    const raw = await runSnippet(
-      connection,
-      ExtendScriptSnippets.applyDataSetsExport(outputDir, format, names)
-    );
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Unparseable dataset export result: ${String(raw)}`));
+    const backend = await backendRouter.backendFor('datasets.generate');
+    let parsed: Record<string, unknown>;
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'generate_from_datasets',
+        {
+          output_dir: outputDir,
+          format,
+          dataset_names: names,
+          ...documentIdParams(args),
+        },
+        'uxp_generate_from_datasets_failed',
+        120_000
+      );
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? 'uxp_generate_from_datasets_failed');
+      }
+      parsed = result.data;
+    } else {
+      const raw = await runSnippet(
+        connection,
+        guardLegacyScript(args, ExtendScriptSnippets.applyDataSetsExport(outputDir, format, names))
+      );
+      const legacyParsed = parseSnippetResult(raw);
+      if (!legacyParsed) {
+        return atomicFailureFromError(new Error(`Unparseable dataset export result: ${String(raw)}`));
+      }
+      parsed = legacyParsed;
     }
     if (parsed.ok === false) {
       return atomicFailureFromError(new Error(String(parsed.message || 'Data set export failed')));

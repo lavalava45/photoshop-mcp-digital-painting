@@ -10,6 +10,8 @@ function assert(condition, message) {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 const source = await readFile(path.join(root, 'src', 'tools', 'color-sampling-tools.ts'), 'utf8');
+const backendSource = await readFile(path.join(root, 'src', 'platform', 'photoshop-backend.ts'), 'utf8');
+const legacySource = await readFile(path.join(root, 'src', 'api', 'extendscript.ts'), 'utf8');
 
 const tools = createColorSamplingTools({});
 assert(tools.length === 2, 'Expected exactly two color-sampling tools');
@@ -21,13 +23,21 @@ assert(tool.inputSchema.required.includes('x') && tool.inputSchema.required.incl
 assert(tool.inputSchema.properties.radius.minimum === 0, 'radius minimum should be 0');
 assert(tool.inputSchema.properties.radius.maximum === 100, 'radius maximum should be 100');
 
-assert(source.includes("duplicate('__MCP_COLOR_SAMPLE__'"), 'Sampling should use a temporary duplicate');
-assert(source.includes('colorSamplers.add'), 'Point sampling should use a Color Sampler on the duplicate');
-assert(source.includes('activeLayer.applyAverage()'), 'Average mode should use Photoshop Average on the duplicate');
-assert(source.includes('SaveOptions.DONOTSAVECHANGES'), 'Temporary duplicate must close without saving');
-assert(source.includes("mode: __mcpRadius > 0 ? 'AVERAGE' : 'POINT'"), 'Result should identify sample mode');
-assert(source.includes("hex: '#'"), 'Result should include HEX color');
-assert(source.includes("mode: 'POINT_BATCH'"), 'Batch sampler should identify POINT_BATCH mode');
+assert(source.includes('new PhotoshopBackendRouter(connection)'), 'Color sampling should route through PhotoshopBackendRouter');
+assert(source.includes('backendRouter.sampleColor('), 'Single sampling should dispatch through the semantic backend router');
+assert(source.includes('backendRouter.sampleColors('), 'Batch sampling should dispatch through the semantic backend router');
+assert(backendSource.includes("backendFor('color.sample')"), 'Single sampling should select its backend before dispatch');
+assert(backendSource.includes("backendFor('colors.sample')"), 'Batch sampling should select its backend before dispatch');
+
+// Retain regression coverage for the legacy fallback implementation without
+// requiring that fallback mechanism from the UXP-first public path.
+assert(legacySource.includes("duplicate('__MCP_COLOR_SAMPLE__'"), 'Legacy single-sample fallback should use a temporary duplicate');
+assert(legacySource.includes('colorSamplers.add'), 'Legacy point sampling should use a Color Sampler on the duplicate');
+assert(legacySource.includes('activeLayer.applyAverage()'), 'Legacy average mode should use Photoshop Average on the duplicate');
+assert(legacySource.includes('SaveOptions.DONOTSAVECHANGES'), 'Legacy temporary duplicate must close without saving');
+assert(legacySource.includes("mode: __mcpRadius > 0 ? 'AVERAGE' : 'POINT'"), 'Legacy result should identify sample mode');
+assert(legacySource.includes("hex: '#'"), 'Legacy result should include HEX color');
+assert(legacySource.includes("mode: 'POINT_BATCH'"), 'Legacy batch sampler should identify POINT_BATCH mode');
 assert(batchTool.inputSchema.properties.points.maxItems === 1024, 'Batch sampler should allow up to 1024 points');
 
 const invalidConnection = {

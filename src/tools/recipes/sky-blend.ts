@@ -1,11 +1,5 @@
 import { ToolDefinition, ToolResult } from '../../core/tool-registry.js';
-import { ExtendScriptSnippets } from '../../api/extendscript.js';
-import { getPhotoshopCapabilities } from '../../platform/capabilities.js';
 import { PhotoshopConnection } from '../../platform/connection.js';
-import {
-  parseGenerativeResult,
-  runGenerativeSnippet,
-} from '../generative/_shared.js';
 import {
   clampInt,
   executeRecipe,
@@ -64,11 +58,6 @@ export function bindSkyBlend(connection: PhotoshopConnection): ToolDefinition {
             description: 'Placement Y offset in pixels (default 0)',
             default: 0,
           },
-          use_native_sky: {
-            type: 'boolean',
-            description:
-              'Try native Sky Replacement first when supported (default true when capable)',
-          },
         },
         required: ['sky_image_path'],
       },
@@ -88,61 +77,6 @@ async function runSkyBlend(
       code: 'invalid_argument',
       message: 'sky_image_path is required',
     });
-  }
-
-  const version = await connection.getVersion();
-  const caps = getPhotoshopCapabilities(version);
-  const tryNative = args.use_native_sky !== false && caps.features.sky_replacement_native;
-
-  if (tryNative) {
-    try {
-      const raw = await runGenerativeSnippet(
-        connection,
-        ExtendScriptSnippets.skyReplacement(skyPath)
-      );
-      const nativeResult = parseGenerativeResult(raw);
-      if (!nativeResult.isError) {
-        const text =
-          nativeResult.content[0]?.type === 'text' ? nativeResult.content[0].text : '{}';
-        try {
-          const body = JSON.parse(text) as Record<string, unknown>;
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    ...body,
-                    undo_history_states_consumed: 1,
-                    details: {
-                      ...(typeof body.details === 'object' && body.details ? body.details : {}),
-                      method: 'native_sky_replacement',
-                      sky_image_path: skyPath,
-                    },
-                  },
-                  null,
-                  2
-                ),
-              },
-            ],
-          };
-        } catch {
-          return nativeResult;
-        }
-      }
-      if (args.use_native_sky === true) {
-        return nativeResult;
-      }
-    } catch (error) {
-      if (args.use_native_sky === true) {
-        return toolFailure({
-          ok: false,
-          code: 'generative_unavailable',
-          message: error instanceof Error ? error.message : String(error),
-          suggested_next_tool: 'photoshop_get_capabilities',
-        });
-      }
-    }
   }
 
   const horizonPct = clampInt(args.horizon_pct, 0, 100, 50);

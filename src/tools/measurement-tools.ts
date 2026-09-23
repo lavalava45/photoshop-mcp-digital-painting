@@ -1,5 +1,7 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
 import { PhotoshopConnection } from '../platform/connection.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 import {
   atomicFailureFromError,
   atomicSuccess,
@@ -276,78 +278,75 @@ function compareLandmarkSets(
   };
 }
 
-function measurementScript(
+function calculatePointMeasurements(
+  document: { id?: unknown; name?: unknown; width: number; height: number },
   points: MeasurementPoint[],
   measurements: DistanceRequest[],
   ratios: RatioRequest[]
-): string {
-  return `
-if (app.documents.length === 0) throw new Error('No active document');
-var doc = app.activeDocument;
-var width = Number(doc.width.as('px'));
-var height = Number(doc.height.as('px'));
-var points = ${JSON.stringify(points)};
-var requests = ${JSON.stringify(measurements)};
-var ratioRequests = ${JSON.stringify(ratios)};
-var pointMap = {};
-var outPoints = [];
-for (var i = 0; i < points.length; i++) {
-  var p = points[i];
-  pointMap[p.name] = p;
-  outPoints.push({
-    name: p.name,
-    x: p.x,
-    y: p.y,
-    x_norm: width ? p.x / width : null,
-    y_norm: height ? p.y / height : null
-  });
-}
-var measurementMap = {};
-var outMeasurements = [];
-for (var m = 0; m < requests.length; m++) {
-  var req = requests[m];
-  var a = pointMap[req.from];
-  var b = pointMap[req.to];
-  var dx = b.x - a.x;
-  var dy = b.y - a.y;
-  var distance = Math.sqrt(dx * dx + dy * dy);
-  var result = {
-    name: req.name,
-    from: req.from,
-    to: req.to,
-    dx: dx,
-    dy: dy,
-    distance: distance,
-    dx_norm: width ? dx / width : null,
-    dy_norm: height ? dy / height : null,
-    distance_over_width: width ? distance / width : null,
-    distance_over_height: height ? distance / height : null
+) {
+  const { width, height } = document;
+  const legacyNumber = (value: number | null): number | null => {
+    if (value === null || !Number.isFinite(value) || Number.isInteger(value)) return value;
+    return Number(value.toPrecision(14));
   };
-  measurementMap[req.name] = result;
-  outMeasurements.push(result);
-}
-var outRatios = [];
-for (var r = 0; r < ratioRequests.length; r++) {
-  var rr = ratioRequests[r];
-  var numerator = measurementMap[rr.numerator].distance;
-  var denominator = measurementMap[rr.denominator].distance;
-  if (denominator === 0) throw new Error('ratio denominator measurement "' + rr.denominator + '" is zero');
-  outRatios.push({
-    name: rr.name,
-    numerator: rr.numerator,
-    denominator: rr.denominator,
-    value: numerator / denominator
+  const pointMap = new Map(points.map((point) => [point.name, point]));
+  const outPoints = points.map((point) => ({
+    name: point.name,
+    x: point.x,
+    y: point.y,
+    x_norm: legacyNumber(width ? point.x / width : null),
+    y_norm: legacyNumber(height ? point.y / height : null),
+  }));
+
+  const measurementMap = new Map<string, Record<string, unknown>>();
+  const outMeasurements = measurements.map((request) => {
+    const from = pointMap.get(request.from)!;
+    const to = pointMap.get(request.to)!;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const result = {
+      name: request.name,
+      from: request.from,
+      to: request.to,
+      dx,
+      dy,
+      distance: legacyNumber(distance),
+      dx_norm: legacyNumber(width ? dx / width : null),
+      dy_norm: legacyNumber(height ? dy / height : null),
+      distance_over_width: legacyNumber(width ? distance / width : null),
+      distance_over_height: legacyNumber(height ? distance / height : null),
+    };
+    measurementMap.set(request.name, result);
+    return result;
   });
-}
-return {
-  ok: true,
-  document: { id: doc.id, name: doc.name, width: width, height: height },
-  points: outPoints,
-  measurements: outMeasurements,
-  ratios: outRatios,
-  landmark_detection: false
-};
-`;
+
+  const outRatios = ratios.map((ratio) => {
+    const numerator = Number(measurementMap.get(ratio.numerator)?.distance);
+    const denominator = Number(measurementMap.get(ratio.denominator)?.distance);
+    if (denominator === 0) {
+      throw new Error(`ratio denominator measurement "${ratio.denominator}" is zero`);
+    }
+    return {
+      name: ratio.name,
+      numerator: ratio.numerator,
+      denominator: ratio.denominator,
+      value: legacyNumber(numerator / denominator),
+    };
+  });
+
+  return {
+    document: {
+      id: document.id,
+      name: document.name,
+      width,
+      height,
+    },
+    points: outPoints,
+    measurements: outMeasurements,
+    ratios: outRatios,
+    landmark_detection: false,
+  };
 }
 
 function addGuidesScript(guides: GuideRequest[]): string {
@@ -448,6 +447,7 @@ return { ok: true, removed: removed, removed_count: removed.length, guide_count:
 }
 
 export function createMeasurementTools(connection: PhotoshopConnection): ToolDefinition[] {
+  const backendRouter = new PhotoshopBackendRouter(connection);
   return [
     {
       tool: {
@@ -504,7 +504,7 @@ export function createMeasurementTools(connection: PhotoshopConnection): ToolDef
           required: ['points'],
         },
       },
-      handler: async (args) => measurePoints(connection, args),
+      handler: async (args) => measurePoints(backendRouter, args),
     },
     {
       tool: {
@@ -531,7 +531,7 @@ export function createMeasurementTools(connection: PhotoshopConnection): ToolDef
           required: ['guides'],
         },
       },
-      handler: async (args) => addGuides(connection, args),
+      handler: async (args) => addGuides(connection, backendRouter, args),
     },
     {
       tool: {
@@ -540,7 +540,7 @@ export function createMeasurementTools(connection: PhotoshopConnection): ToolDef
           'List Photoshop guides with index, orientation, pixel position, and normalized position for the active document.',
         inputSchema: { type: 'object', properties: {} },
       },
-      handler: async () => listGuides(connection),
+      handler: async (args) => listGuides(connection, backendRouter, args),
     },
     {
       tool: {
@@ -560,7 +560,7 @@ export function createMeasurementTools(connection: PhotoshopConnection): ToolDef
           },
         },
       },
-      handler: async (args) => clearGuides(connection, args),
+      handler: async (args) => clearGuides(connection, backendRouter, args),
     },
     {
       tool: {
@@ -685,16 +685,33 @@ async function compareLandmarks(args: Record<string, unknown>): Promise<ToolResu
 }
 
 async function measurePoints(
-  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   try {
     const points = parsePoints(args.points);
     const measurements = parseDistances(args.measurements, points);
     const ratios = parseRatios(args.ratios, measurements);
-    const raw = await runSnippet(connection, measurementScript(points, measurements, ratios));
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) throw new Error(`Unparseable measurement result: ${String(raw)}`);
+    const state = await backendRouter.readDocumentInfo();
+    const document = state.document;
+    if (
+      !document ||
+      typeof document.width !== 'number' ||
+      typeof document.height !== 'number'
+    ) {
+      throw new Error('Active document dimensions are unavailable');
+    }
+    const parsed = calculatePointMeasurements(
+      {
+        id: document.id,
+        name: document.name,
+        width: document.width,
+        height: document.height,
+      },
+      points,
+      measurements,
+      ratios
+    );
     return atomicSuccess('Point measurements calculated', {
       document: parsed.document,
       points: parsed.points,
@@ -709,10 +726,34 @@ async function measurePoints(
 
 async function addGuides(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   try {
     const guides = parseGuides(args.guides);
+    const backend = await backendRouter.backendFor(
+      'guides.add' as Parameters<PhotoshopBackendRouter['backendFor']>[0]
+    );
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' && Number.isSafeInteger(args.document_id) && args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'add_guides',
+        {
+          guides,
+          ...(documentId !== undefined ? { document_id: documentId } : {}),
+        },
+        'uxp_add_guides_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_add_guides_failed');
+      return atomicSuccess(`Added ${guides.length} guide${guides.length === 1 ? '' : 's'}`, {
+        added: result.data.added,
+        guide_count: result.data.guide_count,
+        document: result.data.document,
+      }, 'photoshop_list_guides');
+    }
     const raw = await runSnippet(connection, addGuidesScript(guides));
     const parsed = parseSnippetResult(raw);
     if (!parsed) throw new Error(`Unparseable add-guides result: ${String(raw)}`);
@@ -726,8 +767,33 @@ async function addGuides(
   }
 }
 
-async function listGuides(connection: PhotoshopConnection): Promise<ToolResult> {
+async function listGuides(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   try {
+    const backend = await backendRouter.backendFor(
+      'guides.list' as Parameters<PhotoshopBackendRouter['backendFor']>[0]
+    );
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' && Number.isSafeInteger(args.document_id) && args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'list_guides',
+        documentId !== undefined ? { document_id: documentId } : {},
+        'uxp_list_guides_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_list_guides_failed');
+      const count = typeof result.data.guide_count === 'number' ? result.data.guide_count : 0;
+      return atomicSuccess(`${count} guide${count === 1 ? '' : 's'} listed`, {
+        guides: result.data.guides,
+        guide_count: count,
+        document: result.data.document,
+      }, 'photoshop_measure_points');
+    }
     const raw = await runSnippet(connection, listGuidesScript());
     const parsed = parseSnippetResult(raw);
     if (!parsed) throw new Error(`Unparseable guide list: ${String(raw)}`);
@@ -744,6 +810,7 @@ async function listGuides(connection: PhotoshopConnection): Promise<ToolResult> 
 
 async function clearGuides(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   try {
@@ -759,6 +826,30 @@ async function clearGuides(
         unique.add(n);
         return n;
       });
+    }
+    const backend = await backendRouter.backendFor(
+      'guides.clear' as Parameters<PhotoshopBackendRouter['backendFor']>[0]
+    );
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' && Number.isSafeInteger(args.document_id) && args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'clear_guides',
+        {
+          ...(indices !== undefined ? { indices } : {}),
+          ...(documentId !== undefined ? { document_id: documentId } : {}),
+        },
+        'uxp_clear_guides_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_clear_guides_failed');
+      const removedCount = typeof result.data.removed_count === 'number' ? result.data.removed_count : 0;
+      return atomicSuccess(`Removed ${removedCount} guide${removedCount === 1 ? '' : 's'}`, {
+        removed: result.data.removed,
+        removed_count: removedCount,
+        guide_count: result.data.guide_count,
+      }, 'photoshop_list_guides');
     }
     const raw = await runSnippet(connection, clearGuidesScript(indices));
     const parsed = parseSnippetResult(raw);

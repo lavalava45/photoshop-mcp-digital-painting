@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Task 8/8a Human Adjudication</title>
+  <style>
+    body{font:16px/1.45 system-ui,sans-serif;max-width:1320px;margin:0 auto;padding:24px;background:#151515;color:#eee}
+    .intro,.case{background:#202020;border:1px solid #444;border-radius:10px;padding:18px;margin:0 0 22px}
+    .images{display:grid;grid-template-columns:1fr 1fr;gap:16px}.images img{width:100%;height:auto;display:block;background:#111}.images figure{margin:0}.images figcaption{text-align:center;padding:6px}
+    .controls{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:12px;margin-top:16px}.controls label{display:flex;flex-direction:column;gap:5px}.controls label:last-child{grid-column:1/-1}
+    select,textarea,input,button{font:inherit;padding:8px;background:#111;color:#eee;border:1px solid #666;border-radius:5px}button{cursor:pointer;margin-right:8px}#status{margin-left:8px}
+    @media(max-width:800px){.images,.controls{grid-template-columns:1fr}.controls label:last-child{grid-column:auto}}
+  </style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Task 8/8a Human Adjudication</h1>
+    <p>Judge only the visible before/after evidence against the brief, pass goal, and preservation constraints. Do not inspect project source material or critic answers while adjudicating.</p>
+    <label>Reviewer identifier/role <input id="reviewer" autocomplete="off"></label>
+    <p><button id="export" type="button">Download completed human-reference.json</button><span id="status"></span></p>
+  </div>
+  <section class="case" data-case-id="case-001">
+      <h2>case-001</h2>
+      <div class="images">
+        <figure><img src="images/case-001-before.jpg" alt="case-001 before"><figcaption>Before</figcaption></figure>
+        <figure><img src="images/case-001-after.jpg" alt="case-001 after"><figcaption>After</figcaption></figure>
+      </div>
+      <p><strong>Brief:</strong> A quiet rainy European street corner at night with a warm lamp and bench, cool dark masses, mist, wet reflections, and restrained detail.</p>
+      <p><strong>Pass goal:</strong> Establish or strengthen the large value grouping and atmospheric readability without prematurely detailing peripheral architecture.</p>
+      <div><strong>Preservation constraints:</strong><ul><li>Keep the warm lamp/bench focus distinct from the cool environment.</li><li>Preserve atmospheric depth and a calm peripheral detail level.</li></ul></div>
+      <div class="controls">
+        <label>finding_expected
+          <select data-field="finding_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>ambiguity_expected
+          <select data-field="ambiguity_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>useful_action
+          <select data-field="useful_action"><option value="">—</option><option value="keep">keep</option><option value="correct">correct</option><option value="rollback">rollback</option><option value="abstain">abstain</option></select>
+        </label>
+        <label>note<textarea data-field="human_note" rows="3"></textarea></label>
+      </div>
+    </section>
+<section class="case" data-case-id="case-002">
+      <h2>case-002</h2>
+      <div class="images">
+        <figure><img src="images/case-002-before.jpg" alt="case-002 before"><figcaption>Before</figcaption></figure>
+        <figure><img src="images/case-002-after.jpg" alt="case-002 after"><figcaption>After</figcaption></figure>
+      </div>
+      <p><strong>Brief:</strong> A wind-up toy robot rendered in a limited cream, navy, and rust-red flat screenprint language.</p>
+      <p><strong>Pass goal:</strong> Add connective joint forms while preserving already-established recognition cues and the flat screenprint hierarchy.</p>
+      <div><strong>Preservation constraints:</strong><ul><li>Preserve eyes, grille mouth, chest panel, wind-up key, and primary silhouette.</li><li>Do not turn the flat screenprint treatment into volumetric photoreal rendering.</li></ul></div>
+      <div class="controls">
+        <label>finding_expected
+          <select data-field="finding_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>ambiguity_expected
+          <select data-field="ambiguity_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>useful_action
+          <select data-field="useful_action"><option value="">—</option><option value="keep">keep</option><option value="correct">correct</option><option value="rollback">rollback</option><option value="abstain">abstain</option></select>
+        </label>
+        <label>note<textarea data-field="human_note" rows="3"></textarea></label>
+      </div>
+    </section>
+<section class="case" data-case-id="case-003">
+      <h2>case-003</h2>
+      <div class="images">
+        <figure><img src="images/case-003-before.jpg" alt="case-003 before"><figcaption>Before</figcaption></figure>
+        <figure><img src="images/case-003-after.jpg" alt="case-003 after"><figcaption>After</figcaption></figure>
+      </div>
+      <p><strong>Brief:</strong> A coherent coastal tower scene with readable architecture, sea, atmosphere, and controlled painterly surface variation.</p>
+      <p><strong>Pass goal:</strong> Refine architectural form and surface treatment without weakening silhouette, plane clarity, or scene integration.</p>
+      <div><strong>Preservation constraints:</strong><ul><li>Preserve the tower&#39;s main silhouette and structural readability.</li><li>Avoid local surface treatment that makes the whole image less coherent.</li></ul></div>
+      <div class="controls">
+        <label>finding_expected
+          <select data-field="finding_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>ambiguity_expected
+          <select data-field="ambiguity_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>useful_action
+          <select data-field="useful_action"><option value="">—</option><option value="keep">keep</option><option value="correct">correct</option><option value="rollback">rollback</option><option value="abstain">abstain</option></select>
+        </label>
+        <label>note<textarea data-field="human_note" rows="3"></textarea></label>
+      </div>
+    </section>
+<section class="case" data-case-id="case-004">
+      <h2>case-004</h2>
+      <div class="images">
+        <figure><img src="images/case-004-before.jpg" alt="case-004 before"><figcaption>Before</figcaption></figure>
+        <figure><img src="images/case-004-after.jpg" alt="case-004 after"><figcaption>After</figcaption></figure>
+      </div>
+      <p><strong>Brief:</strong> A painterly portrait study emphasizing the characteristic head turn, dark background, face-light relationship, and pearl focal accent.</p>
+      <p><strong>Pass goal:</strong> Improve composition and large portrait placement before detailed feature rendering.</p>
+      <div><strong>Preservation constraints:</strong><ul><li>Preserve the dominant head/shoulder relationship and dark-background separation.</li><li>Do not treat increased local detail as proof of better likeness or composition.</li></ul></div>
+      <div class="controls">
+        <label>finding_expected
+          <select data-field="finding_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>ambiguity_expected
+          <select data-field="ambiguity_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>useful_action
+          <select data-field="useful_action"><option value="">—</option><option value="keep">keep</option><option value="correct">correct</option><option value="rollback">rollback</option><option value="abstain">abstain</option></select>
+        </label>
+        <label>note<textarea data-field="human_note" rows="3"></textarea></label>
+      </div>
+    </section>
+<section class="case" data-case-id="case-005">
+      <h2>case-005</h2>
+      <div class="images">
+        <figure><img src="images/case-005-before.jpg" alt="case-005 before"><figcaption>Before</figcaption></figure>
+        <figure><img src="images/case-005-after.jpg" alt="case-005 after"><figcaption>After</figcaption></figure>
+      </div>
+      <p><strong>Brief:</strong> A painterly portrait study emphasizing the characteristic head turn, dark background, face-light relationship, and pearl focal accent.</p>
+      <p><strong>Pass goal:</strong> Correct large composition/placement while retaining the established value hierarchy.</p>
+      <div><strong>Preservation constraints:</strong><ul><li>Preserve the main face-light grouping and dark surrounding field.</li><li>Do not claim success from geometric movement alone if the portrait reads worse.</li></ul></div>
+      <div class="controls">
+        <label>finding_expected
+          <select data-field="finding_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>ambiguity_expected
+          <select data-field="ambiguity_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>useful_action
+          <select data-field="useful_action"><option value="">—</option><option value="keep">keep</option><option value="correct">correct</option><option value="rollback">rollback</option><option value="abstain">abstain</option></select>
+        </label>
+        <label>note<textarea data-field="human_note" rows="3"></textarea></label>
+      </div>
+    </section>
+<section class="case" data-case-id="case-006">
+      <h2>case-006</h2>
+      <div class="images">
+        <figure><img src="images/case-006-before.jpg" alt="case-006 before"><figcaption>Before</figcaption></figure>
+        <figure><img src="images/case-006-after.jpg" alt="case-006 after"><figcaption>After</figcaption></figure>
+      </div>
+      <p><strong>Brief:</strong> A retro-futurist penguin with a clear graphic silhouette, readable costume/technology motifs, and controlled stylized shape language.</p>
+      <p><strong>Pass goal:</strong> Refine a bounded visual relationship without sacrificing the graphic silhouette or focal hierarchy.</p>
+      <div><strong>Preservation constraints:</strong><ul><li>Preserve subject recognizability and the dominant graphic silhouette.</li><li>Avoid technically tidy changes that flatten the intended stylization.</li></ul></div>
+      <div class="controls">
+        <label>finding_expected
+          <select data-field="finding_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>ambiguity_expected
+          <select data-field="ambiguity_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>useful_action
+          <select data-field="useful_action"><option value="">—</option><option value="keep">keep</option><option value="correct">correct</option><option value="rollback">rollback</option><option value="abstain">abstain</option></select>
+        </label>
+        <label>note<textarea data-field="human_note" rows="3"></textarea></label>
+      </div>
+    </section>
+<section class="case" data-case-id="case-007">
+      <h2>case-007</h2>
+      <div class="images">
+        <figure><img src="images/case-007-before.jpg" alt="case-007 before"><figcaption>Before</figcaption></figure>
+        <figure><img src="images/case-007-after.jpg" alt="case-007 after"><figcaption>After</figcaption></figure>
+      </div>
+      <p><strong>Brief:</strong> A fantasy night scene with a dark wooden house, warm windows, water reflections, distant shore, moonlight, and soft atmospheric unification.</p>
+      <p><strong>Pass goal:</strong> Unify the whole scene atmospherically by deepening the distant shore, adding horizon haze, and softly gathering peripheral edges without changing composition.</p>
+      <div><strong>Preservation constraints:</strong><ul><li>Keep the house predominantly a dark silhouette with restrained warm-window emphasis.</li><li>Preserve the established composition while adjusting atmosphere.</li></ul></div>
+      <div class="controls">
+        <label>finding_expected
+          <select data-field="finding_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>ambiguity_expected
+          <select data-field="ambiguity_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>useful_action
+          <select data-field="useful_action"><option value="">—</option><option value="keep">keep</option><option value="correct">correct</option><option value="rollback">rollback</option><option value="abstain">abstain</option></select>
+        </label>
+        <label>note<textarea data-field="human_note" rows="3"></textarea></label>
+      </div>
+    </section>
+<section class="case" data-case-id="case-008">
+      <h2>case-008</h2>
+      <div class="images">
+        <figure><img src="images/case-008-before.png" alt="case-008 before"><figcaption>Before</figcaption></figure>
+        <figure><img src="images/case-008-after.png" alt="case-008 after"><figcaption>After</figcaption></figure>
+      </div>
+      <p><strong>Brief:</strong> A clean anime-style car illustration with controlled graphic forms and line hierarchy.</p>
+      <p><strong>Pass goal:</strong> Assess whether any visible change occurred and avoid inventing improvement or regression when evidence is identical.</p>
+      <div><strong>Preservation constraints:</strong><ul><li>Do not infer a change from operation intent or metadata.</li><li>Treat identical visual evidence symmetrically.</li></ul></div>
+      <div class="controls">
+        <label>finding_expected
+          <select data-field="finding_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>ambiguity_expected
+          <select data-field="ambiguity_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>useful_action
+          <select data-field="useful_action"><option value="">—</option><option value="keep">keep</option><option value="correct">correct</option><option value="rollback">rollback</option><option value="abstain">abstain</option></select>
+        </label>
+        <label>note<textarea data-field="human_note" rows="3"></textarea></label>
+      </div>
+    </section>
+<section class="case" data-case-id="case-009">
+      <h2>case-009</h2>
+      <div class="images">
+        <figure><img src="images/case-009-before.jpg" alt="case-009 before"><figcaption>Before</figcaption></figure>
+        <figure><img src="images/case-009-after.jpg" alt="case-009 after"><figcaption>After</figcaption></figure>
+      </div>
+      <p><strong>Brief:</strong> An intentionally surreal night scene in which moon, water, reflected light, and spatial relationships may defy ordinary gravity or physical geometry; those impossible relationships are deliberate.</p>
+      <p><strong>Pass goal:</strong> Assess preservation of the declared surreal spatial intent without correcting intentional impossibility back toward realism.</p>
+      <div><strong>Preservation constraints:</strong><ul><li>Do not flag anti-gravity or impossible spatial relations merely for violating ordinary-world physics when they match the brief.</li><li>Do not invent visual changes when before and after evidence is identical.</li></ul></div>
+      <div class="controls">
+        <label>finding_expected
+          <select data-field="finding_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>ambiguity_expected
+          <select data-field="ambiguity_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>useful_action
+          <select data-field="useful_action"><option value="">—</option><option value="keep">keep</option><option value="correct">correct</option><option value="rollback">rollback</option><option value="abstain">abstain</option></select>
+        </label>
+        <label>note<textarea data-field="human_note" rows="3"></textarea></label>
+      </div>
+    </section>
+<section class="case" data-case-id="case-010">
+      <h2>case-010</h2>
+      <div class="images">
+        <figure><img src="images/case-010-before.jpg" alt="case-010 before"><figcaption>Before</figcaption></figure>
+        <figure><img src="images/case-010-after.jpg" alt="case-010 after"><figcaption>After</figcaption></figure>
+      </div>
+      <p><strong>Brief:</strong> A painterly elderly fisherman study balancing face character, weathered clothing, net material, depth, and a clear focal hierarchy.</p>
+      <p><strong>Pass goal:</strong> Improve material/depth relationships without allowing texture or secondary detail to compete with the face.</p>
+      <div><strong>Preservation constraints:</strong><ul><li>Preserve the face as the principal focal anchor.</li><li>Texture/material detail must remain subordinate to large form and depth.</li></ul></div>
+      <div class="controls">
+        <label>finding_expected
+          <select data-field="finding_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>ambiguity_expected
+          <select data-field="ambiguity_expected"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>
+        </label>
+        <label>useful_action
+          <select data-field="useful_action"><option value="">—</option><option value="keep">keep</option><option value="correct">correct</option><option value="rollback">rollback</option><option value="abstain">abstain</option></select>
+        </label>
+        <label>note<textarea data-field="human_note" rows="3"></textarea></label>
+      </div>
+    </section>
+  <script>
+    const ids = ["case-001","case-002","case-003","case-004","case-005","case-006","case-007","case-008","case-009","case-010"];
+    document.getElementById('export').addEventListener('click', () => {
+      const reviewer = document.getElementById('reviewer').value.trim();
+      const references = {};
+      let incomplete = 0;
+      for (const id of ids) {
+        const section = document.querySelector('[data-case-id="' + id + '"]');
+        const findingRaw = section.querySelector('[data-field="finding_expected"]').value;
+        const ambiguityRaw = section.querySelector('[data-field="ambiguity_expected"]').value;
+        const action = section.querySelector('[data-field="useful_action"]').value;
+        const note = section.querySelector('[data-field="human_note"]').value.trim();
+        const complete = findingRaw !== '' && ambiguityRaw !== '' && action !== '' && reviewer !== '';
+        if (!complete) incomplete++;
+        references[id] = {
+          status: complete ? 'complete' : 'pending',
+          finding_expected: findingRaw === '' ? null : findingRaw === 'true',
+          ambiguity_expected: ambiguityRaw === '' ? null : ambiguityRaw === 'true',
+          useful_action: action || null,
+          human_note: note,
+          adjudicated_by: reviewer,
+          adjudicated_at: complete ? new Date().toISOString() : null
+        };
+      }
+      if (incomplete) {
+        document.getElementById('status').textContent = incomplete + ' case(s) incomplete; fill every decision and reviewer id before export.';
+        return;
+      }
+      const payload = {schema_version:1,instructions:'Independent human adjudication completed before viewing critic answers.',references};
+      const blob = new Blob([JSON.stringify(payload,null,2) + '\n'], {type:'application/json'});
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob); link.download = 'human-reference.json'; link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 0);
+      document.getElementById('status').textContent = 'Exported human-reference.json';
+    });
+  </script>
+</body>
+</html>

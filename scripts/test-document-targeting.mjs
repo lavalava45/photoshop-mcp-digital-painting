@@ -87,6 +87,8 @@ assert(invalidHandlerRan === false, 'invalid document_id must fail before execut
 const guard = documentGuardScript(99);
 assert(guard.includes('app.documents[__mcp_di].id === __mcp_targetDocId'), 'guard should resolve by exact id');
 assert(guard.includes('document_not_found'), 'guard should fail closed when id is missing');
+assert(guard.includes('document_not_active'), 'guard should fail closed when another document is active');
+assert(!guard.includes('app.activeDocument = app.documents[__mcp_di]'), 'guard must not switch active documents');
 
 const scripts = [];
 const fakeConnection = {
@@ -105,8 +107,10 @@ const neuralHandler = wrapDocumentIdHandler(
   fakeConnection
 );
 const neural = await neuralHandler({ document_id: 99, filter: 'skin_smoothing' });
-assert(scripts.length === 1, 'UXP lane should pre-activate the pinned document');
-assert(scripts[0].includes('var __targetId = 99'), 'UXP pre-activation should use requested id');
+assert(scripts.length === 1, 'UXP lane should verify the pinned document');
+assert(scripts[0].includes('var __targetId = 99'), 'UXP active-document verification should use requested id');
+assert(scripts[0].includes('document_not_active'), 'UXP lane should fail closed instead of switching tabs');
+assert(!scripts[0].includes('app.activeDocument = app.documents[i]'), 'UXP lane must not switch active documents');
 assert(neuralObserved === 99, 'UXP handler should retain AsyncLocal target');
 assert(parseJsonText(neural).document_target?.id === 99, 'UXP result should report pinned document id');
 

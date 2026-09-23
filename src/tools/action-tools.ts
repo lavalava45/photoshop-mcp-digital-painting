@@ -2,8 +2,13 @@ import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 
-export function createActionTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createActionTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -24,7 +29,7 @@ export function createActionTools(connection: PhotoshopConnection): ToolDefiniti
           required: ['actionName', 'actionSetName'],
         },
       },
-      handler: async (args) => playAction(connection, args),
+      handler: async (args) => playAction(connection, backendRouter, args),
     },
     {
       tool: {
@@ -56,12 +61,39 @@ export function createActionTools(connection: PhotoshopConnection): ToolDefiniti
 
 async function playAction(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const actionName = args.actionName as string;
   const actionSetName = args.actionSetName as string;
 
   try {
+    const backend = await backendRouter.backendFor(
+      'action.play' as Parameters<PhotoshopBackendRouter['backendFor']>[0]
+    );
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' && Number.isSafeInteger(args.document_id) && args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'play_action',
+        {
+          actionName,
+          actionSetName,
+          ...(documentId !== undefined ? { document_id: documentId } : {}),
+        },
+        'uxp_play_action_failed'
+      );
+      if (!result.ok) throw new Error(result.error ?? 'uxp_play_action_failed');
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Action played: "${actionName}" from set "${actionSetName}"`,
+        }],
+      };
+    }
+
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 

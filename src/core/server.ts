@@ -1,4 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { fileURLToPath } from 'node:url';
+import { ExecutionLease } from './execution-lease.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   ListToolsRequestSchema,
@@ -37,7 +39,7 @@ import { createHistoryTools } from '../tools/history-tools.js';
 import { createLayerOrderingTools } from '../tools/layer-ordering-tools.js';
 import { createStateTools } from '../tools/state-tools.js';
 import { createRecipeTools } from '../tools/recipes/index.js';
-import { createGenerativeTools } from '../tools/generative-tools.js';
+import { createSkyReplacementTools } from '../tools/sky-replacement-tools.js';
 import { createNeuralTools } from '../tools/neural-tools.js';
 import { createStyleTools } from '../tools/style-tools.js';
 import { createColorAdjustmentTools } from '../tools/color-adjustment-tools.js';
@@ -47,8 +49,19 @@ import { createStackTools } from '../tools/stack-tools.js';
 import { createExportTools } from '../tools/export-tools.js';
 import { createPaintingTools } from '../tools/painting-tools.js';
 import { createMeasurementTools } from '../tools/measurement-tools.js';
+import { createMethodPaletteTools } from '../tools/method-palette-tools.js';
+import { createValueCheckTools } from '../tools/value-check-tools.js';
 import { createVisualMicroPlanTools } from '../tools/visual-microplan-tools.js';
+import { createGuardTools } from '../tools/guard-tools.js';
 import { ensureUxpBridgeServer } from '../platform/uxp-bridge-server.js';
+import { getUxpBridgeReadiness } from '../platform/uxp-bridge-client.js';
+import { buildPhotoshopPingPayload } from './photoshop-ping.js';
+import { withToolExecutionContext } from './execution-context.js';
+import {
+  EMBEDDED_GUARD_REQUIRED,
+  EmbeddedGuardRuntime,
+  shouldBlockRawTool,
+} from './guard/runtime.js';
 
 export interface PhotoshopMCPServerOptions {
   serverVersion: string;
@@ -60,6 +73,10 @@ export class PhotoshopMCPServer {
   private toolRegistry: ToolRegistry;
   private promptRegistry: PromptRegistry;
   private session: Session;
+  private guardRuntime: EmbeddedGuardRuntime | undefined;
+  private executionLease = new ExecutionLease(
+    fileURLToPath(new URL('../../.photoshop-runtime/execution.lock', import.meta.url))
+  );
 
   constructor(options: PhotoshopMCPServerOptions) {
     this.logger = new Logger('PhotoshopMCPServer');
@@ -106,10 +123,10 @@ export class PhotoshopMCPServer {
       tool: {
         name: 'photoshop_ping',
         description:
-          'Verify Photoshop is installed and reachable on this machine.\n\n' +
+          'Verify Photoshop and the preferred UXP companion are ready on this machine.\n\n' +
           'Use when: once at session start if connection status is unknown.\n' +
           'Do NOT use when: on every tool call — call once, then use photoshop_get_state.\n\n' +
-          'Returns: connection success or failure message.\n' +
+          'Returns: structured JSON with connected/ready state, selected transport, Photoshop version, UXP bridge revision match, active document, document count, and readiness-cache metadata.\n' +
           'Preconditions: none. Side effects: may trigger Photoshop detection.',
         inputSchema: { type: 'object', properties: {} },
       },
@@ -152,7 +169,7 @@ export class PhotoshopMCPServer {
     this.registerToolDefinitions(createHistoryTools(connection));
     this.registerToolDefinitions(createLayerOrderingTools(connection));
     this.registerToolDefinitions(createStateTools(connection));
-    this.registerToolDefinitions(createGenerativeTools(connection));
+    this.registerToolDefinitions(createSkyReplacementTools(connection));
     this.registerToolDefinitions(createNeuralTools(connection));
     this.registerToolDefinitions(createStyleTools(connection));
     this.registerToolDefinitions(createColorAdjustmentTools(connection));
@@ -163,7 +180,20 @@ export class PhotoshopMCPServer {
     this.registerToolDefinitions(createPaintingTools(connection));
     this.registerToolDefinitions(createMeasurementTools(connection));
     this.registerToolDefinitions(createRecipeTools(connection));
-    this.registerToolDefinitions(createVisualMicroPlanTools(this.toolRegistry));
+    this.registerToolDefinitions(createMethodPaletteTools(this.toolRegistry));
+    this.registerToolDefinitions(createValueCheckTools(this.toolRegistry));
+    const previewBarrierDirectory = process.env.PHOTOSHOP_PREVIEW_BARRIER_DIR?.trim()
+      || fileURLToPath(new URL('../../.photoshop-runtime/preview-barriers/', import.meta.url));
+    this.registerToolDefinitions(createVisualMicroPlanTools(
+      this.toolRegistry,
+      previewBarrierDirectory
+    ));
+    this.guardRuntime = new EmbeddedGuardRuntime(this.toolRegistry, {
+      previewBarrierDirectory,
+      executionLeaseFile: fileURLToPath(new URL('../../.photoshop-runtime/execution.lock', import.meta.url)),
+    });
+    this.guardRuntime.ensureRuntimeDirectories();
+    this.registerToolDefinitions(createGuardTools(this.guardRuntime));
 
     this.logger.info(
       `Registered ${this.toolRegistry.count()} tools and ${this.promptRegistry.count()} prompts`
@@ -197,9 +227,32 @@ export class PhotoshopMCPServer {
       const started = Date.now();
       this.logger.debug(`Tool called: ${toolName}`);
 
+      const guardTool = toolName.startsWith('photoshop_guard_');
+      if (EMBEDDED_GUARD_REQUIRED && shouldBlockRawTool(toolName) && this.guardRuntime) {
+        return this.guardRuntime.rawMutationBlocked(toolName);
+      }
+
+      let release: (() => void) | undefined;
       try {
+        if (!guardTool) {
+          try { release = this.executionLease.acquire(toolName); }
+          catch (error) {
+            return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify({
+              ok: false, code: 'execution_busy', execution: 'not-executed',
+              message: error instanceof Error ? error.message : String(error),
+            }) }] };
+          }
+        }
         const args = (request.params.arguments as Record<string, unknown>) || {};
-        const result = await this.toolRegistry.execute(toolName, args);
+        const meta = (request.params as unknown as { _meta?: Record<string, unknown> })._meta;
+        const rawDeadline = meta?.photoshop_mcp_deadline_at;
+        const deadlineAt = typeof rawDeadline === 'number' && Number.isFinite(rawDeadline)
+          ? Math.floor(rawDeadline)
+          : undefined;
+        const result = await withToolExecutionContext(
+          deadlineAt ? { deadlineAt } : {},
+          () => this.toolRegistry.execute(toolName, args)
+        );
         this.session.updateActivity();
         return result;
       } catch (error) {
@@ -212,6 +265,8 @@ export class PhotoshopMCPServer {
           });
         }
         throw error;
+      } finally {
+        release?.();
       }
     });
   }
@@ -219,13 +274,13 @@ export class PhotoshopMCPServer {
   private async pingPhotoshop() {
     const connection = this.session.getConnection();
     const isConnected = await connection.ping();
+    const uxp = await getUxpBridgeReadiness();
+    const payload = buildPhotoshopPingPayload(isConnected, uxp);
     return {
       content: [
         {
           type: 'text' as const,
-          text: isConnected
-            ? 'Successfully connected to Photoshop'
-            : 'Failed to connect to Photoshop',
+          text: JSON.stringify(payload, null, 2),
         },
       ],
     };

@@ -92,7 +92,7 @@ async function runNeuralFilter(
   if (!FILTER_KINDS.includes(filterRaw as NeuralFilterKind)) {
     return atomicFailure({
       ok: false,
-      code: 'generative_unavailable',
+      code: 'invalid_arguments',
       message: `filter must be one of: ${FILTER_KINDS.join(', ')}`,
     });
   }

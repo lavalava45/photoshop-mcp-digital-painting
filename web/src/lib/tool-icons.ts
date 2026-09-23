@@ -52,18 +52,13 @@ const EXACT_ICONS: Record<string, Component> = {
   photoshop_invert_selection: BoxSelect,
   photoshop_select_subject: BoxSelect,
   photoshop_list_fonts: Type,
-  photoshop_generative_fill: Sparkles,
-  photoshop_generative_remove: Eraser,
-  photoshop_generative_expand: Sparkles,
-  photoshop_generative_upscale: Sparkles,
   photoshop_sky_replacement: Sparkles,
-  photoshop_generate_image: Sparkles,
   photoshop_neural_filter: Sparkles,
 };
 
 const PATTERN_ICONS: IconMatcher[] = [
   { test: (n) => n.startsWith('photoshop_recipe_'), icon: Wand2 },
-  { test: (n) => n.startsWith('photoshop_generative_') || n === 'photoshop_generate_image' || n === 'photoshop_sky_replacement' || n === 'photoshop_neural_filter', icon: Sparkles },
+  { test: (n) => n === 'photoshop_sky_replacement' || n === 'photoshop_neural_filter', icon: Sparkles },
   { test: (n) => n.startsWith('photoshop_select_'), icon: BoxSelect },
   { test: (n) => n.includes('_mask'), icon: CircleDot },
   { test: (n) => n.includes('_text'), icon: Type },

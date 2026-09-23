@@ -119,7 +119,7 @@ async function runPassportPhoto(
           executeAction(stringIDToTypeID('autoCutout'), cutoutDesc, DialogModes.NO);
           subjectSelected = true;
         } catch (eSelectSubject) {
-          return failPassport({ ok: false, code: 'generative_unavailable', message: 'Select Subject is not available: ' + (eSelectSubject.message || eSelectSubject), suggested_next_tool: 'photoshop_get_capabilities' });
+          return failPassport({ ok: false, code: 'version_unsupported', message: 'Select Subject is not available: ' + (eSelectSubject.message || eSelectSubject), suggested_next_tool: 'photoshop_get_capabilities' });
         }
       }
 

@@ -1,7 +1,7 @@
 {
   "name": "photoshop-mcp-digital-painting-fork",
   "version": "1.7.6",
-  "description": "Independent community fork of Photoshop MCP for AI-driven digital painting — 134 tools with painting, VisualMicroPlan execution, color sampling, landmarks/guides, previews, recipes, and hardened document targeting. Based on alisaitteke/photoshop-mcp; not an official upstream release.",
+  "description": "Independent community fork of Photoshop MCP for AI-driven digital painting — 145 tools with painting, two-level Art Director/Painter orchestration, embedded Guard orchestration, VisualMicroPlan execution, color sampling, grayscale value analysis, landmarks/guides, previews, recipes, method selection, and hardened document targeting. Based on alisaitteke/photoshop-mcp; not an official upstream release.",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
@@ -27,7 +27,6 @@
     "build": "npm run build:server && npm run build:web",
     "build:server": "node scripts/clean-dist.mjs && tsc",
     "build:web": "npm --prefix web install --no-audit --no-fund && npm --prefix web run build",
-    "build:site": "npm --prefix site run build",
     "start": "node dist/index.js",
     "start:ui": "node dist/ui/cli.js",
     "lint": "eslint src --ext .ts",
@@ -46,6 +45,8 @@
     "test:landmark-ergonomics": "node scripts/test-landmark-ergonomics.mjs",
     "test:painting-batching": "node scripts/test-painting-batching.mjs",
     "test:painting-batching-live": "node scripts/test-painting-batching-live.mjs",
+    "test:embedded-guard-mcp": "node scripts/test-embedded-guard-mcp.mjs",
+    "test:acceptance": "vitest run tests/embedded-guard.test.ts tests/session-store-regressions.test.ts tests/recovery-state-machine.test.ts tests/microplan-recovery.test.ts tests/preview-barriers.test.ts tests/execution-lease.test.ts tests/legacy-consumer-retirement.test.ts tests/legacy-transport-retirement.test.ts tests/uxp-migration-completeness.test.ts src/platform/uxp-bridge-server.test.ts",
     "test:document-targeting": "node scripts/test-document-targeting.mjs",
     "test:document-targeting-live": "node scripts/test-document-targeting-live.mjs",
     "test:color-sampling": "node scripts/test-color-sampling.mjs",
@@ -56,8 +57,7 @@
     "build:mcpb": "tsx scripts/build-mcpb.ts",
     "prepublishOnly": "npm run build && npm run sync:server-version && npm run verify:pack",
     "test:unit": "vitest run",
-    "verify:tool-counts": "tsx scripts/verify-tool-counts.ts",
-    "site:data": "tsx scripts/generate-site-data.ts"
+    "verify:tool-counts": "tsx scripts/verify-tool-counts.ts"
   },
   "keywords": [
     "mcp",
@@ -102,6 +102,7 @@
     "better-sqlite3": "^12.9.0",
     "get-port": "^7.1.0",
     "hono": "^4.6.14",
+    "jpeg-js": "^0.4.4",
     "open": "^10.1.0",
     "zod": "^4.4.3"
   },

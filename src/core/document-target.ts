@@ -22,6 +22,18 @@ export const DOCUMENT_ID_SCHEMA_EXCLUDES = new Set([
   'photoshop_list_fonts',
   'photoshop_transform_landmarks',
   'photoshop_compare_landmarks',
+  'photoshop_guard_capabilities',
+  'photoshop_guard_status',
+  'photoshop_guard_resume',
+  'photoshop_guard_cycle',
+  'photoshop_guard_cycle_auto',
+  'photoshop_guard_job_poll',
+  'photoshop_guard_report',
+  'photoshop_guard_ack_operation',
+  'photoshop_guard_verdict',
+  'photoshop_guard_reconcile',
+  'photoshop_guard_set_priorities',
+  'photoshop_guard_recover_lock',
 ]);
 
 /** Non-ExtendScript tools that still mutate the currently active Photoshop document. */
@@ -32,7 +44,8 @@ export const DOCUMENT_ID_PROPERTY = {
   minimum: 1,
   description:
     'Optional Photoshop document id from photoshop_get_state / photoshop_list_documents. ' +
-    'When set, the tool activates that document before running so a UI tab switch cannot retarget the edit.',
+    'When set, the tool verifies that this document is already active and fails closed if another tab is active. ' +
+    'It never switches the active Photoshop document automatically.',
 } as const;
 
 export function runWithDocumentId<T>(documentId: number | undefined, fn: () => T): T {
@@ -101,17 +114,24 @@ function annotateDocumentTarget(result: CallToolResult, documentId: number): Cal
   return { ...result, content };
 }
 
-async function preactivateDocument(connection: PhotoshopConnection, documentId: number): Promise<void> {
+async function verifyActiveDocument(connection: PhotoshopConnection, documentId: number): Promise<void> {
   const script = `
 (function() {
   var __targetId = ${documentId};
+  var __found = false;
   for (var i = 0; i < app.documents.length; i++) {
     if (app.documents[i].id === __targetId) {
-      app.activeDocument = app.documents[i];
-      return String(app.activeDocument.id);
+      __found = true;
+      break;
     }
   }
-  throw new Error('document_not_found: no open document with id ' + __targetId);
+  if (!__found) {
+    throw new Error('document_not_found: no open document with id ' + __targetId);
+  }
+  if (app.activeDocument.id !== __targetId) {
+    throw new Error('document_not_active: pinned document ' + __targetId + ' is open but not active; active document was not changed');
+  }
+  return String(app.activeDocument.id);
 })();
   `.trim();
   await connection.executeScript(script);
@@ -136,8 +156,10 @@ export function wrapDocumentIdHandler(
         return invalidDocumentIdResult(`document targeting is unavailable for ${toolName}`);
       }
       try {
-        await preactivateDocument(connection, documentId);
+        await verifyActiveDocument(connection, documentId);
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const code = /document_not_active/i.test(message) ? 'document_not_active' : 'document_not_found';
         return {
           content: [
             {
@@ -145,8 +167,8 @@ export function wrapDocumentIdHandler(
               text: JSON.stringify(
                 {
                   ok: false,
-                  code: 'document_not_found',
-                  message: error instanceof Error ? error.message : String(error),
+                  code,
+                  message,
                   suggested_next_tool: 'photoshop_list_documents',
                   document_target: { id: documentId, pinned: true },
                 },
@@ -201,13 +223,15 @@ export function documentGuardScript(documentId: number): string {
       var __mcp_found = false;
       for (var __mcp_di = 0; __mcp_di < app.documents.length; __mcp_di++) {
         if (app.documents[__mcp_di].id === __mcp_targetDocId) {
-          app.activeDocument = app.documents[__mcp_di];
           __mcp_found = true;
           break;
         }
       }
       if (!__mcp_found) {
         throw new Error('document_not_found: no open document with id ' + __mcp_targetDocId);
+      }
+      if (app.activeDocument.id !== __mcp_targetDocId) {
+        throw new Error('document_not_active: pinned document ' + __mcp_targetDocId + ' is open but not active; active document was not changed');
       }
     })();
   `;

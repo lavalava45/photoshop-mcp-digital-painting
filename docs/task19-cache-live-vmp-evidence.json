@@ -1,0 +1,138 @@
+{
+  "protocol": "photoshop.task19.live_vmp_cache_ab.v1",
+  "generated_from": "durable compact-v2 Guard operation journals",
+  "document_id": 73,
+  "layer_provenance": "3",
+  "pairs": [
+    {
+      "pair": 1,
+      "child_pid": 4572,
+      "cold": {
+        "operation_id": "cache-final-p1-cold",
+        "preparation_host_calls": 1,
+        "cache_events": [
+          {
+            "reason": "miss_empty",
+            "tool": "photoshop_get_brush_settings",
+            "step_id": "prep"
+          }
+        ],
+        "guard_preflight_ms": 147,
+        "photoshop_dispatch_wall_ms": 338,
+        "guard_cycle_total_ms": 938,
+        "semantic_cycle_wall_ms": 12759
+      },
+      "warm": {
+        "operation_id": "cache-final-p1-warm",
+        "preparation_host_calls": 0,
+        "cache_events": [
+          {
+            "reason": "hit",
+            "tool": "photoshop_get_brush_settings",
+            "step_id": "prep"
+          }
+        ],
+        "guard_preflight_ms": 219,
+        "photoshop_dispatch_wall_ms": 376,
+        "guard_cycle_total_ms": 1076,
+        "semantic_cycle_wall_ms": 22606
+      }
+    },
+    {
+      "pair": 2,
+      "child_pid": 348,
+      "cold": {
+        "operation_id": "cache-final-p2-cold",
+        "preparation_host_calls": 1,
+        "cache_events": [
+          {
+            "reason": "miss_empty",
+            "tool": "photoshop_get_brush_settings",
+            "step_id": "prep"
+          }
+        ],
+        "guard_preflight_ms": 150,
+        "photoshop_dispatch_wall_ms": 366,
+        "guard_cycle_total_ms": 1062,
+        "semantic_cycle_wall_ms": 13525
+      },
+      "warm": {
+        "operation_id": "cache-final-p2-warm",
+        "preparation_host_calls": 0,
+        "cache_events": [
+          {
+            "reason": "hit",
+            "tool": "photoshop_get_brush_settings",
+            "step_id": "prep"
+          }
+        ],
+        "guard_preflight_ms": 252,
+        "photoshop_dispatch_wall_ms": 322,
+        "guard_cycle_total_ms": 1235,
+        "semantic_cycle_wall_ms": 14018
+      }
+    },
+    {
+      "pair": 3,
+      "child_pid": 20324,
+      "cold": {
+        "operation_id": "cache-final-p3-cold",
+        "preparation_host_calls": 1,
+        "cache_events": [
+          {
+            "reason": "miss_empty",
+            "tool": "photoshop_get_brush_settings",
+            "step_id": "prep"
+          }
+        ],
+        "guard_preflight_ms": 145,
+        "photoshop_dispatch_wall_ms": 370,
+        "guard_cycle_total_ms": 1004,
+        "semantic_cycle_wall_ms": 14875
+      },
+      "warm": {
+        "operation_id": "cache-final-p3-warm",
+        "preparation_host_calls": 0,
+        "cache_events": [
+          {
+            "reason": "hit",
+            "tool": "photoshop_get_brush_settings",
+            "step_id": "prep"
+          }
+        ],
+        "guard_preflight_ms": 220,
+        "photoshop_dispatch_wall_ms": 273,
+        "guard_cycle_total_ms": 1101,
+        "semantic_cycle_wall_ms": 29843
+      }
+    }
+  ],
+  "medians": {
+    "preparation_host_calls": {
+      "cold_median": 1,
+      "warm_median": 0
+    },
+    "guard_preflight_ms": {
+      "cold_median": 147,
+      "warm_median": 220
+    },
+    "photoshop_dispatch_wall_ms": {
+      "cold_median": 366,
+      "warm_median": 322
+    },
+    "guard_cycle_total_ms": {
+      "cold_median": 1004,
+      "warm_median": 1101
+    },
+    "semantic_cycle_wall_ms": {
+      "cold_median": 13525,
+      "warm_median": 22606
+    }
+  },
+  "interpretation": {
+    "cache_reuse_proved": true,
+    "cold_child_restart_proved": true,
+    "preparation_host_call_reduction": "cold median 1 -> warm median 0",
+    "latency_claim": "No blanket speedup claim. Warm preparation reuse is proven, while measured Guard/dispatch/semantic timings include unrelated runtime and host/model gaps and are reported as observed."
+  }
+}

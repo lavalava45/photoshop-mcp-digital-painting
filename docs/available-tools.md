@@ -1,18 +1,52 @@
 # Available Tools
 
-**134 tools total** — 118 atomic/non-recipe `photoshop_*` tools plus 16 recipe `photoshop_recipe_*` workflows (single undo step each).
+**145 tools total** — 129 atomic/non-recipe `photoshop_*` tools plus 16 recipe `photoshop_recipe_*` workflows (single undo step each). The atomic/non-recipe count includes 11 public `photoshop_guard_*` tools for durable native-MCP orchestration.
+
+The Guard surface includes `photoshop_guard_art_director`, which manages the high-level
+Planner directive independently from Painter mutations. `action=review` records global
+assessment, priorities, bounded Painter tasks and an adaptive `review_after_microplans`
+horizon; `action=interrupt` returns early from Painter without a Photoshop mutation when
+the directive cannot be followed safely; `action=complete` closes a fully satisfied task
+queue. `photoshop_guard_status` / `photoshop_guard_resume` expose the active directive,
+current task, completed micro-plan count and review/interrupt reason.
 
 Reference for all atomic `photoshop_*` MCP tools exposed by this server (parameters, examples, and return shapes).
 
 ← Back to [README](../README.md)
 
+### Embedded Guard
+
+For Chat On Steroids, use the dedicated `dist/cos-plugin.js` entry point. It enables `PHOTOSHOP_GUARD_MODE=required`: read-only Photoshop tools remain directly callable, while raw mutating tools return `guard_required` and must be named inside a `photoshop_guard_cycle_auto` operation. This keeps the raw schemas visible for planning without allowing them to bypass the durable Guard.
+
+The native Guard surface is:
+
+- `photoshop_guard_capabilities`
+- `photoshop_guard_status`
+- `photoshop_guard_resume`
+- `photoshop_guard_cycle`
+- `photoshop_guard_cycle_auto`
+- `photoshop_guard_job_poll`
+- `photoshop_guard_reconcile`
+- `photoshop_guard_set_priorities`
+- `photoshop_guard_art_director`
+- `photoshop_guard_set_art_run`
+- `photoshop_guard_recover_lock`
+
+`photoshop_guard_cycle_auto` is the normal mutation entry point. It journals intent before dispatch, closes technical report/receipt/verdict state behind the compact facade, captures required previews for visual mutations, preserves uncertainty/replay protection, and starts a durable in-process job when predicted/observed work is long-running.
+
 ### Connection & Info
 
 #### `photoshop_ping`
-Test connection to Photoshop.
+Return structured connection and preferred-route readiness for Photoshop.
+
+The payload distinguishes general Photoshop connectivity from readiness of the preferred UXP
+route. It includes `connected`, `ready`, `degraded`, selected `transport`, Photoshop version,
+actual/expected bridge revision and revision match, active document, document count, and readiness
+cache hit/age/TTL metadata. A connected legacy route with a missing or stale UXP companion is
+reported as degraded rather than as fully ready.
 
 ```javascript
-// Example: Check if Photoshop is accessible
+// Example: Check Photoshop connectivity and preferred UXP readiness
 photoshop_ping()
 ```
 
@@ -27,7 +61,10 @@ photoshop_get_version()
 ### Document Management
 
 #### `photoshop_create_document`
-Create a new Photoshop document.
+Create a new Photoshop document through the UXP companion. Guarded calls use the Guard operation id
+as the stable UXP command identity, so a lost response can be reconciled from the durable command
+receipt without creating a second document. Ready/revision mismatch fails before dispatch; there is
+no post-dispatch ExtendScript fallback.
 
 **Parameters:**
 - `width` (number, required): Document width in pixels
@@ -44,6 +81,10 @@ photoshop_create_document({
   colorMode: "RGB"
 })
 ```
+
+**Returns:** the real created `document.id` plus name, dimensions, resolution, color mode, UXP
+transport metadata and the stable command/receipt identity. Document creation itself is a
+non-visual bootstrap step and does not require a visual verdict.
 
 #### `photoshop_get_document_info`
 Get information about the active document.
@@ -125,12 +166,25 @@ photoshop_create_layer({ name: "Background" })
 ```
 
 #### `photoshop_delete_layer`
-Delete the active layer.
+Delete one exact layer. Pass `layer_id` to discard a logical rollback unit by stable id;
+the tool restores an unrelated previously-active layer when possible. Omitting `layer_id`
+retains the legacy active-layer behavior.
 
 ```javascript
 // Example: Delete current layer
 photoshop_delete_layer()
 ```
+
+#### `photoshop_merge_layer_down`
+Merge one exact source layer into one exact immediately-below sibling:
+
+```text
+photoshop_merge_layer_down({ layer_id: 77, target_layer_id: 55 })
+```
+
+The tool fails closed when the ids are identical, missing, not siblings, or not adjacent.
+Use it only after the source logical hypothesis is accepted and no longer requires
+independent rollback.
 
 #### `photoshop_create_text_layer`
 Create a text layer.
@@ -966,7 +1020,9 @@ photoshop_place_image({
 ```
 
 #### `photoshop_open_image`
-Open an image file as a new document.
+Open an image file as a new document through the UXP companion. It uses the same stable durable
+bootstrap receipt/recovery protocol as `photoshop_create_document`; once Photoshop has claimed the
+open command, the operation is never blindly replayed after a lost response.
 
 **Parameters:**
 - `filePath` (string, required): Full path to the image file
@@ -978,27 +1034,14 @@ photoshop_open_image({
 })
 ```
 
-### Generative AI (Firefly)
+**Returns:** the opened document id/name/dimensions plus UXP command receipt metadata. Arbitrary
+absolute filesystem paths rely on the companion's configured `localFileSystem: "fullAccess"`;
+no persisted UXP session token is introduced by this tool.
 
-Requires Photoshop 24+ and signed-in Adobe generative credits. Call `photoshop_get_capabilities` first.
-
-#### `photoshop_generative_fill`
-Fill the current selection with Generative Fill. **Parameters:** `prompt` (required)
-
-#### `photoshop_generative_remove`
-AI Remove on the current selection. **Parameters:** `feather_px`, `auto_select_subject`
-
-#### `photoshop_generative_expand`
-Extend canvas with Generative Expand. **Parameters:** `prompt`, `direction`
-
-#### `photoshop_generative_upscale`
-Generative Upscale (PS 27+). **Parameters:** `target_scale` (2 or 4)
+### Native Sky Replacement
 
 #### `photoshop_sky_replacement`
 Native Sky Replacement. **Parameters:** `sky_image_path` (optional)
-
-#### `photoshop_generate_image`
-Text-to-image. **Parameters:** `prompt`, `width`, `height`
 
 ### Neural Filters (UXP bridge)
 
@@ -1208,39 +1251,111 @@ taper with a hard round brush can show slight segment texture; higher step
 counts reduce it. Dynamics is intentionally rejected for closed strokes.
 
 #### `photoshop_paint_dabs`
-Paint up to 5000 independent Brush dabs in one MCP call. Dabs with identical
-color/size/opacity/flow are grouped and internally chunked into short Photoshop
-scripts for timeout resilience. Use this for dense tonal buildup, stippling,
-texture and overlapping patch work where individual marks do not need directional
-Bezier geometry.
+Paint up to 5000 independent Brush dabs in one MCP call. Only adjacent dabs with
+identical color/size/opacity/flow are collapsed into ordered style runs; the tool
+never reorders non-adjacent compatible marks. Runs are internally chunked into short
+Photoshop scripts for timeout resilience. Optional `layer_id` pins execution to a stable
+raster layer and restores the previously active layer afterward.
+
+#### `photoshop_paint_regions`
+Fill one or more ordered closed Bezier regions directly into raster layers. This is
+the broad-mass/block-in primitive: use it for silhouettes, large value/color families
+and early recognition features that would otherwise require many overlapping dabs or
+thick strokes. Coordinates and Bezier handles are canvas pixels regardless of document
+DPI. Each region may target a stable `layer_id`; input array order is overlap/paint
+order. Optional `clip_bounds` is enforced against every anchor and handle. A region may
+contain one ADD contour plus later SUBTRACT contours for holes/cutouts.
+
+#### `photoshop_get_painting_method_capabilities`
+Return the executable painting-method palette derived from tools actually registered in
+the current runtime. Entries report `available`, `conditional`, or `unavailable`, plus
+the primary tool, preparation tools, execution hints, limitations and fallbacks. This is
+the authoritative place to distinguish a verified path from a Photoshop feature that has
+no exposed execution primitive.
+
+#### `photoshop_select_painting_method`
+Read-only method router implementing:
+
+```text
+visual_intent → impact_class → method → registered runtime tool → fallback
+```
+
+It supports explicit `avoid_method_ids` and returns the selected method plus executable
+fallbacks and rejected/unavailable candidates. Use it when several causal mechanisms can
+address the same visual problem instead of defaulting to a round/soft brush.
+
+The selector also accepts optional `edge_class` (`hard|firm|soft|lost|broken`) and
+`preferred_method_id`. When supplied it returns `edge_selection`, compiled independently
+against the same live capability map. An unavailable preferred method is reported in
+`rejected` and the next compatible available edge method is selected explicitly.
+
+#### `photoshop_analyze_value_structure`
+Read-only grayscale/value evidence for Art Director review. It captures the pinned
+document through the existing preview pipeline, converts the JPEG to grayscale in Node,
+and returns the grayscale image plus descriptive luminance summaries (`p10/p50/p90`,
+dark/midtone/light proportions, center/border means). It does **not** modify the PSD and
+does **not** declare artistic PASS automatically. The caller must inspect the grayscale
+image and record a machine-readable Art Director `value_check`.
 
 #### `photoshop_execute_visual_microplan`
 Execute one **atomic visual bundle** as a single MCP round-trip:
 
 ```text
 0..N preparation/read steps
-→ exactly one approved visual mutation
-→ photoshop_get_preview
+→ optional before photoshop_get_preview
+→ 1..4 contiguous compatible visual mutations
+→ mandatory final photoshop_get_preview
 → STOP for visual verdict
 ```
 
 The tool is intentionally narrower than the standalone UI Action Plan. It cannot
-queue multiple semantic passes. Allowed visual mutations are currently
-`photoshop_paint_strokes`, `photoshop_paint_dabs`, `photoshop_fill_layer`, and
+queue multiple semantic passes. All bundled mutations must share one `intent`, one
+semantic `region`/optional `region_bounds`, one `method_class`, one plan-level `risk`,
+one `expected_visual_delta` and one `verification_envelope`. Step metadata cannot change
+those boundaries, and a step cannot declare higher risk than the enclosing plan. Allowed visual mutations are currently
+`photoshop_paint_strokes`, `photoshop_paint_dabs`, `photoshop_paint_regions`, `photoshop_fill_layer`, and
 `photoshop_undo`. Preparation may select/read brush state, sample/measure, inspect
 layers/state/history, select/create a layer, and set brush/foreground state.
 
-`document_id` is required and is propagated into document-bound internal steps.
-Step argument values may reference an earlier normalized JSON result with
-`$steps.<stepId>.<dot.path>`. If a brush preset is selected, a later
-`photoshop_get_brush_settings` is mandatory before the mutation.
+For those mutations, `method_class` is executable rather than descriptive: Pencil-only
+strokes are `line`, Smudge-only strokes are `smudge`, Eraser-only strokes are `erase`,
+closed region painting is `region`, normal Brush/dab work is `paint`, fills are `fill`, and
+Undo is `rollback`. `preset-brush` requires an explicit preceding preset selection and
+normal Brush strokes. Mixed mechanisms fail closed and must be split into separate semantic
+transactions.
 
-The preview image is returned in the same MCP result. Its SHA-256 opens a server
-barrier: the next VisualMicroPlan for that document is rejected until the caller
-supplies `previous_preview: { sha256, verdict, disposition }`, proving that the
-exact prior frame was classified as `improvement`, `neutral`, or `regression`.
+`document_id` is required and is propagated into document-bound internal steps.
+When `stage=RECOGNITION_BLOCK_IN`, the plan must use `scale=global` and declare
+3–7 `recognition_features`; optional `style_recognition_features` records the
+large-scale style cues that should already be visible in that first readable pass.
+Step argument values may reference an earlier normalized JSON result with
+`$steps.<stepId>.<dot.path>`. `photoshop_select_brush_preset` already returns a fresh
+post-selection effective-settings readback, so an immediate duplicate
+`photoshop_get_brush_settings` is unnecessary unless brush state may be stale/changed.
+
+`protected_layer_ids` provides executable protection for features isolated on stable
+layers. When present, `photoshop_paint_strokes`, `photoshop_paint_dabs` and
+`photoshop_fill_layer` must pin `layer_id`, while every `photoshop_paint_regions` entry
+must pin its own `layer_id`. Unknown targets and protected targets fail closed before
+mutation dispatch. `replace_protected_layer_ids` is the explicit exception for an
+intentional `REPLACE`/`ERASE` of a protected layer. Semantic `protected_regions` remains
+descriptive rather than an arbitrary pixel mask.
+
+Optional `logical_layer` metadata makes the rollback unit explicit. `create-new` and
+`temporary-hypothesis` require exactly one create-layer step plus one or more concrete
+separation reasons; all visual mutations must target that new layer through its stable-id
+placeholder. `continue-logical-layer` and `adjust` must reuse the declared existing
+`layer_id` and may not create another layer. `keep`, `discard` and `merge` are explicit
+lifecycle decisions and are intentionally not hidden inside a paint micro-plan.
+
+The final preview is returned in the same MCP result. Its SHA-256 opens a server
+barrier: the next VisualMicroPlan is rejected until `previous_preview` supplies that
+SHA plus `observed_change`, `target_resolved`, `regressions`, `uncertainty`, `verdict`
+and `disposition`. The optional before preview is evidence only and never releases
+the barrier.
 Mutation errors are never blindly retried; the tool still attempts the mandatory
-preview because an AUTO batch may have partially changed the canvas.
+preview because an earlier operation in the same transaction may already have changed
+the canvas. Remaining mutations after the first failure are not dispatched.
 
 ### Measurement & Guides
 

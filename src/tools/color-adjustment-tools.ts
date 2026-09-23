@@ -1,6 +1,9 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
+import { documentGuardScript } from '../core/document-target.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter, type PhotoshopPrimitive } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 import {
   atomicFailureFromError,
   atomicSuccess,
@@ -13,7 +16,25 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
   return Math.max(min, Math.min(max, n));
 }
 
-export function createColorAdjustmentTools(connection: PhotoshopConnection): ToolDefinition[] {
+function documentIdParams(args: Record<string, unknown>): Record<string, unknown> {
+  return typeof args.document_id === 'number' &&
+    Number.isSafeInteger(args.document_id) &&
+    args.document_id > 0
+    ? { document_id: args.document_id }
+    : {};
+}
+
+function guardLegacyScript(args: Record<string, unknown>, script: string): string {
+  const documentId = documentIdParams(args).document_id;
+  return typeof documentId === 'number'
+    ? `${documentGuardScript(documentId)}\n${script}`
+    : script;
+}
+
+export function createColorAdjustmentTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -37,7 +58,7 @@ export function createColorAdjustmentTools(connection: PhotoshopConnection): Too
           required: ['lut'],
         },
       },
-      handler: async (args) => applyLut(connection, args),
+      handler: async (args) => applyLut(connection, backendRouter, args),
     },
     {
       tool: {
@@ -55,7 +76,7 @@ export function createColorAdjustmentTools(connection: PhotoshopConnection): Too
           },
         },
       },
-      handler: async (args) => adjustVibrance(connection, args),
+      handler: async (args) => adjustVibrance(connection, backendRouter, args),
     },
     {
       tool: {
@@ -74,7 +95,7 @@ export function createColorAdjustmentTools(connection: PhotoshopConnection): Too
           },
         },
       },
-      handler: async (args) => adjustExposure(connection, args),
+      handler: async (args) => adjustExposure(connection, backendRouter, args),
     },
     {
       tool: {
@@ -95,7 +116,7 @@ export function createColorAdjustmentTools(connection: PhotoshopConnection): Too
           },
         },
       },
-      handler: async (args) => applyPhotoFilter(connection, args),
+      handler: async (args) => applyPhotoFilter(connection, backendRouter, args),
     },
     {
       tool: {
@@ -112,21 +133,39 @@ export function createColorAdjustmentTools(connection: PhotoshopConnection): Too
           },
         },
       },
-      handler: async (args) => applyGradientMap(connection, args),
+      handler: async (args) => applyGradientMap(connection, backendRouter, args),
     },
   ];
 }
 
 async function runAdjustmentSnippet(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>,
+  primitive: PhotoshopPrimitive,
+  action: string,
+  params: Record<string, unknown>,
   script: string,
   summary: string
 ): Promise<ToolResult> {
   try {
-    const raw = await runSnippet(connection, script);
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Unparseable adjustment result: ${String(raw)}`));
+    const backend = await backendRouter.backendFor(primitive);
+    let parsed: Record<string, unknown>;
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        action,
+        { ...params, ...documentIdParams(args) },
+        `uxp_${action}_failed`
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? `uxp_${action}_failed`);
+      parsed = result.data;
+    } else {
+      const raw = await runSnippet(connection, guardLegacyScript(args, script));
+      const legacyParsed = parseSnippetResult(raw);
+      if (!legacyParsed) {
+        return atomicFailureFromError(new Error(`Unparseable adjustment result: ${String(raw)}`));
+      }
+      parsed = legacyParsed;
     }
     return atomicSuccess(summary, parsed);
   } catch (error) {
@@ -136,6 +175,7 @@ async function runAdjustmentSnippet(
 
 async function applyLut(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const lut = typeof args.lut === 'string' ? args.lut.trim() : '';
@@ -144,6 +184,11 @@ async function applyLut(
   }
   return runAdjustmentSnippet(
     connection,
+    backendRouter,
+    args,
+    'adjustment.lut',
+    'apply_lut',
+    { lut },
     ExtendScriptSnippets.applyLut(lut),
     `Color Lookup adjustment layer created (${lut})`
   );
@@ -151,12 +196,18 @@ async function applyLut(
 
 async function adjustVibrance(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const vibrance = clampNumber(args.vibrance, -100, 100, 40);
   const saturation = clampNumber(args.saturation, -100, 100, 0);
   return runAdjustmentSnippet(
     connection,
+    backendRouter,
+    args,
+    'adjustment.vibrance',
+    'adjust_vibrance',
+    { vibrance, saturation },
     ExtendScriptSnippets.adjustVibrance(vibrance, saturation),
     `Vibrance adjustment layer created (vibrance ${vibrance}, saturation ${saturation})`
   );
@@ -164,6 +215,7 @@ async function adjustVibrance(
 
 async function adjustExposure(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const exposure = clampNumber(args.exposure, -20, 20, 0.5);
@@ -171,6 +223,11 @@ async function adjustExposure(
   const gamma = clampNumber(args.gamma, 0.01, 9.99, 1);
   return runAdjustmentSnippet(
     connection,
+    backendRouter,
+    args,
+    'adjustment.exposure',
+    'adjust_exposure',
+    { exposure, offset, gamma },
     ExtendScriptSnippets.adjustExposure(exposure, offset, gamma),
     `Exposure adjustment layer created (${exposure} stops)`
   );
@@ -178,6 +235,7 @@ async function adjustExposure(
 
 async function applyPhotoFilter(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const red = clampNumber(args.red, 0, 255, 236);
@@ -187,6 +245,11 @@ async function applyPhotoFilter(
   const preserve = args.preserve_luminosity !== false;
   return runAdjustmentSnippet(
     connection,
+    backendRouter,
+    args,
+    'adjustment.photo_filter',
+    'apply_photo_filter',
+    { red, green, blue, density, preserve_luminosity: preserve },
     ExtendScriptSnippets.applyPhotoFilter(red, green, blue, density, preserve),
     `Photo Filter adjustment layer created (density ${density}%)`
   );
@@ -194,11 +257,17 @@ async function applyPhotoFilter(
 
 async function applyGradientMap(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const reverse = args.reverse === true;
   return runAdjustmentSnippet(
     connection,
+    backendRouter,
+    args,
+    'adjustment.gradient_map',
+    'apply_gradient_map',
+    { reverse },
     ExtendScriptSnippets.applyGradientMap(reverse),
     `Gradient Map adjustment layer created${reverse ? ' (reversed)' : ''}`
   );

@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "case-001",
+      "before": {
+        "filename": "case-001-before.jpg",
+        "sha256": "8ddb5cff29d0529d39fd7b27baea3ff8f80458084eb92bec8c6abe02f95b4e90",
+        "size_bytes": 11363
+      },
+      "after": {
+        "filename": "case-001-after.jpg",
+        "sha256": "20670ec9d666becd73d56aca9e6503f96ce195facf16d7b214e4e4a9e2dd5aea",
+        "size_bytes": 11363
+      }
+    },
+    {
+      "case_id": "case-002",
+      "before": {
+        "filename": "case-002-before.jpg",
+        "sha256": "202c8ad602f325a8ef7c10068efc68afe61a0232c769acf4d35c8a81c6177e9f",
+        "size_bytes": 56977
+      },
+      "after": {
+        "filename": "case-002-after.jpg",
+        "sha256": "159100d2f54f8dbb63e212fcc820034089409c558d8bddf1f3f0c843f31a482f",
+        "size_bytes": 60840
+      }
+    },
+    {
+      "case_id": "case-003",
+      "before": {
+        "filename": "case-003-before.jpg",
+        "sha256": "f429b8309b5570a5a19621e4d02da30062d1be6f6723f4d13486c9fa1b856a53",
+        "size_bytes": 161293
+      },
+      "after": {
+        "filename": "case-003-after.jpg",
+        "sha256": "7f2ee9bb35cd93ef180cebbc6d3590435cf2cb6b6504a7d7b3d6ed86f847b3e6",
+        "size_bytes": 160981
+      }
+    },
+    {
+      "case_id": "case-004",
+      "before": {
+        "filename": "case-004-before.jpg",
+        "sha256": "d352278cbca1205f6fd639b4c703c43eab83b70aa61aacc8f58d41d4eaeb7d76",
+        "size_bytes": 49101
+      },
+      "after": {
+        "filename": "case-004-after.jpg",
+        "sha256": "74536c2ada24fa6d760986477729076c4a5f7f970f103408b87814e0627fa9dc",
+        "size_bytes": 69474
+      }
+    },
+    {
+      "case_id": "case-005",
+      "before": {
+        "filename": "case-005-before.jpg",
+        "sha256": "e32d8f1a66b423ee698397ab87b1e5c5b062a64092fdaedb16bee6affbaeb5d2",
+        "size_bytes": 69474
+      },
+      "after": {
+        "filename": "case-005-after.jpg",
+        "sha256": "743ad44b17f6320d4d7afc24c8fec8fc3ea92fbe8eb44f2f0aa0ad68a4b0d20f",
+        "size_bytes": 75503
+      }
+    },
+    {
+      "case_id": "case-006",
+      "before": {
+        "filename": "case-006-before.jpg",
+        "sha256": "8e1027e74fac27d752b6cf2eb7327ab288449c01c44a4dddddd1789fac85ab3d",
+        "size_bytes": 78156
+      },
+      "after": {
+        "filename": "case-006-after.jpg",
+        "sha256": "fb1ea2bc5b708849fe7c362ba23ca94f878c1d4dee215e7907bb66986355539b",
+        "size_bytes": 81664
+      }
+    },
+    {
+      "case_id": "case-007",
+      "before": {
+        "filename": "case-007-before.jpg",
+        "sha256": "4813c45c519afa3d88c26a239c64a63d388cec325acc0bc61c7d57b7b5d8a8c5",
+        "size_bytes": 29448
+      },
+      "after": {
+        "filename": "case-007-after.jpg",
+        "sha256": "3d96af9148bf819cef0686a40fba5613ab5bce4ea06537fc87c794675590c0c3",
+        "size_bytes": 29327
+      }
+    },
+    {
+      "case_id": "case-008",
+      "before": {
+        "filename": "case-008-before.png",
+        "sha256": "195cb7fe054c9a28c7daaac8770ece978c2a70866a8f8a8376c81770eef6ffaa",
+        "size_bytes": 93912
+      },
+      "after": {
+        "filename": "case-008-after.png",
+        "sha256": "195cb7fe054c9a28c7daaac8770ece978c2a70866a8f8a8376c81770eef6ffaa",
+        "size_bytes": 93912
+      }
+    },
+    {
+      "case_id": "case-009",
+      "before": {
+        "filename": "case-009-before.jpg",
+        "sha256": "3d96af9148bf819cef0686a40fba5613ab5bce4ea06537fc87c794675590c0c3",
+        "size_bytes": 29327
+      },
+      "after": {
+        "filename": "case-009-after.jpg",
+        "sha256": "3d96af9148bf819cef0686a40fba5613ab5bce4ea06537fc87c794675590c0c3",
+        "size_bytes": 29327
+      }
+    },
+    {
+      "case_id": "case-010",
+      "before": {
+        "filename": "case-010-before.jpg",
+        "sha256": "5eb58e5ee635e097a7c9c8ed60b4a57d2b54aa3258d9ee46193ed318a0918777",
+        "size_bytes": 175203
+      },
+      "after": {
+        "filename": "case-010-after.jpg",
+        "sha256": "48ef0b532f8045e7a35cd73b048f900f62ffe455bb244bc247c8e6cb8768d1ff",
+        "size_bytes": 175591
+      }
+    }
+  ]
+}

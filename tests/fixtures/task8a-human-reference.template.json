@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "instructions": "Fill only from independent human adjudication completed before viewing critic answers. Producer reports/verdicts are not valid human reference.",
+  "references": {
+    "case-001": null,
+    "case-002": null,
+    "case-003": null,
+    "case-004": null,
+    "case-005": null,
+    "case-006": null,
+    "case-007": null,
+    "case-008": null,
+    "case-009": null,
+    "case-010": null
+  },
+  "completed_reference_shape": {
+    "status": "complete",
+    "finding_expected": "boolean: whether the human reference says there is a material issue/loss the reviewer should flag",
+    "ambiguity_expected": "boolean: whether abstention/uncertainty is appropriate",
+    "useful_action": "keep | correct | rollback | abstain",
+    "human_note": "free text",
+    "adjudicated_by": "human identifier/role",
+    "adjudicated_at": "ISO-8601 timestamp"
+  }
+}

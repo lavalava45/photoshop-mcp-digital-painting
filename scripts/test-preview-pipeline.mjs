@@ -44,11 +44,20 @@ try {
 
   const richResult = await client.callTool({
     name: 'photoshop_get_preview',
-    arguments: { document_id: documentId, max_dimension_px: 384, quality: 7 },
+    arguments: {
+      document_id: documentId,
+      max_dimension_px: 384,
+      quality: 7,
+      focus_region: { left: 0, top: 0, right: 128, bottom: 128 },
+      focus_max_dimension_px: 512,
+    },
   });
   const richMetadata = metadataFrom(richResult);
-  const imageBlock = richResult.content?.find((item) => item.type === 'image');
+  const imageBlocks = richResult.content?.filter((item) => item.type === 'image') ?? [];
+  const imageBlock = imageBlocks[0];
   if (!imageBlock?.data) throw new Error('Default preview response is missing MCP image content');
+  if (imageBlocks.length !== 2) throw new Error(`Expected overview + focus image blocks, got ${imageBlocks.length}`);
+  if (!richMetadata.focus?.sha256) throw new Error('Focus preview metadata is missing');
   const richBuffer = Buffer.from(imageBlock.data, 'base64');
   assertJpeg(richBuffer, 'MCP image block');
   if (richBuffer.length !== richMetadata.bytes) {
@@ -65,6 +74,8 @@ try {
       quality: 7,
       materialize_path: materializedPath,
       include_image: false,
+      focus_region: { left: 0, top: 0, right: 128, bottom: 128 },
+      focus_max_dimension_px: 512,
     },
   });
   const fileMetadata = metadataFrom(fileResult);
@@ -79,6 +90,14 @@ try {
   }
   if (fileMetadata.materialized_path !== materializedPath) {
     throw new Error(`Unexpected materialized path: ${fileMetadata.materialized_path}`);
+  }
+  const focusPath = fileMetadata.focus?.materialized_path;
+  if (typeof focusPath !== 'string') throw new Error('Materialized focus path is missing');
+  const focusBuffer = await readFile(focusPath);
+  assertJpeg(focusBuffer, 'Materialized focus preview');
+  const focusSha256 = createHash('sha256').update(focusBuffer).digest('hex');
+  if (focusSha256 !== fileMetadata.focus.sha256) {
+    throw new Error(`Materialized focus SHA-256 mismatch: ${focusSha256} != ${fileMetadata.focus.sha256}`);
   }
 
   console.log('PREVIEW_PIPELINE_TEST_OK');

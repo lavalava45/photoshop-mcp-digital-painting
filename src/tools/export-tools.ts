@@ -1,6 +1,8 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpOperation } from '../platform/uxp-bridge-client.js';
 import {
   atomicFailureFromError,
   atomicSuccess,
@@ -11,7 +13,10 @@ import {
 const EXPORT_FORMATS = ['PNG', 'JPEG', 'WEBP', 'AVIF'] as const;
 type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
-export function createExportTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createExportTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -33,13 +38,14 @@ export function createExportTools(connection: PhotoshopConnection): ToolDefiniti
           required: ['path'],
         },
       },
-      handler: async (args) => exportAs(connection, args),
+      handler: async (args) => exportAs(connection, backendRouter, args),
     },
   ];
 }
 
 async function exportAs(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const filePath = typeof args.path === 'string' ? args.path.trim() : '';
@@ -55,13 +61,40 @@ async function exportAs(
       : 80;
 
   try {
-    const raw = await runSnippet(
-      connection,
-      ExtendScriptSnippets.exportAs(filePath, format, quality)
-    );
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Unparseable export result: ${String(raw)}`));
+    const backend = await backendRouter.backendFor('document.export');
+    let parsed: Record<string, unknown>;
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' &&
+        Number.isSafeInteger(args.document_id) &&
+        args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'export_as',
+        {
+          ...(documentId !== undefined ? { document_id: documentId } : {}),
+          path: filePath,
+          format,
+          quality,
+        },
+        'uxp_export_as_failed',
+        60_000
+      );
+      if (!result.ok || !result.data) {
+        return atomicFailureFromError(new Error(result.error ?? 'uxp_export_as_failed'));
+      }
+      parsed = result.data;
+    } else {
+      const raw = await runSnippet(
+        connection,
+        ExtendScriptSnippets.exportAs(filePath, format, quality)
+      );
+      const legacy = parseSnippetResult(raw);
+      if (!legacy) {
+        return atomicFailureFromError(new Error(`Unparseable export result: ${String(raw)}`));
+      }
+      parsed = legacy;
     }
     if (parsed.ok === false) {
       return atomicFailureFromError(new Error(String(parsed.message || 'Export failed')), {

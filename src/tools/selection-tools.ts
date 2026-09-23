@@ -3,6 +3,15 @@ import { PhotoshopConnection } from '../platform/connection.js';
 import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
 import { PhotoshopDetector } from '../platform/detector.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import {
+  invokeUxpCreateLayerMask,
+  invokeUxpFeatherSelection,
+  invokeUxpOperation,
+  invokeUxpSelectEllipse,
+  invokeUxpSelectRectangle,
+  invokeUxpSelectSubject,
+} from '../platform/uxp-bridge-client.js';
 import {
   atomicFailure,
   atomicFailureFromError,
@@ -49,7 +58,10 @@ function parseSelectionBounds(
   return Object.keys(details).length > 0 ? details : undefined;
 }
 
-export function createSelectionTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createSelectionTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -65,7 +77,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           properties: {},
         },
       },
-      handler: async () => getSelectionBounds(connection),
+      handler: async () => getSelectionBounds(backendRouter),
     },
     {
       tool: {
@@ -99,7 +111,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           required: ['left', 'top', 'right', 'bottom'],
         },
       },
-      handler: async (args) => selectEllipse(connection, args),
+      handler: async (args) => selectEllipse(connection, backendRouter, args),
     },
     {
       tool: {
@@ -122,7 +134,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           required: ['pixels'],
         },
       },
-      handler: async (args) => expandSelection(connection, args),
+      handler: async (args) => expandSelection(connection, backendRouter, args),
     },
     {
       tool: {
@@ -145,7 +157,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           required: ['pixels'],
         },
       },
-      handler: async (args) => contractSelection(connection, args),
+      handler: async (args) => contractSelection(connection, backendRouter, args),
     },
     {
       tool: {
@@ -168,7 +180,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           required: ['pixels'],
         },
       },
-      handler: async (args) => featherSelection(connection, args),
+      handler: async (args) => featherSelection(connection, backendRouter, args),
     },
     {
       tool: {
@@ -189,7 +201,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           },
         },
       },
-      handler: async (args) => saveSelection(connection, args),
+      handler: async (args) => saveSelection(connection, backendRouter, args),
     },
     {
       tool: {
@@ -223,7 +235,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           required: ['left', 'top', 'right', 'bottom'],
         },
       },
-      handler: async (args) => selectRectangle(connection, args),
+      handler: async (args) => selectRectangle(connection, backendRouter, args),
     },
     {
       tool: {
@@ -234,7 +246,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           properties: {},
         },
       },
-      handler: async () => selectAll(connection),
+      handler: async () => selectAll(connection, backendRouter),
     },
     {
       tool: {
@@ -245,7 +257,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           properties: {},
         },
       },
-      handler: async () => deselect(connection),
+      handler: async () => deselect(connection, backendRouter),
     },
     {
       tool: {
@@ -256,7 +268,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           properties: {},
         },
       },
-      handler: async () => invertSelection(connection),
+      handler: async () => invertSelection(connection, backendRouter),
     },
     {
       tool: {
@@ -273,7 +285,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           properties: {},
         },
       },
-      handler: async () => createLayerMask(connection),
+        handler: async (args) => createLayerMask(connection, backendRouter, args),
     },
     {
       tool: {
@@ -284,7 +296,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           properties: {},
         },
       },
-      handler: async () => deleteLayerMask(connection),
+      handler: async () => deleteLayerMask(connection, backendRouter),
     },
     {
       tool: {
@@ -295,7 +307,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           properties: {},
         },
       },
-      handler: async () => applyLayerMask(connection),
+      handler: async () => applyLayerMask(connection, backendRouter),
     },
     {
       tool: {
@@ -319,7 +331,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           },
         },
       },
-      handler: async (args) => selectSubject(connection, args),
+      handler: async (args) => selectSubject(connection, backendRouter, args),
     },
     {
       tool: {
@@ -329,7 +341,7 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           'Users often say: remove distraction, erase object, content aware fill, inpaint selection.\n\n' +
           'Use when: a rectangular or other selection covers the area to remove/replace.\n' +
           'Do NOT use when: no selection exists — use photoshop_select_rectangle first.\n' +
-          'Do NOT use when: generative remove is requested — not scriptable; use this fill or manual touch-up.\n\n' +
+          'Use this for deterministic local inpainting or object removal after making a selection.\n\n' +
           'Returns: JSON { ok, summary, details: { filled } }.\n' +
           'Preconditions: active document and active pixel selection.\n' +
           'Side effects: modifies pixels inside selection; deselects afterward.',
@@ -338,18 +350,14 @@ export function createSelectionTools(connection: PhotoshopConnection): ToolDefin
           properties: {},
         },
       },
-      handler: async () => contentAwareFill(connection),
+      handler: async () => contentAwareFill(connection, backendRouter),
     },
   ];
 }
 
-async function getSelectionBounds(connection: PhotoshopConnection): Promise<ToolResult> {
+async function getSelectionBounds(backendRouter: PhotoshopBackendRouter): Promise<ToolResult> {
   try {
-    const raw = await runSnippet(connection, ExtendScriptSnippets.getSelectionBounds());
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Snippet returned unparseable payload: ${String(raw)}`));
-    }
+    const parsed = await backendRouter.readSelectionBounds();
 
     if (parsed.ok === false) {
       const code = parsed.code === 'no_document' ? 'no_active_document' : 'extendscript_runtime_error';
@@ -384,6 +392,7 @@ async function getSelectionBounds(connection: PhotoshopConnection): Promise<Tool
 
 async function selectEllipse(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const left = args.left as number;
@@ -401,15 +410,17 @@ async function selectEllipse(
   }
 
   try {
+    const backend = await backendRouter.backendFor('selection.ellipse');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpSelectEllipse({ left, top, right, bottom });
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_select_ellipse_failed');
+      return atomicSuccess('Elliptical selection created', parseSelectionBounds(result.data));
+    }
     const raw = await runSnippet(connection, ExtendScriptSnippets.selectEllipse(left, top, right, bottom));
     const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Snippet returned unparseable payload: ${String(raw)}`));
-    }
-
+    if (!parsed) throw new Error(`Snippet returned unparseable payload: ${String(raw)}`);
     const failure = mapSelectionSnippetFailure(parsed);
     if (failure) return failure;
-
     return atomicSuccess('Elliptical selection created', parseSelectionBounds(parsed));
   } catch (error) {
     return atomicFailureFromError(error);
@@ -418,6 +429,7 @@ async function selectEllipse(
 
 async function expandSelection(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const pixels = parseRequiredPixels(args);
@@ -431,6 +443,21 @@ async function expandSelection(
   }
 
   try {
+    const backend = await backendRouter.backendFor('selection.expand');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'expand_selection',
+        { pixels },
+        'uxp_expand_selection_failed'
+      );
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? 'uxp_expand_selection_failed');
+      }
+      const failure = mapSelectionSnippetFailure(result.data);
+      if (failure) return failure;
+      return atomicSuccess(`Selection expanded by ${pixels}px`, parseSelectionBounds(result.data));
+    }
+
     const raw = await runSnippet(connection, ExtendScriptSnippets.expandSelection(pixels));
     const parsed = parseSnippetResult(raw);
     if (!parsed) {
@@ -448,6 +475,7 @@ async function expandSelection(
 
 async function contractSelection(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const pixels = parseRequiredPixels(args);
@@ -461,6 +489,21 @@ async function contractSelection(
   }
 
   try {
+    const backend = await backendRouter.backendFor('selection.contract');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'contract_selection',
+        { pixels },
+        'uxp_contract_selection_failed'
+      );
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? 'uxp_contract_selection_failed');
+      }
+      const failure = mapSelectionSnippetFailure(result.data);
+      if (failure) return failure;
+      return atomicSuccess(`Selection contracted by ${pixels}px`, parseSelectionBounds(result.data));
+    }
+
     const raw = await runSnippet(connection, ExtendScriptSnippets.contractSelection(pixels));
     const parsed = parseSnippetResult(raw);
     if (!parsed) {
@@ -478,6 +521,7 @@ async function contractSelection(
 
 async function featherSelection(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const pixels = parseRequiredPixels(args);
@@ -491,15 +535,17 @@ async function featherSelection(
   }
 
   try {
+    const backend = await backendRouter.backendFor('selection.feather');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpFeatherSelection({ pixels });
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_feather_selection_failed');
+      return atomicSuccess(`Selection feathered by ${pixels}px`, parseSelectionBounds(result.data));
+    }
     const raw = await runSnippet(connection, ExtendScriptSnippets.featherSelection(pixels));
     const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Snippet returned unparseable payload: ${String(raw)}`));
-    }
-
+    if (!parsed) throw new Error(`Snippet returned unparseable payload: ${String(raw)}`);
     const failure = mapSelectionSnippetFailure(parsed);
     if (failure) return failure;
-
     return atomicSuccess(`Selection feathered by ${pixels}px`, parseSelectionBounds(parsed));
   } catch (error) {
     return atomicFailureFromError(error);
@@ -508,6 +554,7 @@ async function featherSelection(
 
 async function saveSelection(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const channelName =
@@ -516,6 +563,25 @@ async function saveSelection(
       : undefined;
 
   try {
+    const backend = await backendRouter.backendFor('selection.save');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'save_selection',
+        channelName ? { channel_name: channelName } : {},
+        'uxp_save_selection_failed'
+      );
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? 'uxp_save_selection_failed');
+      }
+      const failure = mapSelectionSnippetFailure(result.data);
+      if (failure) return failure;
+      const name = typeof result.data.channel_name === 'string' ? result.data.channel_name : channelName;
+      return atomicSuccess(
+        name ? `Selection saved to channel \"${name}\"` : 'Selection saved to new alpha channel',
+        parseSelectionBounds(result.data)
+      );
+    }
+
     const raw = await runSnippet(connection, ExtendScriptSnippets.saveSelection(channelName));
     const parsed = parseSnippetResult(raw);
     if (!parsed) {
@@ -537,6 +603,7 @@ async function saveSelection(
 
 async function selectRectangle(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const left = args.left as number;
@@ -545,11 +612,13 @@ async function selectRectangle(
   const bottom = args.bottom as number;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.selectRectangle(left, top, right, bottom);
-    await api.executeScript(script);
+    const backend = await backendRouter.backendFor('selection.rectangle');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpSelectRectangle({ left, top, right, bottom });
+      if (!result.ok) throw new Error(result.error ?? 'uxp_select_rectangle_failed');
+    } else {
+      await runSnippet(connection, ExtendScriptSnippets.selectRectangle(left, top, right, bottom));
+    }
 
     return {
       content: [
@@ -572,8 +641,20 @@ async function selectRectangle(
   }
 }
 
-async function selectAll(connection: PhotoshopConnection): Promise<ToolResult> {
+async function selectAll(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter
+): Promise<ToolResult> {
   try {
+    const backend = await backendRouter.backendFor('selection.all');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation('select_all', {}, 'uxp_select_all_failed');
+      if (!result.ok) throw new Error(result.error ?? 'uxp_select_all_failed');
+      return {
+        content: [{ type: 'text' as const, text: 'All selected' }],
+      };
+    }
+
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 
@@ -601,8 +682,20 @@ async function selectAll(connection: PhotoshopConnection): Promise<ToolResult> {
   }
 }
 
-async function deselect(connection: PhotoshopConnection): Promise<ToolResult> {
+async function deselect(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter
+): Promise<ToolResult> {
   try {
+    const backend = await backendRouter.backendFor('selection.deselect');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation('deselect', {}, 'uxp_deselect_failed');
+      if (!result.ok) throw new Error(result.error ?? 'uxp_deselect_failed');
+      return {
+        content: [{ type: 'text' as const, text: 'Selection cleared' }],
+      };
+    }
+
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 
@@ -630,8 +723,24 @@ async function deselect(connection: PhotoshopConnection): Promise<ToolResult> {
   }
 }
 
-async function invertSelection(connection: PhotoshopConnection): Promise<ToolResult> {
+async function invertSelection(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter
+): Promise<ToolResult> {
   try {
+    const backend = await backendRouter.backendFor('selection.invert');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'invert_selection',
+        {},
+        'uxp_invert_selection_failed'
+      );
+      if (!result.ok) throw new Error(result.error ?? 'uxp_invert_selection_failed');
+      return {
+        content: [{ type: 'text' as const, text: 'Selection inverted' }],
+      };
+    }
+
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 
@@ -659,37 +768,56 @@ async function invertSelection(connection: PhotoshopConnection): Promise<ToolRes
   }
 }
 
-async function createLayerMask(connection: PhotoshopConnection): Promise<ToolResult> {
+async function createLayerMask(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.createLayerMask();
-    await api.executeScript(script);
-
+    const backend = await backendRouter.backendFor('layer.mask.create');
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' &&
+        Number.isSafeInteger(args.document_id) &&
+        args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpCreateLayerMask(
+        documentId !== undefined ? { document_id: documentId } : {}
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_create_layer_mask_failed');
+    } else {
+      await runSnippet(connection, ExtendScriptSnippets.createLayerMask());
+    }
     return {
-      content: [
-        {
-          type: 'text' as const,
-          text: 'Layer mask created from selection',
-        },
-      ],
+      content: [{
+        type: 'text' as const,
+        text: 'Layer mask created from selection',
+      }],
     };
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error creating layer mask: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      ],
-      isError: true,
-    };
+    return atomicFailureFromError(error);
   }
 }
 
-async function deleteLayerMask(connection: PhotoshopConnection): Promise<ToolResult> {
+async function deleteLayerMask(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter
+): Promise<ToolResult> {
   try {
+    const backend = await backendRouter.backendFor('layer.mask.delete');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'delete_layer_mask',
+        {},
+        'uxp_delete_layer_mask_failed'
+      );
+      if (!result.ok) throw new Error(result.error ?? 'uxp_delete_layer_mask_failed');
+      return {
+        content: [{ type: 'text' as const, text: 'Layer mask deleted' }],
+      };
+    }
+
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 
@@ -717,8 +845,24 @@ async function deleteLayerMask(connection: PhotoshopConnection): Promise<ToolRes
   }
 }
 
-async function applyLayerMask(connection: PhotoshopConnection): Promise<ToolResult> {
+async function applyLayerMask(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter
+): Promise<ToolResult> {
   try {
+    const backend = await backendRouter.backendFor('layer.mask.apply');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'apply_layer_mask',
+        {},
+        'uxp_apply_layer_mask_failed'
+      );
+      if (!result.ok) throw new Error(result.error ?? 'uxp_apply_layer_mask_failed');
+      return {
+        content: [{ type: 'text' as const, text: 'Layer mask applied (merged to layer)' }],
+      };
+    }
+
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 
@@ -748,6 +892,7 @@ async function applyLayerMask(connection: PhotoshopConnection): Promise<ToolResu
 
 async function selectSubject(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const sampleAllLayers = args.sample_all_layers === true;
@@ -767,12 +912,16 @@ async function selectSubject(
   }
 
   try {
+    const backend = await backendRouter.backendFor('selection.subject');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpSelectSubject({ sample_all_layers: sampleAllLayers });
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_select_subject_failed');
+      const method = typeof result.data.method === 'string' ? result.data.method : 'selectSubject';
+      return atomicSuccess(`Subject selected via ${method}`, result.data);
+    }
     const raw = await runSnippet(connection, ExtendScriptSnippets.selectSubject(sampleAllLayers));
     const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Snippet returned unparseable payload: ${String(raw)}`));
-    }
-
+    if (!parsed) throw new Error(`Snippet returned unparseable payload: ${String(raw)}`);
     const method = typeof parsed.method === 'string' ? parsed.method : 'selectSubject';
     return atomicSuccess(`Subject selected via ${method}`, parsed);
   } catch (error) {
@@ -780,8 +929,26 @@ async function selectSubject(
   }
 }
 
-async function contentAwareFill(connection: PhotoshopConnection): Promise<ToolResult> {
+async function contentAwareFill(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter
+): Promise<ToolResult> {
   try {
+    const backend = await backendRouter.backendFor('selection.content_aware_fill');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'content_aware_fill',
+        {},
+        'uxp_content_aware_fill_failed'
+      );
+      if (!result.ok || !result.data) {
+        throw new Error(result.error ?? 'uxp_content_aware_fill_failed');
+      }
+      const failure = mapSelectionSnippetFailure(result.data);
+      if (failure) return failure;
+      return atomicSuccess('Content-aware fill applied', result.data);
+    }
+
     const raw = await runSnippet(connection, ExtendScriptSnippets.contentAwareFill());
     const parsed = parseSnippetResult(raw);
     if (!parsed) {

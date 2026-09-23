@@ -1,6 +1,8 @@
 import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import { invokeUxpMoveLayer } from '../platform/uxp-bridge-client.js';
 import {
   atomicFailureFromError,
   atomicSuccess,
@@ -8,7 +10,10 @@ import {
   runSnippet,
 } from './atomic-shared.js';
 
-export function createLayerOrderingTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createLayerOrderingTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -36,7 +41,7 @@ export function createLayerOrderingTools(connection: PhotoshopConnection): ToolD
           required: ['position'],
         },
       },
-      handler: async (args) => moveLayerToPosition(connection, args),
+      handler: async (args) => moveLayerToPosition(connection, backendRouter, args),
     },
     {
       tool: {
@@ -47,7 +52,7 @@ export function createLayerOrderingTools(connection: PhotoshopConnection): ToolD
           properties: {},
         },
       },
-      handler: async () => moveLayerToTop(connection),
+      handler: async (args) => moveLayerToTop(connection, backendRouter, args),
     },
     {
       tool: {
@@ -58,7 +63,7 @@ export function createLayerOrderingTools(connection: PhotoshopConnection): ToolD
           properties: {},
         },
       },
-      handler: async () => moveLayerToBottom(connection),
+      handler: async (args) => moveLayerToBottom(connection, backendRouter, args),
     },
     {
       tool: {
@@ -69,7 +74,7 @@ export function createLayerOrderingTools(connection: PhotoshopConnection): ToolD
           properties: {},
         },
       },
-      handler: async () => moveLayerUp(connection),
+      handler: async (args) => moveLayerUp(connection, backendRouter, args),
     },
     {
       tool: {
@@ -80,13 +85,14 @@ export function createLayerOrderingTools(connection: PhotoshopConnection): ToolD
           properties: {},
         },
       },
-      handler: async () => moveLayerDown(connection),
+      handler: async (args) => moveLayerDown(connection, backendRouter, args),
     },
   ];
 }
 
 async function moveLayerToPosition(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const targetLayerName =
@@ -106,13 +112,27 @@ async function moveLayerToPosition(
   }
 
   try {
-    const raw = await runSnippet(
-      connection,
-      ExtendScriptSnippets.moveLayerToPosition(targetLayerName, position, targetLayerId)
-    );
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) {
-      return atomicFailureFromError(new Error(`Unparseable move-layer result: ${String(raw)}`));
+    const backend = await backendRouter.backendFor('layer.order.write');
+    let parsed: Record<string, unknown>;
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpMoveLayer({
+        ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+        position: position as 'ABOVE' | 'BELOW' | 'TOP' | 'BOTTOM',
+        ...(targetLayerId !== undefined ? { targetLayerId } : {}),
+        ...(targetLayerName !== undefined ? { targetLayerName } : {}),
+      });
+      if (!result.ok || !result.data) return atomicFailureFromError(new Error(result.error ?? 'uxp_move_layer_failed'));
+      parsed = normalizePositionResult(result.data, position);
+    } else {
+      const raw = await runSnippet(
+        connection,
+        ExtendScriptSnippets.moveLayerToPosition(targetLayerName, position, targetLayerId)
+      );
+      const legacy = parseSnippetResult(raw);
+      if (!legacy) {
+        return atomicFailureFromError(new Error(`Unparseable move-layer result: ${String(raw)}`));
+      }
+      parsed = legacy;
     }
     return atomicSuccess(`Layer moved ${position}`, parsed, 'photoshop_get_layers');
   } catch (error) {
@@ -120,46 +140,107 @@ async function moveLayerToPosition(
   }
 }
 
-async function moveLayerToTop(connection: PhotoshopConnection): Promise<ToolResult> {
+async function moveLayerToTop(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   try {
-    const raw = await runSnippet(connection, ExtendScriptSnippets.moveLayerToTop());
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) return atomicFailureFromError(new Error(`Unparseable move-to-top result: ${String(raw)}`));
+    const parsed = await moveSimple(
+      connection, backendRouter, args, 'TOP', ExtendScriptSnippets.moveLayerToTop(), 'move-to-top'
+    );
     return atomicSuccess('Layer moved to top', parsed, 'photoshop_get_layers');
   } catch (error) {
     return atomicFailureFromError(error);
   }
 }
 
-async function moveLayerToBottom(connection: PhotoshopConnection): Promise<ToolResult> {
+async function moveLayerToBottom(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   try {
-    const raw = await runSnippet(connection, ExtendScriptSnippets.moveLayerToBottom());
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) return atomicFailureFromError(new Error(`Unparseable move-to-bottom result: ${String(raw)}`));
+    const parsed = await moveSimple(
+      connection, backendRouter, args, 'BOTTOM', ExtendScriptSnippets.moveLayerToBottom(), 'move-to-bottom'
+    );
     return atomicSuccess('Layer moved to bottom', parsed, 'photoshop_get_layers');
   } catch (error) {
     return atomicFailureFromError(error);
   }
 }
 
-async function moveLayerUp(connection: PhotoshopConnection): Promise<ToolResult> {
+async function moveLayerUp(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   try {
-    const raw = await runSnippet(connection, ExtendScriptSnippets.moveLayerUp());
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) return atomicFailureFromError(new Error(`Unparseable move-up result: ${String(raw)}`));
+    const parsed = await moveSimple(
+      connection, backendRouter, args, 'UP', ExtendScriptSnippets.moveLayerUp(), 'move-up'
+    );
     return atomicSuccess('Layer moved up', parsed, 'photoshop_get_layers');
   } catch (error) {
     return atomicFailureFromError(error);
   }
 }
 
-async function moveLayerDown(connection: PhotoshopConnection): Promise<ToolResult> {
+async function moveLayerDown(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   try {
-    const raw = await runSnippet(connection, ExtendScriptSnippets.moveLayerDown());
-    const parsed = parseSnippetResult(raw);
-    if (!parsed) return atomicFailureFromError(new Error(`Unparseable move-down result: ${String(raw)}`));
+    const parsed = await moveSimple(
+      connection, backendRouter, args, 'DOWN', ExtendScriptSnippets.moveLayerDown(), 'move-down'
+    );
     return atomicSuccess('Layer moved down', parsed, 'photoshop_get_layers');
   } catch (error) {
     return atomicFailureFromError(error);
   }
+}
+
+async function moveSimple(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>,
+  position: 'TOP' | 'BOTTOM' | 'UP' | 'DOWN',
+  legacySnippet: string,
+  legacyParseLabel: string
+): Promise<Record<string, unknown>> {
+  const backend = await backendRouter.backendFor('layer.order.write');
+  if (backend.kind === 'uxp') {
+    const result = await invokeUxpMoveLayer({
+      ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+      position,
+    });
+    if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_move_layer_failed');
+    return result.data;
+  }
+  const raw = await runSnippet(connection, legacySnippet);
+  const parsed = parseSnippetResult(raw);
+  if (!parsed) throw new Error(`Unparseable ${legacyParseLabel} result: ${String(raw)}`);
+  return parsed;
+}
+
+function documentIdFromArgs(args: Record<string, unknown>): number | undefined {
+  return typeof args.document_id === 'number' &&
+    Number.isSafeInteger(args.document_id) &&
+    args.document_id > 0
+    ? args.document_id
+    : undefined;
+}
+
+function normalizePositionResult(
+  data: Record<string, unknown>,
+  position: string
+): Record<string, unknown> {
+  if (position !== 'TOP' && position !== 'BOTTOM') return data;
+  return {
+    moved: data.moved,
+    layerName: data.layerName,
+    layerId: data.layerId,
+    position,
+    context: data.context,
+  };
 }

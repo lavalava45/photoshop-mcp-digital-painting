@@ -24,6 +24,22 @@ The result contains:
 - one MCP `image` content block containing the JPEG as base64;
 - one text metadata block containing width, height and byte size.
 
+For local work, add a document-space crop:
+
+```json
+{
+  "max_dimension_px": 1000,
+  "focus_region": { "left": 420, "top": 180, "right": 760, "bottom": 520 },
+  "focus_max_dimension_px": 1200
+}
+```
+
+The canonical whole-document frame remains the top-level preview and SHA used by
+the hard preview barrier. The local crop is returned as `focus` metadata plus a
+second image block (or `*-focus.jpg` when materialized). Its coordinates remain in
+source-document pixels, so planning and correction coordinates do not depend on the
+overview downscale.
+
 For a terminal/direct-stdio client, pass an absolute `materialize_path` and set
 `include_image` to `false`:
 
@@ -37,14 +53,14 @@ For a terminal/direct-stdio client, pass an absolute `materialize_path` and set
 }
 ```
 
-The preview is still generated only once in Photoshop. Node reads that same
-temporary JPEG buffer, writes it to `materialize_path`, returns the materialized
-path in the metadata, and then removes Photoshop's temporary file.
+The canonical preview is generated once. When `focus_region` is requested, a second
+read-only crop export is generated in the same MCP tool call. Node materializes both
+and removes Photoshop's temporary files.
 
 `materialize_path` must be an absolute path. Missing parent directories are
 created automatically. The tool does not modify the source document.
 
-## Chat On Steroids Core workflow
+## Retiring direct-stdio preview helper
 
 The repository includes a small direct-stdio helper:
 
@@ -62,16 +78,24 @@ The `.mcp-preview/` directory is git-ignored. The helper prints the resulting
 path, document id, dimensions, byte size and SHA-256 digest. The resulting JPEG
 can then be opened directly with the host's local file/image reader.
 
-This is the recommended verification loop for the project's Core + direct
-stdio workflow:
+This helper may remain useful to isolated tests while the Core/controller dependencies
+are migrated, but it is not a supported agent workflow and must not receive new
+dependencies. Ordinary Chat On Steroids Photoshop work uses the native Plugins +
+embedded-Guard route:
 
 ```text
 Photoshop edit
-→ photoshop_get_preview (materialize_path, include_image=false)
-→ local preview JPEG
+→ photoshop_get_preview (overview + optional document-space focus crop)
+→ inspect overview and local evidence
 → visual inspection
 → next semantic pass
 ```
+
+For painting, `photoshop_execute_visual_microplan` can place one read-only preview
+immediately before its single mutation and the mandatory preview immediately after.
+With the same `focus_region`, the caller receives a direct before/after local comparison
+inside one external MCP action; only the final canonical frame participates in the
+next-mutation barrier.
 
 It replaces the older workaround of calling `photoshop_get_preview`, seeing
 only its text metadata in a terminal helper, and then issuing a separate

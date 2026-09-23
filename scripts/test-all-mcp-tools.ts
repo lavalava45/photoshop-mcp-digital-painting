@@ -788,40 +788,27 @@ async function main(): Promise<void> {
     code: `var doc=app.activeDocument; var target=null; function findRaster(c){for(var i=0;i<c.layers.length;i++){var L=c.layers[i]; if(L.typename==='LayerSet'){var n=findRaster(L); if(n)return n;} else if(String(L.kind)==='LayerKind.NORMAL'&&!L.isBackgroundLayer){return L;}} return null;} target=findRaster(doc); if(!target) throw new Error('No raster layer'); doc.activeLayer=target; return {active:target.name,kind:String(target.kind)};`,
   });
   await t.run('photoshop_select_rectangle', { left: 80, top: 80, right: 200, bottom: 200 });
-  const recipeAiSmoke = process.env.PHOTOSHOP_AI_SMOKE === '1';
   await t.run('photoshop_recipe_remove_distraction', {
     feather_px: 1,
-    ...(recipeAiSmoke ? {} : { use_generative: false }),
   });
   await t.run('photoshop_undo', { steps: 1 });
   await t.run('photoshop_recipe_sky_blend', {
     sky_image_path: testPng,
     horizon_pct: 45,
-    ...(recipeAiSmoke ? {} : { use_native_sky: false }),
   });
   await t.run('photoshop_undo', { steps: 1 });
 
-  const generativeSkip =
-    process.env.PHOTOSHOP_AI_SMOKE === '1'
+  const neuralSkip =
+    process.env.PHOTOSHOP_NEURAL_SMOKE === '1'
       ? undefined
-      : 'set PHOTOSHOP_AI_SMOKE=1 for live generative credit tests';
+      : 'set PHOTOSHOP_NEURAL_SMOKE=1 for live Neural Filter tests';
 
-  console.log('\n=== Phase 14b: Generative & Neural AI ===');
-  await t.run('photoshop_select_rectangle', { left: 100, top: 100, right: 250, bottom: 250 });
-  await t.run('photoshop_generative_fill', { prompt: 'soft gradient' }, { skip: generativeSkip });
-  await t.run('photoshop_generative_remove', { feather_px: 0 }, { skip: generativeSkip });
-  await t.run('photoshop_generative_expand', { prompt: 'extend background', direction: 'all' }, {
-    skip: generativeSkip,
-  });
-  await t.run('photoshop_generative_upscale', { target_scale: 2 }, { skip: generativeSkip });
-  await t.run('photoshop_sky_replacement', { sky_image_path: testPng }, { skip: generativeSkip });
-  await t.run('photoshop_generate_image', { prompt: 'abstract gradient', width: 512, height: 512 }, {
-    skip: generativeSkip,
-  });
+  console.log('\n=== Phase 14b: Native Sky & Neural Filters ===');
+  await t.run('photoshop_sky_replacement', { sky_image_path: testPng });
   await t.run(
     'photoshop_neural_filter',
     { filter: 'skin_smoothing', smoothness: 40, blur: 40 },
-    { skip: generativeSkip ?? 'requires UXP bridge plugin panel open' }
+    { skip: neuralSkip ?? 'requires UXP bridge plugin panel open' }
   );
 
   console.log('\n=== Phase 15: State, preview, save ===');

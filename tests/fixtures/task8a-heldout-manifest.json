@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "purpose": "Task 8/8a held-out calibration infrastructure. Sampling strata are curator coverage targets, not human truth and must never be shown to the critic.",
+  "evidence_budget": {
+    "baseline": ["neutral before image", "neutral after image", "brief", "pass goal", "preservation constraints"],
+    "critic": ["neutral before image", "neutral after image", "brief", "pass goal", "preservation constraints"],
+    "same_budget_required": true,
+    "producer_reports_withheld": true,
+    "producer_verdicts_withheld": true
+  },
+  "orders": {
+    "baseline": [
+      "case-001", "case-002", "case-003", "case-004", "case-005",
+      "case-006", "case-007", "case-008", "case-009", "case-010",
+      "case-003-r1", "case-007-r1"
+    ],
+    "critic": [
+      "case-010", "case-009", "case-008", "case-007", "case-006",
+      "case-005", "case-004", "case-003", "case-002", "case-001",
+      "case-007-r1", "case-003-r1"
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "case-001",
+      "sampling_stratum": "acceptable_unfinished_candidate",
+      "subject_style": "rainy urban nocturne; painterly realism",
+      "source_before": "processes/rainy-european-city-street-process/run-01/frames/value-baseline-02.jpg",
+      "source_after": "processes/rainy-european-city-street-process/run-01/frames/value-current-03.jpg",
+      "neutral_before_filename": "case-001-before.jpg",
+      "neutral_after_filename": "case-001-after.jpg",
+      "brief": "A quiet rainy European street corner at night with a warm lamp and bench, cool dark masses, mist, wet reflections, and restrained detail.",
+      "pass_goal": "Establish or strengthen the large value grouping and atmospheric readability without prematurely detailing peripheral architecture.",
+      "preservation_constraints": [
+        "Keep the warm lamp/bench focus distinct from the cool environment.",
+        "Preserve atmospheric depth and a calm peripheral detail level."
+      ],
+      "human_reference": null,
+      "source_notes": [
+        "processes/rainy-european-city-street-process/run-01/painting-state.json"
+      ]
+    },
+    {
+      "case_id": "case-002",
+      "sampling_stratum": "improvement_candidate",
+      "subject_style": "wind-up toy robot; limited flat screenprint",
+      "source_before": "processes/wind-up-robot-process/holdout-01/frames/frame_0001_recognition_blockin.jpg",
+      "source_after": "processes/wind-up-robot-process/holdout-01/frames/frame_0002_joints_protected.jpg",
+      "neutral_before_filename": "case-002-before.jpg",
+      "neutral_after_filename": "case-002-after.jpg",
+      "brief": "A wind-up toy robot rendered in a limited cream, navy, and rust-red flat screenprint language.",
+      "pass_goal": "Add connective joint forms while preserving already-established recognition cues and the flat screenprint hierarchy.",
+      "preservation_constraints": [
+        "Preserve eyes, grille mouth, chest panel, wind-up key, and primary silhouette.",
+        "Do not turn the flat screenprint treatment into volumetric photoreal rendering."
+      ],
+      "human_reference": null,
+      "source_notes": [
+        "processes/documentation-maintenance-process/2026-09-21-pre-actualization/docs/painting-development-status.md"
+      ]
+    },
+    {
+      "case_id": "case-003",
+      "sampling_stratum": "regression_candidate",
+      "subject_style": "coastal tower; photoreal/painterly architecture",
+      "source_before": "processes/tower-process/photoreal-tower-01/frame_0010_crossgrain.jpg",
+      "source_after": "processes/tower-process/photoreal-tower-01/frame_0012_stage9_rollback.jpg",
+      "neutral_before_filename": "case-003-before.jpg",
+      "neutral_after_filename": "case-003-after.jpg",
+      "brief": "A coherent coastal tower scene with readable architecture, sea, atmosphere, and controlled painterly surface variation.",
+      "pass_goal": "Refine architectural form and surface treatment without weakening silhouette, plane clarity, or scene integration.",
+      "preservation_constraints": [
+        "Preserve the tower's main silhouette and structural readability.",
+        "Avoid local surface treatment that makes the whole image less coherent."
+      ],
+      "human_reference": null,
+      "source_notes": []
+    },
+    {
+      "case_id": "case-004",
+      "sampling_stratum": "ambiguous_tradeoff_candidate",
+      "subject_style": "Girl with a Pearl Earring study; painterly portrait",
+      "source_before": "processes/girl-with-pearl-earring-process/study-01/frames/frame_0001_composition_before.jpg",
+      "source_after": "processes/girl-with-pearl-earring-process/study-01/frames/frame_0001_composition_after.jpg",
+      "neutral_before_filename": "case-004-before.jpg",
+      "neutral_after_filename": "case-004-after.jpg",
+      "brief": "A painterly portrait study emphasizing the characteristic head turn, dark background, face-light relationship, and pearl focal accent.",
+      "pass_goal": "Improve composition and large portrait placement before detailed feature rendering.",
+      "preservation_constraints": [
+        "Preserve the dominant head/shoulder relationship and dark-background separation.",
+        "Do not treat increased local detail as proof of better likeness or composition."
+      ],
+      "human_reference": null,
+      "source_notes": []
+    },
+    {
+      "case_id": "case-005",
+      "sampling_stratum": "improvement_candidate",
+      "subject_style": "Girl with a Pearl Earring study; painterly portrait",
+      "source_before": "processes/girl-with-pearl-earring-process/study-01/frames/frame_0002_composition_correct_before.jpg",
+      "source_after": "processes/girl-with-pearl-earring-process/study-01/frames/frame_0002_composition_correct_after.jpg",
+      "neutral_before_filename": "case-005-before.jpg",
+      "neutral_after_filename": "case-005-after.jpg",
+      "brief": "A painterly portrait study emphasizing the characteristic head turn, dark background, face-light relationship, and pearl focal accent.",
+      "pass_goal": "Correct large composition/placement while retaining the established value hierarchy.",
+      "preservation_constraints": [
+        "Preserve the main face-light grouping and dark surrounding field.",
+        "Do not claim success from geometric movement alone if the portrait reads worse."
+      ],
+      "human_reference": null,
+      "source_notes": []
+    },
+    {
+      "case_id": "case-006",
+      "sampling_stratum": "ambiguous_tradeoff_candidate",
+      "subject_style": "retro-futurist penguin; graphic stylization",
+      "source_before": "processes/retro-futurist-penguin-process/study-01/runtime/controller/previews/penguin-art-pass-04-before.jpg",
+      "source_after": "processes/retro-futurist-penguin-process/study-01/runtime/controller/previews/penguin-art-pass-04-preview.jpg",
+      "neutral_before_filename": "case-006-before.jpg",
+      "neutral_after_filename": "case-006-after.jpg",
+      "brief": "A retro-futurist penguin with a clear graphic silhouette, readable costume/technology motifs, and controlled stylized shape language.",
+      "pass_goal": "Refine a bounded visual relationship without sacrificing the graphic silhouette or focal hierarchy.",
+      "preservation_constraints": [
+        "Preserve subject recognizability and the dominant graphic silhouette.",
+        "Avoid technically tidy changes that flatten the intended stylization."
+      ],
+      "human_reference": null,
+      "source_notes": []
+    },
+    {
+      "case_id": "case-007",
+      "sampling_stratum": "improvement_candidate",
+      "subject_style": "fantasy moon-house night scene; painterly atmospheric",
+      "source_before": "processes/moon-house-process/fantasy-night/frames/frame_0604_fantasy_painterly_003.jpg",
+      "source_after": "processes/moon-house-process/fantasy-night/frames/frame_0605_fantasy_painterly_004.jpg",
+      "neutral_before_filename": "case-007-before.jpg",
+      "neutral_after_filename": "case-007-after.jpg",
+      "brief": "A fantasy night scene with a dark wooden house, warm windows, water reflections, distant shore, moonlight, and soft atmospheric unification.",
+      "pass_goal": "Unify the whole scene atmospherically by deepening the distant shore, adding horizon haze, and softly gathering peripheral edges without changing composition.",
+      "preservation_constraints": [
+        "Keep the house predominantly a dark silhouette with restrained warm-window emphasis.",
+        "Preserve the established composition while adjusting atmosphere."
+      ],
+      "human_reference": null,
+      "source_notes": [
+        "processes/moon-house-process/fantasy-night/frames/frame_0604_fantasy_painterly_003.txt",
+        "processes/moon-house-process/fantasy-night/frames/frame_0605_fantasy_painterly_004.txt"
+      ]
+    },
+    {
+      "case_id": "case-008",
+      "sampling_stratum": "identical_pair_control",
+      "subject_style": "anime car; graphic cleanup",
+      "source_before": "processes/anime-car-process/ANIME_CAR_SKILL_V2_04_CLEANUP.png",
+      "source_after": "processes/anime-car-process/ANIME_CAR_SKILL_V2_04_CLEANUP.png",
+      "neutral_before_filename": "case-008-before.png",
+      "neutral_after_filename": "case-008-after.png",
+      "brief": "A clean anime-style car illustration with controlled graphic forms and line hierarchy.",
+      "pass_goal": "Assess whether any visible change occurred and avoid inventing improvement or regression when evidence is identical.",
+      "preservation_constraints": [
+        "Do not infer a change from operation intent or metadata.",
+        "Treat identical visual evidence symmetrically."
+      ],
+      "human_reference": null,
+      "source_notes": []
+    },
+    {
+      "case_id": "case-009",
+      "sampling_stratum": "explicit_surreal_negative_control",
+      "subject_style": "fantasy moon-house night scene; explicitly impossible spatial intent",
+      "source_before": "processes/moon-house-process/fantasy-night/frames/frame_0605_fantasy_painterly_004.jpg",
+      "source_after": "processes/moon-house-process/fantasy-night/frames/frame_0605_fantasy_painterly_004.jpg",
+      "neutral_before_filename": "case-009-before.jpg",
+      "neutral_after_filename": "case-009-after.jpg",
+      "brief": "An intentionally surreal night scene in which moon, water, reflected light, and spatial relationships may defy ordinary gravity or physical geometry; those impossible relationships are deliberate.",
+      "pass_goal": "Assess preservation of the declared surreal spatial intent without correcting intentional impossibility back toward realism.",
+      "preservation_constraints": [
+        "Do not flag anti-gravity or impossible spatial relations merely for violating ordinary-world physics when they match the brief.",
+        "Do not invent visual changes when before and after evidence is identical."
+      ],
+      "human_reference": null,
+      "source_notes": []
+    },
+    {
+      "case_id": "case-010",
+      "sampling_stratum": "detail_competes_candidate",
+      "subject_style": "elderly fisherman; painterly character study",
+      "source_before": "processes/elderly-fisherman-process/holdout-01/branches/P0L1/frames/frame_0008_face_focus.jpg",
+      "source_after": "processes/elderly-fisherman-process/holdout-01/branches/P0L1/frames/frame_0009_material_depth.jpg",
+      "neutral_before_filename": "case-010-before.jpg",
+      "neutral_after_filename": "case-010-after.jpg",
+      "brief": "A painterly elderly fisherman study balancing face character, weathered clothing, net material, depth, and a clear focal hierarchy.",
+      "pass_goal": "Improve material/depth relationships without allowing texture or secondary detail to compete with the face.",
+      "preservation_constraints": [
+        "Preserve the face as the principal focal anchor.",
+        "Texture/material detail must remain subordinate to large form and depth."
+      ],
+      "human_reference": null,
+      "source_notes": []
+    }
+  ],
+  "repeats": [
+    {
+      "evaluation_id": "case-003-r1",
+      "case_id": "case-003",
+      "purpose": "consistency_repeat"
+    },
+    {
+      "evaluation_id": "case-007-r1",
+      "case_id": "case-007",
+      "purpose": "consistency_repeat"
+    }
+  ]
+}

@@ -18,6 +18,8 @@ Use this checklist before publishing a tagged GitHub release.
 - [ ] `npm run lint`
 - [ ] `npm run verify:photoshop-prompts`
 - [ ] `npm run verify:tool-counts`
+- [ ] `npm run test:embedded-guard-mcp`
+- [ ] `npx vitest run src/platform/uxp-bridge-server.test.ts`
 - [ ] `node scripts/test-painting-tools.mjs` with a supported Photoshop version running.
 - [ ] `npm run test:measurement-tools` with an open Photoshop document; confirm temporary guides are restored/removed by the test.
 - [ ] Confirm `photoshop_paint_strokes` is present in `tools/list`.
@@ -29,7 +31,10 @@ Use this checklist before publishing a tagged GitHub release.
 ## Documentation
 
 - [ ] Installation from a fresh clone/ZIP has been tested on a clean directory.
-- [ ] Chat On Steroids instructions use Core + direct stdio to the fork's `dist/index.js` and do not depend on the shared Plugins connector.
+- [ ] Chat On Steroids instructions use the canonical Plugins → `dist/cos-plugin.js` → embedded Guard route; Core/controller is described only as dev/debug/recovery compatibility.
+- [ ] Local-development docs distinguish ChatGPT Plugins **Refresh** from CoS plugin-process **Restart**, document that only the custom Photoshop MCP plugin should be restarted after a server rebuild, and do not recommend whole-CoS restarts or obsolete restart-helper scripts.
+- [ ] UXP docs describe localhost long-poll, `Reload` for `main.js`, `Unload → Load` for manifest changes, and health verification via `plugin_connected` / `transport: "long-poll"`.
+- [ ] Native catalog/required-mode documentation matches the tested 148 tools / 13 Guard tools and raw mutations fail closed with `guard_required`.
 - [ ] `PHOTOSHOP_PATH` guidance covers current Photoshop versions.
 - [ ] Upstream-vs-fork distinction is explicit so users do not accidentally install the upstream npm package.
 - [ ] Known limitations are listed (for example Mixer Brush status, `SINGLE_HISTORY` timeout tradeoffs, and segmented-dynamics rendering).

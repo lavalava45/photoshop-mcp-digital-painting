@@ -89,18 +89,16 @@ the upstream detector.
 
 ## 5. Connect from Chat On Steroids
 
-For this fork, use **Chat On Steroids Core + a direct stdio MCP client**. Do not use the shared `Chat On Steroids Plugins` connector as the Photoshop execution path, health check, or fallback.
+For ordinary Photoshop work in Chat On Steroids, use the live-accepted **Plugins →
+`dist/cos-plugin.js` → embedded Guard → Photoshop** route. The dedicated entry point
+enables `PHOTOSHOP_GUARD_MODE=required`: known read-only Photoshop tools stay directly
+callable, while public raw mutating tools fail closed with `guard_required` and must be
+dispatched through `photoshop_guard_cycle_auto`.
 
-Launch the built server with a stdio client using a command equivalent to:
+Configure the Chat On Steroids custom plugin to launch the built entry point:
 
-```json
-{
-  "kind": "command",
-  "command": "C:\\Program Files\\nodejs\\node.exe",
-  "args": [
-    "D:\\Tools\\photoshop-mcp-digital-painting\\dist\\index.js"
-  ]
-}
+```text
+<repo>\dist\cos-plugin.js
 ```
 
 Replace the example repository path with your actual checkout location.
@@ -113,11 +111,54 @@ Pass `PHOTOSHOP_PATH` in the stdio transport environment when automatic detectio
 }
 ```
 
-### Why not the shared Plugins connector
+After rebuilding/updating the fork, refresh the Chat On Steroids Plugins schema through
+the normal host UI. The accepted native catalog is **148 tools total / 13 Guard tools**.
+A stale legacy 64-tool snapshot is not a limitation of this server.
 
-Chat On Steroids may expose only a subset of a large MCP server's tools through the shared `Chat On Steroids Plugins` connector. This fork currently exposes 131 tools, so the project standard is to bypass that surface entirely and connect directly over stdio from Chat On Steroids Core.
+For local development, distinguish **schema refresh** from **process restart**:
 
-For Photoshop work in Chat On Steroids, `PLUGIN_DISABLED`, plugin runtime status, or a truncated Plugins catalog are therefore not diagnostic signals for this fork. Verify the direct stdio connection instead with `tools/list`, `prompts/list`, and `photoshop_ping`.
+- ChatGPT **Settings → Plugins → Refresh** refreshes the connector/schema view.
+- To make a rebuilt `dist/cos-plugin.js` take effect, in the **Chat On Steroids app** use
+  **Plugins → Photoshop MCP Digital Painting Fork → … → Restart**. This restarts only the
+  custom MCP child process; restarting the whole Chat On Steroids application is unnecessary.
+- Do not use old restart-helper scripts for this workflow.
+- If `uxp-plugin/main.js` changed, use **Reload** for Photoshop MCP UXP Bridge in Adobe UXP
+  Developer Tool. If `manifest.json` changed, use **Unload → Load** instead.
+
+### 5a. Load the Photoshop UXP companion
+
+Non-interfering `photoshop_save_document` persistence and Neural Filters require the
+repository's UXP companion. In **Adobe UXP Developer Tool**, add:
+
+```text
+<repo>\uxp-plugin\manifest.json
+```
+
+and choose **Load**. The plugin starts its localhost long-poll service at plugin creation;
+the panel does not need to stay in the foreground. Verify the MCP-side bridge endpoint:
+
+```text
+http://127.0.0.1:38452/health
+```
+
+A healthy bridge reports `plugin_connected: true` and `transport: "long-poll"`.
+
+The current live-tested Photoshop 2026 / UXP runtime requires the companion manifest's
+network permission to be `domains: "all"` for the local HTTP bridge; narrowed loopback
+entries are rejected by UXP with `Manifest entry not found`. The Node server still listens
+only on `127.0.0.1`. If Adobe fixes loopback matching in a later runtime, this permission
+can be narrowed without changing the bridge protocol.
+
+`photoshop_save_document` is intentionally UXP-only and fails closed when this companion
+is unavailable; it does not fall back to foreground-prone COM/ExtendScript saving.
+
+The older **Core → `photoshop-session.mjs` → persistent daemon → `dist/index.js`**
+route remains in the repository for development, diagnostics, recovery experiments and
+legacy regression/live-test coverage. It is not the normal production transport.
+
+If the native Plugins route is genuinely absent or stale, Core may be used to diagnose
+the repository/server independently. Do not interpret a stale Plugins schema as proof
+that Photoshop or the fork itself is unavailable.
 
 ## 6. Generic MCP client configuration
 

@@ -82,8 +82,7 @@ credentials or identifiers into this fork.
 | `src/` | MCP server core, tools, recipes, and UI backend |
 | `web/` | Vue 3 standalone UI (Tailwind v4, shadcn-vue) |
 | `scripts/` | Integration and verification test scripts |
-| `site/` | Legacy VitePress tree (not deployed) |
-| `docs/` | Additional documentation (synced to the site at build time) |
+| `docs/` | Additional project documentation |
 
 See [`docs/architecture.md`](docs/architecture.md) for a detailed breakdown.
 

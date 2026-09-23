@@ -57,9 +57,11 @@ describe('parseDocumentIdArg', () => {
 });
 
 describe('documentGuardScript', () => {
-  it('embeds the numeric id and document_not_found error', () => {
+  it('embeds the numeric id and fails closed without switching active documents', () => {
     const script = documentGuardScript(42);
     expect(script).toContain('var __mcp_targetDocId = 42;');
     expect(script).toContain('document_not_found');
+    expect(script).toContain('document_not_active');
+    expect(script).not.toContain('app.activeDocument = app.documents[__mcp_di]');
   });
 });

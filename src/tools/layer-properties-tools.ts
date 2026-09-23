@@ -2,9 +2,22 @@ import { ToolDefinition, ToolResult } from '../core/tool-registry.js';
 import { PhotoshopConnection } from '../platform/connection.js';
 import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { ExtendScriptSnippets } from '../api/extendscript.js';
+import { PhotoshopBackendRouter } from '../platform/photoshop-backend.js';
+import {
+  invokeUxpDuplicateLayer,
+  invokeUxpOperation,
+  invokeUxpRenameLayer,
+  invokeUxpSetLayerBlendMode,
+  invokeUxpSetLayerLocked,
+  invokeUxpSetLayerOpacity,
+  invokeUxpSetLayerVisibility,
+} from '../platform/uxp-bridge-client.js';
 import { LAYER_BLEND_MODE_ENUM, resolveLayerBlendMode } from './blend-mode.js';
 
-export function createLayerPropertiesTools(connection: PhotoshopConnection): ToolDefinition[] {
+export function createLayerPropertiesTools(
+  connection: PhotoshopConnection,
+  backendRouter = new PhotoshopBackendRouter(connection)
+): ToolDefinition[] {
   return [
     {
       tool: {
@@ -15,7 +28,7 @@ export function createLayerPropertiesTools(connection: PhotoshopConnection): Too
           properties: {},
         },
       },
-      handler: async () => rasterizeLayer(connection),
+      handler: async (args) => rasterizeLayer(connection, backendRouter, args),
     },
     {
       tool: {
@@ -34,7 +47,7 @@ export function createLayerPropertiesTools(connection: PhotoshopConnection): Too
           required: ['opacity'],
         },
       },
-      handler: async (args) => setLayerOpacity(connection, args),
+      handler: async (args) => setLayerOpacity(connection, backendRouter, args),
     },
     {
       tool: {
@@ -56,7 +69,7 @@ export function createLayerPropertiesTools(connection: PhotoshopConnection): Too
           required: ['blendMode'],
         },
       },
-      handler: async (args) => setLayerBlendMode(connection, args),
+      handler: async (args) => setLayerBlendMode(connection, backendRouter, args),
     },
     {
       tool: {
@@ -73,7 +86,7 @@ export function createLayerPropertiesTools(connection: PhotoshopConnection): Too
           required: ['visible'],
         },
       },
-      handler: async (args) => setLayerVisibility(connection, args),
+      handler: async (args) => setLayerVisibility(connection, backendRouter, args),
     },
     {
       tool: {
@@ -90,7 +103,7 @@ export function createLayerPropertiesTools(connection: PhotoshopConnection): Too
           required: ['locked'],
         },
       },
-      handler: async (args) => setLayerLocked(connection, args),
+      handler: async (args) => setLayerLocked(connection, backendRouter, args),
     },
     {
       tool: {
@@ -107,7 +120,7 @@ export function createLayerPropertiesTools(connection: PhotoshopConnection): Too
           required: ['name'],
         },
       },
-      handler: async (args) => renameLayer(connection, args),
+      handler: async (args) => renameLayer(connection, backendRouter, args),
     },
     {
       tool: {
@@ -125,7 +138,7 @@ export function createLayerPropertiesTools(connection: PhotoshopConnection): Too
           },
         },
       },
-      handler: async (args) => duplicateLayer(connection, args),
+      handler: async (args) => duplicateLayer(connection, backendRouter, args),
     },
     {
       tool: {
@@ -136,7 +149,7 @@ export function createLayerPropertiesTools(connection: PhotoshopConnection): Too
           properties: {},
         },
       },
-      handler: async () => mergeVisibleLayers(connection),
+      handler: async (args) => mergeVisibleLayers(connection, backendRouter, args),
     },
     {
       tool: {
@@ -147,23 +160,31 @@ export function createLayerPropertiesTools(connection: PhotoshopConnection): Too
           properties: {},
         },
       },
-      handler: async () => flattenImage(connection),
+      handler: async (args) => flattenImage(connection, backendRouter, args),
     },
   ];
 }
 
 async function setLayerOpacity(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const opacity = args.opacity as number;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.setLayerOpacity(opacity);
-    await api.executeScript(script);
+    const backend = await backendRouter.backendFor('layer.opacity.write');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpSetLayerOpacity({
+        ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+        opacity,
+      });
+      if (!result.ok) throw new Error(result.error ?? 'uxp_set_layer_opacity_failed');
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      await api.executeScript(ExtendScriptSnippets.setLayerOpacity(opacity));
+    }
 
     return {
       content: [
@@ -188,6 +209,7 @@ async function setLayerOpacity(
 
 async function setLayerBlendMode(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const requested = typeof args.blendMode === 'string' ? args.blendMode : '';
@@ -205,11 +227,18 @@ async function setLayerBlendMode(
   }
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.setLayerBlendMode(extendScriptToken);
-    await api.executeScript(script);
+    const backend = await backendRouter.backendFor('layer.blend_mode.write');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpSetLayerBlendMode({
+        ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+        blendMode: requested,
+      });
+      if (!result.ok) throw new Error(result.error ?? 'uxp_set_layer_blend_mode_failed');
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      await api.executeScript(ExtendScriptSnippets.setLayerBlendMode(extendScriptToken));
+    }
 
     return {
       content: [
@@ -234,16 +263,24 @@ async function setLayerBlendMode(
 
 async function setLayerVisibility(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const visible = args.visible as boolean;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.setLayerVisibility(visible);
-    await api.executeScript(script);
+    const backend = await backendRouter.backendFor('layer.visibility.write');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpSetLayerVisibility({
+        ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+        visible,
+      });
+      if (!result.ok) throw new Error(result.error ?? 'uxp_set_layer_visibility_failed');
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      await api.executeScript(ExtendScriptSnippets.setLayerVisibility(visible));
+    }
 
     return {
       content: [
@@ -268,16 +305,24 @@ async function setLayerVisibility(
 
 async function setLayerLocked(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const locked = args.locked as boolean;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.setLayerLocked(locked);
-    await api.executeScript(script);
+    const backend = await backendRouter.backendFor('layer.locked.write');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpSetLayerLocked({
+        ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+        locked,
+      });
+      if (!result.ok) throw new Error(result.error ?? 'uxp_set_layer_locked_failed');
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      await api.executeScript(ExtendScriptSnippets.setLayerLocked(locked));
+    }
 
     return {
       content: [
@@ -302,16 +347,26 @@ async function setLayerLocked(
 
 async function renameLayer(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const name = args.name as string;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.renameLayer(name);
-    const result = await api.executeScript(script);
+    const backend = await backendRouter.backendFor('layer.rename');
+    let result: unknown;
+    if (backend.kind === 'uxp') {
+      const uxpResult = await invokeUxpRenameLayer({
+        ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+        name,
+      });
+      if (!uxpResult.ok || !uxpResult.data) throw new Error(uxpResult.error ?? 'uxp_rename_layer_failed');
+      result = uxpResult.data;
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      result = await api.executeScript(ExtendScriptSnippets.renameLayer(name));
+    }
 
     return {
       content: [
@@ -336,16 +391,26 @@ async function renameLayer(
 
 async function duplicateLayer(
   connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
   args: Record<string, unknown>
 ): Promise<ToolResult> {
   const newName = args.newName as string | undefined;
 
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.duplicateLayer(newName);
-    const result = await api.executeScript(script);
+    const backend = await backendRouter.backendFor('layer.duplicate');
+    let result: unknown;
+    if (backend.kind === 'uxp') {
+      const uxpResult = await invokeUxpDuplicateLayer({
+        ...(documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {}),
+        ...(newName !== undefined ? { newName } : {}),
+      });
+      if (!uxpResult.ok || !uxpResult.data) throw new Error(uxpResult.error ?? 'uxp_duplicate_layer_failed');
+      result = uxpResult.data;
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      result = await api.executeScript(ExtendScriptSnippets.duplicateLayer(newName));
+    }
 
     return {
       content: [
@@ -368,13 +433,34 @@ async function duplicateLayer(
   }
 }
 
-async function mergeVisibleLayers(connection: PhotoshopConnection): Promise<ToolResult> {
-  try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
+function documentIdFromArgs(args: Record<string, unknown>): number | undefined {
+  return typeof args.document_id === 'number' &&
+    Number.isSafeInteger(args.document_id) &&
+    args.document_id > 0
+    ? args.document_id
+    : undefined;
+}
 
-    const script = ExtendScriptSnippets.mergeVisibleLayers();
-    await api.executeScript(script);
+async function mergeVisibleLayers(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  try {
+    const backend = await backendRouter.backendFor('layer.merge_visible');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'merge_visible_layers',
+        documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {},
+        'uxp_merge_visible_layers_failed'
+      );
+      if (!result.ok) throw new Error(result.error ?? 'uxp_merge_visible_layers_failed');
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      const script = ExtendScriptSnippets.mergeVisibleLayers();
+      await api.executeScript(script);
+    }
 
     return {
       content: [
@@ -397,13 +483,26 @@ async function mergeVisibleLayers(connection: PhotoshopConnection): Promise<Tool
   }
 }
 
-async function flattenImage(connection: PhotoshopConnection): Promise<ToolResult> {
+async function flattenImage(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   try {
-    const apiFactory = new PhotoshopAPIFactory(connection);
-    const api = await apiFactory.createAPI();
-
-    const script = ExtendScriptSnippets.flattenImage();
-    await api.executeScript(script);
+    const backend = await backendRouter.backendFor('layer.flatten');
+    if (backend.kind === 'uxp') {
+      const result = await invokeUxpOperation(
+        'flatten_image',
+        documentIdFromArgs(args) !== undefined ? { document_id: documentIdFromArgs(args) } : {},
+        'uxp_flatten_image_failed'
+      );
+      if (!result.ok) throw new Error(result.error ?? 'uxp_flatten_image_failed');
+    } else {
+      const apiFactory = new PhotoshopAPIFactory(connection);
+      const api = await apiFactory.createAPI();
+      const script = ExtendScriptSnippets.flattenImage();
+      await api.executeScript(script);
+    }
 
     return {
       content: [
@@ -426,8 +525,31 @@ async function flattenImage(connection: PhotoshopConnection): Promise<ToolResult
   }
 }
 
-async function rasterizeLayer(connection: PhotoshopConnection): Promise<ToolResult> {
+async function rasterizeLayer(
+  connection: PhotoshopConnection,
+  backendRouter: PhotoshopBackendRouter,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   try {
+    const backend = await backendRouter.backendFor('layer.rasterize');
+    if (backend.kind === 'uxp') {
+      const documentId =
+        typeof args.document_id === 'number' && Number.isSafeInteger(args.document_id) && args.document_id > 0
+          ? args.document_id
+          : undefined;
+      const result = await invokeUxpOperation(
+        'rasterize_layer',
+        documentId !== undefined ? { document_id: documentId } : {},
+        'uxp_rasterize_layer_failed'
+      );
+      if (!result.ok || !result.data) throw new Error(result.error ?? 'uxp_rasterize_layer_failed');
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Layer rasterized\nResult: ${JSON.stringify(result.data)}`,
+        }],
+      };
+    }
     const apiFactory = new PhotoshopAPIFactory(connection);
     const api = await apiFactory.createAPI();
 

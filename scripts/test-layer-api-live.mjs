@@ -1,16 +1,13 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+// HISTORICAL LEGACY DAEMON LIVE UTILITY — not a maintained acceptance command.
+// Do not use for canonical compact-v2 acceptance.
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PersistentMcpClient } from './lib/mcp-daemon-client.mjs';
 
-const transport = new StdioClientTransport({
-  command: process.execPath,
-  args: ['dist/index.js'],
-  env: {
-    ...process.env,
-    ...(process.env.PHOTOSHOP_PATH ? { PHOTOSHOP_PATH: process.env.PHOTOSHOP_PATH } : {}),
-  },
-});
-
-const client = new Client({ name: 'layer-api-live-smoke', version: '1.0.0' });
+const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(here, '..');
+const runtimeDirectory = path.join(root, '.photoshop-runtime', 'controller');
+const client = new PersistentMcpClient({ root, runtimeDirectory });
 let tempDocumentId;
 
 function textOf(result) {
@@ -84,7 +81,7 @@ async function selectByName(name) {
 }
 
 try {
-  await client.connect(transport);
+  await client.ensureDaemon();
 
   const createDoc = await call('photoshop_create_document', {
     width: 320,
@@ -131,10 +128,21 @@ try {
   const createLayer = await call('photoshop_create_layer', {
     document_id: tempDocumentId,
     name: 'Structured Create',
+    above_layer_id: nestedB.id,
   });
   const created = parseStructured(createLayer, 'photoshop_create_layer');
   if (typeof detail(created, 'layerId') !== 'number') {
     throw new Error('photoshop_create_layer: details.layerId missing');
+  }
+  if (detail(created, 'relativeToId') !== nestedB.id) {
+    throw new Error('photoshop_create_layer: explicit above_layer_id was not reported');
+  }
+  list = await layers();
+  let createdOrder = nestedOrder(list);
+  const createdIndex = createdOrder.indexOf('Structured Create');
+  const nestedBIndexAfterCreate = createdOrder.indexOf('Nested B');
+  if (createdIndex < 0 || nestedBIndexAfterCreate !== createdIndex + 1) {
+    throw new Error(`photoshop_create_layer explicit ABOVE placement failed: ${createdOrder.join(' > ')}`);
   }
 
   await selectByName('Nested B');

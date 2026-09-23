@@ -9,6 +9,7 @@ export class PhotoshopDetector {
   private platformType: NodeJS.Platform;
   private windowsDetector?: WindowsDetector;
   private macosDetector?: MacOSDetector;
+  private cachedInfo?: PhotoshopInfo;
 
   constructor() {
     this.logger = new Logger('PhotoshopDetector');
@@ -22,16 +23,23 @@ export class PhotoshopDetector {
     }
   }
 
-  async detect(): Promise<PhotoshopInfo> {
+  async detect(forceRefresh = false): Promise<PhotoshopInfo> {
+    if (!forceRefresh && this.cachedInfo) return { ...this.cachedInfo };
     this.logger.info(`Detecting Photoshop on ${this.platformType}...`);
 
     if (this.platformType === 'win32' && this.windowsDetector) {
-      return await this.windowsDetector.detect();
+      this.cachedInfo = await this.windowsDetector.detect();
+      return { ...this.cachedInfo };
     } else if (this.platformType === 'darwin' && this.macosDetector) {
-      return await this.macosDetector.detect();
+      this.cachedInfo = await this.macosDetector.detect();
+      return { ...this.cachedInfo };
     } else {
       throw new Error(`Unsupported platform: ${this.platformType}`);
     }
+  }
+
+  invalidateCache(): void {
+    this.cachedInfo = undefined;
   }
 
   /**
