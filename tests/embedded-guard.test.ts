@@ -402,6 +402,97 @@ describe('embedded Photoshop Guard', () => {
     expect(runtime.store.status().pending_visual_verdicts).not.toContain('create-ready-success');
   });
 
+  it('ignores accidental artistic method metadata on document bootstrap instead of misclassifying it as region block-in', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-create-artistic-metadata-'));
+    dirs.push(dir);
+    const { registry } = fakeRegistry(dir);
+    let dispatches = 0;
+    registry.register('photoshop_create_document', {
+      tool: {
+        name: 'photoshop_create_document',
+        description: 'test bootstrap with accidental artistic metadata',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            width: { type: 'number', minimum: 1 },
+            height: { type: 'number', minimum: 1 },
+            resolution: { type: 'number' },
+            colorMode: { type: 'string', enum: ['RGB', 'CMYK', 'Grayscale'] },
+          },
+          required: ['width', 'height'],
+        },
+      },
+      handler: async (args) => {
+        dispatches += 1;
+        expect(args._guard_operation_id).toBe('create-with-artistic-metadata');
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              ok: true,
+              summary: 'Document created via UXP',
+              details: {
+                transport: 'uxp',
+                command_id: 'create-with-artistic-metadata',
+                document: { id: 733, name: 'Untitled-2', width: 1400, height: 1000, resolution: 72, colorMode: 'RGB' },
+              },
+            }),
+          }],
+        };
+      },
+    });
+    {
+      const microplan = createVisualMicroPlanTools(registry)[0]!;
+      registry.register(microplan.tool.name, microplan);
+    }
+    const runtime = new EmbeddedGuardRuntime(registry, {
+      runtimeDirectory: path.join(dir, 'controller'),
+      previewBarrierDirectory: path.join(dir, 'barriers'),
+      executionLeaseFile: path.join(dir, 'execution.lock'),
+      workspaceRoot: dir,
+      uxpReadinessProbe: async () => ({
+        ready: true,
+        transport: 'uxp',
+        bridge_transport: 'long-poll',
+        bridge_revision: 'expected-revision',
+        expected_bridge_revision: 'expected-revision',
+        revision_match: true,
+        photoshop_version: '27.0.0',
+        document_count: 0,
+        active_document: null,
+        plugin_connected: true,
+        reason: null,
+        checked_at: new Date().toISOString(),
+        cache: { hit: false, age_ms: 0, ttl_ms: 2000 },
+      }),
+    });
+
+    const result = await runtime.cycleAuto({
+      next_pass: {
+        request_key: 'create-with-artistic-metadata',
+        goal: 'Create a 1400 by 1000 painting canvas.',
+        stage: 'GLOBAL_BLOCK_IN',
+        scale: 'global',
+        visual_intent: 'mass',
+        impact_class: 'construct',
+        preferred_method_id: 'region-block-in',
+        actions: [{
+          id: 'create-document',
+          tool: 'photoshop_create_document',
+          args: { width: 1400, height: 1000, resolution: 72, colorMode: 'RGB' },
+        }],
+      },
+    }) as any;
+
+    expect(result.preflight_rejection).toBeUndefined();
+    expect(dispatches).toBe(1);
+    expect(result.execution).toMatchObject({ phase: 'completed', failed: false });
+    expect(result.confirmed_targets.document_id).toBe(733);
+    expect(result.preview).toBeUndefined();
+    expect(runtime.store.read('create-with-artistic-metadata')?.bootstrap_outcome?.document_id).toBe(733);
+    expect(runtime.store.read('create-with-artistic-metadata')?.artistic_operation).toBeUndefined();
+  });
+
   it('recovers a claimed bootstrap from a completed durable receipt without creating a second document', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-bootstrap-completed-'));
     dirs.push(dir);

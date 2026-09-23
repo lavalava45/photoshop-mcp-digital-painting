@@ -68,6 +68,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 2026-09-23: keep document bootstrap outside the artistic-method selector. `photoshop_create_document`
+  and `photoshop_open_image` now ignore accidental `visual_intent` / `impact_class` /
+  `preferred_method_id` metadata carried from a painting request instead of being misclassified as
+  methods such as `region-block-in` and rejected before dispatch. Regression coverage reproduces
+  the exact `GLOBAL_BLOCK_IN + mass + construct + region-block-in` create-document failure.
 - 2026-09-23: harden painting-continuation liveness around read-only Guard checks. Closing a
   read-only compact operation without `next_pass` no longer marks an active painting workflow as
   stopped; pending Art Director review now outranks a stale lifecycle `ready` projection; and

@@ -481,7 +481,12 @@ function compileCompactPass(
 
     const visualIntent = text(raw.visual_intent);
     const impactClass = text(raw.impact_class);
-    if (visualIntent || impactClass || text(raw.preferred_method_id)) {
+    // Document bootstrap is infrastructure, not an artistic painting method.
+    // Callers may accidentally carry stage/intent metadata from the painting
+    // request into create/open. Never route bootstrap through method selection:
+    // doing so can misclassify GLOBAL_BLOCK_IN + mass/construct as
+    // region-block-in and reject the real create/open tool before dispatch.
+    if (!bootstrap && (visualIntent || impactClass || text(raw.preferred_method_id))) {
       if (!visualIntent || !impactClass) {
         violations.push(violation(
           'next_operation',
