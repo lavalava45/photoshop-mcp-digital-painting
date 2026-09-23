@@ -219,7 +219,9 @@ This is a heuristic, not a numeric requirement.
 
 Brush choice is part of visual planning. Do not begin a non-trivial painting by accepting whichever preset happens to be active, and do not brute-force every installed brush.
 
-Before the first paint mutation, perform a **bounded inventory/preflight**:
+Before the first **brush-dependent** mutation in a non-trivial run, perform a
+**bounded inventory/preflight**. Region/fill construction does not require brush
+inventory merely because it is a painting operation:
 
 ```text
 ROLE NEED
@@ -238,8 +240,10 @@ run, inspect the live installed preset library, select the small set actually
 assigned to image/material roles, use the authoritative post-selection effective
 settings, make only necessary footprint probes, then call
 `photoshop_guard_set_art_run` again with the **same** `process_dir` and a completed
-`brush_preflight`. Brush painting remains fail-closed until that durable role map
-exists. `simple_graphic` is only for deliberately flat/simple graphic work.
+`brush_preflight`. Operations that actually use Brush/Pencil/Smudge/Eraser-style
+stroke execution remain fail-closed until that durable role map exists; region/fill
+operations and unrelated preparation do not. `simple_graphic` is only for deliberately
+flat/simple graphic work.
 
 In a non-trivial run, direct `photoshop_paint_strokes`, `photoshop_paint_dabs`
 and `photoshop_paint_regions` are not an escape hatch: route them through

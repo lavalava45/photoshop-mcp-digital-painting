@@ -6,6 +6,15 @@ import { preflightVisualMicroPlanForExecution } from '../../tools/visual-micropl
 import { parseTexts } from './session-store.js';
 import { compileArtisticOperation } from '../artistic-operation-contract.js';
 import { UXP_BRIDGE_REVISION } from './protocol-version.js';
+import {
+  VISUAL_MICROPLAN_ACTION_CLASSES,
+  VISUAL_MICROPLAN_MAX_LAYER_CREATIONS,
+  VISUAL_MICROPLAN_MAX_MUTATIONS,
+  VISUAL_MICROPLAN_MUTATION_TOOLS,
+  visualMicroPlanMethodClassForStep,
+  visualMicroPlanRequiresLocalInspection,
+  type VisualMicroPlanSignificanceMode,
+} from '../visual-microplan.js';
 import type { GuardProjectionContext } from './projection-context.js';
 import {
   collectOperationContractViolations,
@@ -351,39 +360,16 @@ function normalizeCompactOperation(
   return { operation: compiled, violations, normalizations };
 }
 
-const COMPACT_MUTATION_TOOLS = new Set([
-  'photoshop_paint_strokes',
-  'photoshop_paint_dabs',
-  'photoshop_paint_regions',
-  'photoshop_fill_layer',
-  'photoshop_undo',
-]);
 const COMPACT_DOCUMENT_BOOTSTRAP_TOOLS = new Set([
   'photoshop_create_document',
   'photoshop_open_image',
 ]);
 
 function compactStepMethodClass(step: Record<string, unknown>): string | undefined {
-  const tool = text(step.tool);
-  if (tool === 'photoshop_undo') return 'rollback';
-  if (tool === 'photoshop_fill_layer') return 'fill';
-  if (tool === 'photoshop_paint_regions') return 'region';
-  if (tool === 'photoshop_paint_dabs') return 'paint';
-  if (tool !== 'photoshop_paint_strokes') return undefined;
   const args = step.args && typeof step.args === 'object' && !Array.isArray(step.args)
     ? step.args as Record<string, unknown>
     : {};
-  const strokes = Array.isArray(args.strokes) ? args.strokes : [];
-  const modes = new Set(strokes.map((stroke) => {
-    if (!stroke || typeof stroke !== 'object' || Array.isArray(stroke)) return 'BRUSH';
-    return text((stroke as Record<string, unknown>).tool)?.toUpperCase() ?? 'BRUSH';
-  }));
-  if (modes.size > 1) return undefined;
-  const mode = [...modes][0] ?? 'BRUSH';
-  if (mode === 'ERASER') return 'erase';
-  if (mode === 'SMUDGE') return 'smudge';
-  if (mode === 'PENCIL') return 'line';
-  return 'paint';
+  return visualMicroPlanMethodClassForStep({ tool: text(step.tool) ?? '', args });
 }
 
 function compactRiskForMethod(method: string | undefined): 'low' | 'moderate' | 'high' {
@@ -413,6 +399,7 @@ function compileCompactPass(
   if (!requestKey || !goal || !actions.length) {
     return { violations };
   }
+  const problemId = text(raw.problem_id) ?? text(raw.addresses_problem_id) ?? requestKey;
 
   const onlyAction = actions.length === 1 ? actions[0] : undefined;
   const onlyTool = onlyAction ? text(onlyAction.tool) : undefined;
@@ -437,7 +424,7 @@ function compileCompactPass(
   // Curves/masks/blend/transform/property mutations and other single registered
   // Photoshop operations keep their native semantics and are guarded directly.
   // VisualMicroPlan remains the compact bundle for its paint/fill/undo family.
-  if (onlyAction && onlyTool && !COMPACT_MUTATION_TOOLS.has(onlyTool)) {
+  if (onlyAction && onlyTool && !VISUAL_MICROPLAN_MUTATION_TOOLS.has(onlyTool)) {
     const actionArgs = onlyAction.args && typeof onlyAction.args === 'object' && !Array.isArray(onlyAction.args)
       ? structuredClone(onlyAction.args) as Record<string, unknown>
       : {};
@@ -456,6 +443,7 @@ function compileCompactPass(
     const directOperation: Record<string, unknown> = {
       request_key: requestKey,
       goal,
+      ...(!bootstrap ? { problem_id: problemId } : {}),
       tool: onlyTool,
       args: actionArgs,
       summary: goal,
@@ -540,7 +528,7 @@ function compileCompactPass(
     return { violations };
   }
 
-  const mutationSteps = actions.filter(step => COMPACT_MUTATION_TOOLS.has(text(step.tool) ?? ''));
+  const mutationSteps = actions.filter(step => VISUAL_MICROPLAN_MUTATION_TOOLS.has(text(step.tool) ?? ''));
   const methodClasses = [...new Set(mutationSteps.map(compactStepMethodClass).filter(Boolean))] as string[];
   if (methodClasses.length > 1) {
     violations.push(violation(
@@ -549,14 +537,35 @@ function compileCompactPass(
       `next_pass actions contain incompatible mutation method classes: ${methodClasses.join(', ')}; split them into bounded passes`
     ));
   }
+  if (mutationSteps.length > VISUAL_MICROPLAN_MAX_MUTATIONS) {
+    violations.push(violation(
+      'next_operation',
+      'compact_pass_visual_mutation_limit',
+      `next_pass may contain at most ${VISUAL_MICROPLAN_MAX_MUTATIONS} visual mutations; split the artistic stage into sequential Guard passes`
+    ));
+  }
   const methodClass = methodClasses[0];
   const risk = mutationSteps
     .map(step => compactRiskForMethod(compactStepMethodClass(step)))
     .sort((a, b) => ['low', 'moderate', 'high'].indexOf(b) - ['low', 'moderate', 'high'].indexOf(a))[0]
     ?? 'low';
-  const actionClass = methodClass === 'rollback' ? 'ROLLBACK'
-    : methodClass === 'erase' ? 'ERASE'
-      : 'ADD';
+  const explicitActionClass = text(raw.action_class)?.toUpperCase();
+  if (explicitActionClass && !VISUAL_MICROPLAN_ACTION_CLASSES.includes(explicitActionClass as never)) {
+    violations.push(violation(
+      'next_operation',
+      'compact_action_class_invalid',
+      `next_pass.action_class must be one of ${VISUAL_MICROPLAN_ACTION_CLASSES.join('|')}`
+    ));
+  }
+  if (Array.isArray(raw.replace_protected_layer_ids) && raw.replace_protected_layer_ids.length > 0 && !explicitActionClass) {
+    violations.push(violation(
+      'next_operation',
+      'compact_replace_action_required',
+      'replace_protected_layer_ids requires explicit next_pass.action_class=REPLACE or ERASE'
+    ));
+  }
+  const actionClass = explicitActionClass
+    ?? (methodClass === 'rollback' ? 'ROLLBACK' : methodClass === 'erase' ? 'ERASE' : 'ADD');
 
   const context = store.compactPassContext?.(Number(documentId)) ?? {};
   const stage = text(raw.stage) ?? text(context.stage) ?? (methodClass === 'region' ? 'GLOBAL_BLOCK_IN' : undefined);
@@ -567,11 +576,11 @@ function compileCompactPass(
     ? structuredClone(raw.region_bounds) as Record<string, unknown>
     : undefined;
   const createSteps = actions.filter(step => text(step.tool) === 'photoshop_create_layer');
-  if (createSteps.length > 1) {
+  if (createSteps.length > VISUAL_MICROPLAN_MAX_LAYER_CREATIONS) {
     violations.push(violation(
       'next_operation',
       'compact_pass_multiple_layer_creation',
-      'next_pass may create at most one logical layer; split independent rollback units into separate passes'
+      `next_pass may create at most ${VISUAL_MICROPLAN_MAX_LAYER_CREATIONS} logical layer; the current VisualMicroPlan represents one rollback unit`
     ));
   }
 
@@ -698,10 +707,21 @@ function compileCompactPass(
     }
   }
 
+  const requiresLocalInspection = visualMicroPlanRequiresLocalInspection(
+    scale ?? '',
+    significanceMode as VisualMicroPlanSignificanceMode
+  );
+  if (requiresLocalInspection && !regionBounds) {
+    violations.push(violation(
+      'next_operation',
+      'compact_local_region_bounds_required',
+      'local/small/subtle visual passes require next_pass.region_bounds so Guard can generate matching BEFORE/AFTER focus previews'
+    ));
+  }
   if (regionBounds) {
-    const firstMutationIndex = actions.findIndex(step => COMPACT_MUTATION_TOOLS.has(text(step.tool) ?? ''));
+    const firstMutationIndex = actions.findIndex(step => VISUAL_MICROPLAN_MUTATION_TOOLS.has(text(step.tool) ?? ''));
     if (firstMutationIndex >= 0) {
-      if (significanceMode === 'subtle_local') {
+      if (requiresLocalInspection) {
         actions.splice(firstMutationIndex, 0, {
           id: 'guard_before_preview',
           tool: 'photoshop_get_preview',
@@ -735,12 +755,13 @@ function compileCompactPass(
     method_class: methodClass,
     risk,
     expected_visual_delta: goal,
-    verification_envelope: significanceMode === 'subtle_local'
+    verification_envelope: requiresLocalInspection
       ? { mode: 'before_after', min_focus_dimension_px: 800 }
       : { mode: 'after_only' },
     layer_separation_check: layerSeparationCheck,
     ...(logicalLayer ? { logical_layer: logicalLayer } : {}),
     action_class: actionClass,
+    problem_id: problemId,
     expected_visual_result: goal,
     failure_signals: [],
     significance_mode: significanceMode,
@@ -767,6 +788,7 @@ function compileCompactPass(
     operation: {
       request_key: requestKey,
       goal,
+      problem_id: problemId,
       tool: 'photoshop_execute_visual_microplan',
       args,
       significance_mode: significanceMode,
@@ -1074,11 +1096,6 @@ export async function compileGuardCycle(
   const currentTaskId = text(artDirector?.current_task_id);
   const tasks = Array.isArray(artDirector?.tasks) ? artDirector.tasks as Array<Record<string, unknown>> : [];
   const currentTask = currentTaskId ? tasks.find(task => text(task.task_id) === currentTaskId) : undefined;
-  const methodClass = text(nextArgs.method_class)?.toLowerCase();
-  const allowedStages = methodClass === 'region'
-    ? ['RECOGNITION_BLOCK_IN', 'GLOBAL_BLOCK_IN', 'COMPOSITION', 'SHAPE']
-    : undefined;
-
   return {
     input: compiledInput,
     nextOperation,
@@ -1103,7 +1120,6 @@ export async function compileGuardCycle(
         planner_task_id: currentTaskId ?? null,
         planner_task_status: text(currentTask?.status) ?? null,
       } : null,
-      ...(allowedStages ? { allowed_stages: allowedStages } : {}),
       cycle_errors: cycleErrors,
       finalization_errors: finalizationErrors,
       next_operation_errors: nextOperationErrors,
@@ -1138,7 +1154,6 @@ export async function compileGuardCycle(
         photoshop_mutation_started: false,
         ...(currentTaskId ? { planner_task_id: currentTaskId } : {}),
         ...(text(currentTask?.status) ? { planner_task_status: text(currentTask?.status) } : {}),
-        ...(allowedStages ? { allowed_stages: allowedStages } : {}),
       },
       next_required_action:
         'Correct all listed deterministic finalization and next-operation errors together, then resubmit the same Guard cycle. The previous operation was not closed and no next Photoshop operation was dispatched.',

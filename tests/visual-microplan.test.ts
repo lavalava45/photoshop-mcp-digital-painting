@@ -621,7 +621,7 @@ describe('parseVisualMicroPlan', () => {
         },
         { id: 'preview', tool: 'photoshop_get_preview', args: {} },
       ],
-    }))).toThrow(/temporary block-in scaffold/);
+    }))).toThrow(/outside block-in stages.*REPLACE\/ERASE/);
   });
 
   it('requires declared simulated pressure to be present in the actual brush strokes', () => {

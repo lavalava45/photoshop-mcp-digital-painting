@@ -907,8 +907,31 @@ describe('embedded Photoshop Guard', () => {
     expect(capabilitiesBody.compact_guard_protocol_version).toBe('photoshop.guard.compact.v2');
     expect(capabilitiesBody.runtime_state_version).toBe('photoshop.guard.runtime-state.v2');
     expect(capabilitiesBody.expected_uxp_bridge_revision).toBe(UXP_BRIDGE_REVISION);
+    expect(capabilitiesBody.compact_pass_limits).toMatchObject({
+      max_visual_mutations: 4,
+      max_layer_creations: 1,
+      mixed_method_classes_allowed: false,
+      single_method_class: true,
+      visual_mutations_must_be_contiguous: true,
+      preparation_must_precede_visual_transaction: true,
+    });
+    expect(capabilitiesBody.brush_preflight_dependency).toMatchObject({
+      semantic: true,
+      photoshop_paint_dabs: 'required',
+      photoshop_paint_strokes: 'required_when_stroke_mechanism_is_BRUSH',
+      region_painting_requires_brush_preflight: false,
+    });
 
     const cycle = tools.find(definition => definition.tool.name === 'photoshop_guard_cycle_auto')!;
+    const cycleSchema = cycle.tool.inputSchema as any;
+    const nextPassSchema = cycleSchema.properties.next_pass;
+    expect(nextPassSchema.required).not.toContain('pass_type');
+    expect(nextPassSchema.properties.pass_type).toBeUndefined();
+    expect(nextPassSchema.properties.problem_id).toBeTruthy();
+    expect(nextPassSchema.properties.action_class.enum).toEqual(expect.arrayContaining([
+      'ADD', 'REFINE', 'REPLACE', 'ERASE', 'ROLLBACK',
+    ]));
+    expect(cycle.tool.description).toMatch(/not an entire artistic stage/i);
     const stale = JSON.parse(((await cycle.handler({ protocol_version: 'photoshop.guard.compact.v1' })).content[0] as any).text);
     expect(stale.ok).toBe(false);
     expect(stale.message).toMatch(/guard_protocol_version_mismatch.*compact\.v2.*compact\.v1/);
@@ -1094,12 +1117,34 @@ describe('embedded Photoshop Guard', () => {
 
     const publicTools = createGuardTools(runtime);
     const setArtRunTool = publicTools.find(definition => definition.tool.name === 'photoshop_guard_set_art_run')!;
+    const statusTool = publicTools.find(definition => definition.tool.name === 'photoshop_guard_status')!;
+    const beforeSetup = JSON.parse(((await statusTool.handler({})).content[0] as any).text) as any;
+    expect(beforeSetup.paint_readiness).toMatchObject({
+      document: 'ready',
+      document_id: 42,
+      art_run: 'missing',
+      brush_preflight: 'missing',
+      can_submit_visual_pass: false,
+      can_submit_brush_independent_visual_pass: false,
+      can_submit_brush_dependent_visual_pass: false,
+      next_required_action: 'photoshop_guard_set_art_run',
+    });
     const configured = JSON.parse(((await setArtRunTool.handler({
       document_id: 42,
       process_dir: 'processes/capability-snapshot-process/run-01',
       painting_profile: 'nontrivial_painting',
       brush_preflight: brushPreflight,
     })).content[0] as any).text) as any;
+    expect(configured.paint_readiness).toMatchObject({
+      document: 'ready',
+      document_id: 42,
+      art_run: 'ready',
+      brush_preflight: 'ready',
+      can_submit_visual_pass: true,
+      can_submit_brush_independent_visual_pass: true,
+      can_submit_brush_dependent_visual_pass: true,
+      next_required_action: 'photoshop_guard_cycle_auto',
+    });
     const first = configured.capability_snapshot;
     expect(first).toMatchObject({
       protocol: 'photoshop.guard.capability_snapshot.v1',
@@ -1156,7 +1201,6 @@ describe('embedded Photoshop Guard', () => {
     }) as any;
     expect(pass.execution.phase).toBe('completed');
 
-    const statusTool = publicTools.find(definition => definition.tool.name === 'photoshop_guard_status')!;
     const status = JSON.parse(((await statusTool.handler({})).content[0] as any).text) as any;
     const reused = status.capability_snapshots['42'];
     expect(reused.snapshot_revision).toBe(first.snapshot_revision);

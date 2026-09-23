@@ -1,4 +1,9 @@
 // @ts-nocheck
+import {
+  VISUAL_MICROPLAN_MAX_LAYER_CREATIONS,
+  VISUAL_MICROPLAN_MAX_MUTATIONS,
+} from '../visual-microplan.js';
+
 export const GUARD_CAPABILITIES_PROTOCOL = 'photoshop.guard.capabilities.v1';
 export const OPERATION_RECEIPT_PROTOCOL = 'photoshop.guard.operation_receipt.v1';
 export const OPERATION_ACK_PROTOCOL = 'photoshop.guard.operation_ack.v1';
@@ -29,6 +34,23 @@ export function guardCapabilities(env = process.env) {
       preview_required: true,
       verdict_required_before_next_visual_mutation: true,
     },
+    compact_pass_limits: {
+      max_visual_mutations: VISUAL_MICROPLAN_MAX_MUTATIONS,
+      max_layer_creations: VISUAL_MICROPLAN_MAX_LAYER_CREATIONS,
+      mixed_method_classes_allowed: false,
+      single_method_class: true,
+      visual_mutations_must_be_contiguous: true,
+      preparation_must_precede_visual_transaction: true,
+      limits_source: 'VisualMicroPlan executor contract',
+    },
+    brush_preflight_dependency: {
+      semantic: true,
+      photoshop_paint_dabs: 'required',
+      photoshop_paint_strokes: 'required_when_stroke_mechanism_is_BRUSH',
+      non_brush_stroke_mechanisms: ['PENCIL', 'SMUDGE', 'ERASER'],
+      not_required_merely_for_preparation: true,
+      region_painting_requires_brush_preflight: false,
+    },
     cycle_compiler: {
       unified_pre_dispatch_validation: true,
       aggregates_deterministic_errors: true,
@@ -38,6 +60,7 @@ export function guardCapabilities(env = process.env) {
         next_pass_supported: true,
         one_root_goal: true,
         request_key_is_durable_operation_identity: true,
+        problem_id_is_stable_artistic_problem_identity: true,
         step_prose_is_explanatory: true,
         compact_visual_closure: ['previous_operation_id', 'previous_observation'],
         preferred_previous_observation: ['observed', 'target'],

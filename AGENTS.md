@@ -561,6 +561,14 @@ Follow the server `instructions` advertised on MCP `initialize` ([src/prompts/in
 
 For new drawing/painting subjects, the first artistic milestone is **recognition**, not a polished silhouette. Before ordinary refinement, derive 3–7 discriminative recognition features plus a large style cue when style is requested, rough in the whole subject, inspect one overview preview, and correct the largest recognition barrier. Feature importance is semantic, not proportional to pixel size. Once the subject reads without relying on the prompt, return to the normal composition/shape/value/form hierarchy. `photoshop_paint_regions` is the preferred broad-mass primitive when closed filled regions are a better fit than many dabs/strokes.
 
+**One Guard pass is not an artistic stage.** "Rough in the whole subject" or "complete
+the recognition block-in" may require several sequential `photoshop_guard_cycle_auto`
+passes. `request_key` is the unique idempotency identity of one execution attempt;
+`problem_id` is the stable artistic-problem identity shared by later attempts at the
+same unresolved problem. The compiler derives method/preview requirements from the
+actual actions rather than a duplicate pass label. Use `photoshop_guard_status.paint_readiness`
+before first live paint instead of inferring setup order from later preflight errors.
+
 For non-trivial scenes, establish a **semantic layer architecture before broad
 paint**. Every VisualMicroPlan performs a **Layer Separation Check**. Before the
 first substantial change to a new independent object, material, light effect or

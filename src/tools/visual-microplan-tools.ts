@@ -20,6 +20,7 @@ import {
   VISUAL_MICROPLAN_VERDICTS,
   VISUAL_MICROPLAN_MAX_MUTATIONS,
   VISUAL_MICROPLAN_MUTATION_TOOLS,
+  visualMicroPlanMethodClassForStep,
   type PreviousPreviewVerdict,
   type VisualMicroPlan,
   type VisualMicroPlanStep,
@@ -474,27 +475,10 @@ function rawMutationIndexes(steps: unknown[]): number[] {
 }
 
 function rawStrokeMethodClass(step: Record<string, unknown>): string | undefined {
-  const tool = String(step.tool ?? '');
-  if (tool === 'photoshop_undo') return 'rollback';
-  if (tool === 'photoshop_fill_layer') return 'fill';
-  if (tool === 'photoshop_paint_regions') return 'region';
-  if (tool === 'photoshop_paint_dabs') return 'paint';
-  if (tool !== 'photoshop_paint_strokes') return undefined;
-  const args = step.args;
-  if (!args || typeof args !== 'object' || Array.isArray(args)) return undefined;
-  const strokes = (args as Record<string, unknown>).strokes;
-  if (!Array.isArray(strokes) || strokes.length === 0) return undefined;
-  const modes = new Set(strokes.map(stroke => {
-    if (!stroke || typeof stroke !== 'object' || Array.isArray(stroke)) return 'INVALID';
-    return String((stroke as Record<string, unknown>).tool ?? 'BRUSH').toUpperCase();
-  }));
-  if (modes.size !== 1) return undefined;
-  const mode = [...modes][0];
-  if (mode === 'PENCIL') return 'line';
-  if (mode === 'SMUDGE') return 'smudge';
-  if (mode === 'ERASER') return 'erase';
-  if (mode === 'BRUSH') return 'paint';
-  return undefined;
+  const args = step.args && typeof step.args === 'object' && !Array.isArray(step.args)
+    ? step.args as Record<string, unknown>
+    : {};
+  return visualMicroPlanMethodClassForStep({ tool: String(step.tool ?? ''), args });
 }
 
 function collectSemanticEnvelopeErrors(args: Record<string, unknown>): string[] {

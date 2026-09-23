@@ -93,6 +93,25 @@ Batching, style grouping, transport quantization or other execution optimization
 
 Within the mutation subset executable by VisualMicroPlan, `method_class` is also fail-closed against the actual mechanism: `line` requires all Pencil strokes, `smudge` all Smudge strokes, `erase` all Eraser strokes, `region` requires `photoshop_paint_regions`, ordinary Brush/dabs use `paint`, `fill` uses `photoshop_fill_layer`, and `rollback` uses Undo. The compiled plan still contains a concrete `photoshop_select_brush_preset` preparation step when a preset is used, but on compact `next_pass` Guard may derive and insert that step from the durable brush-role map rather than making the model repeat the preset name. Mixed stroke mechanisms do not qualify as one method transaction.
 
+Current compact executor restrictions are safety/executor constraints, not artistic
+prohibitions. They remain until the executor can represent the stronger transaction:
+
+- `fill` + `paint_regions` stays split because one VisualMicroPlan has one authoritative
+  `method_class`/risk envelope. Safe composition would require per-step method/risk plus
+  same-target and partial-execution semantics.
+- Brush-setting changes stay before the visual transaction. Interleaving `set_brush` between
+  visual mutations would require sequential preparation/mutation execution, brush-state
+  provenance after partial failure, and cache invalidation tied to the failed boundary.
+- A VisualMicroPlan still creates at most one logical layer because it currently owns one
+  `logical_layer` hypothesis/rollback unit. Multiple created layers require per-layer hypotheses,
+  exact result-reference targeting and defined partial rollback/continuation semantics.
+- `paint_regions` remains the broad ADD scaffold for early block-in stages. At later stages it
+  is allowed only as an explicit `REPLACE`/`ERASE` correction when every region mutation has an
+  exact target layer and bounded `clip_bounds`; late broad ADD remains fail-closed.
+
+Do not bypass these constraints by falsifying stage, scale or `significance_mode`. Rejected
+requests remain not-executed; the Guard does not automatically split or dispatch them.
+
 At the host/Guard boundary, use `photoshop_guard_cycle_auto` on the native route rather
 than separate raw mutation/report/preview/verdict invocations. The canonical model contract is
 `next_pass={request_key,document_id,goal,region/protection,actions}`. The compiler

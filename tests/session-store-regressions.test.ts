@@ -545,7 +545,11 @@ describe('Guard session-store regressions', () => {
       }), problem_id: 'whole-image-masses', stage: 'GLOBAL_BLOCK_IN', scale: 'global',
     };
     expect(() => s.begin({ ...operation, args: { ...operation.args,
-      steps: [{ tool: 'photoshop_paint_regions' }, { tool: 'photoshop_paint_strokes' }, { tool: 'photoshop_get_preview' }],
+      steps: [
+        { tool: 'photoshop_paint_regions' },
+        { tool: 'photoshop_paint_strokes', args: { strokes: [{ tool: 'BRUSH', points: [{ x: 1, y: 1 }, { x: 2, y: 2 }] }] } },
+        { tool: 'photoshop_get_preview' },
+      ],
     } })).toThrow(/brush_preflight_required/);
     expect(s.begin(operation).record.phase).toBe('started');
   });
@@ -562,13 +566,14 @@ describe('Guard session-store regressions', () => {
       ...request('before-preflight', 'photoshop_execute_visual_microplan', {
         document_id: 42,
         plan_id: 'before-preflight-plan',
-        stage: 'RECOGNITION_BLOCK_IN',
-        scale: 'global',
-        method_class: 'region',
+        stage: 'FORM',
+        scale: 'medium',
+        method_class: 'paint',
+        steps: [{ tool: 'photoshop_paint_strokes', args: { strokes: [{ tool: 'BRUSH', points: [{ x: 1, y: 1 }, { x: 2, y: 2 }] }] } }],
       }),
-      problem_id: 'recognition-masses',
-      stage: 'RECOGNITION_BLOCK_IN',
-      scale: 'global',
+      problem_id: 'brush-form',
+      stage: 'FORM',
+      scale: 'medium',
     })).toThrow(/brush_preflight_required/);
 
     const configured = s.setArtRunState({

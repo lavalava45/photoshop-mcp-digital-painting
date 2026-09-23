@@ -12,7 +12,9 @@ The fixtures have two deliberately separate purposes:
 
 The artistic goal, current stage, canvas evidence and revision-bound runtime capability map choose
 the method. A caller must not copy the first fixture merely because it is the first fixture. In
-particular, `photoshop_paint_regions` is only a temporary early block-in scaffold.
+particular, `photoshop_paint_regions` is the broad early block-in scaffold. Outside the early
+block-in stages it is admitted only for a bounded explicit `REPLACE`/`ERASE` correction with an
+exact target layer and `clip_bounds`; ordinary late-stage `ADD` region block-in remains invalid.
 
 ## Executable VisualMicroPlan fixture: early region block-in
 

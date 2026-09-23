@@ -117,12 +117,20 @@ Healthy painting continuation
   uncertain goal. Comparative improvement/readability claims require a comparable same-document
   before frame; otherwise keep the comparison explicitly unknown/unconfirmed.
 - Normal visual continuation uses the compact cycle_auto contract. Start a pass with
-  next_pass={request_key, document_id, goal, region/protection when needed, actions}.
+  next_pass={request_key, problem_id when needed, document_id, goal, region/protection when needed,
+  optional action_class for explicit REPLACE/ERASE, actions}.
   After inspecting its returned frame, the next call carries previous_operation_id +
   previous_observation + the next next_pass. For the last pass omit next_pass.
   Guard derives the technical report and exact durable receipt acknowledgement from
   its journal; do not copy receipt tokens or manufacture did/why/result. Removed
   legacy operation/closure payloads are not public alternatives and fail closed.
+- HARD PASS BOUNDARY: one Guard pass is not an entire artistic stage. A recognition or
+  whole-canvas block-in may require several sequential Guard passes. Current VisualMicroPlan
+  execution supports one rollback unit, at most one created logical layer, and 1-4 contiguous
+  compatible visual mutations with preparation first. These limits are derived from the
+  executable action contract, not from a caller-supplied pass type. Never interpret "rough in
+  the whole subject" or "complete the recognition block-in" as permission to pack the whole
+  artistic stage into one Guard pass.
 - A preflight execution=not-executed rejection requires correction of the listed
   errors, not invented reconciliation debt. Uncertain bootstrap uses reconcile
   on its original id and durable receipt; absent/corrupt is never replay permission.
@@ -138,6 +146,11 @@ Multi-step etiquette
   frames + same-stem commentary .txt files in frames/, editable milestones in
   checkpoints/ and final PSD/image files in final/; art-run save/export paths stay
   inside that project folder.
+- Before first live paint, read photoshop_guard_status.paint_readiness instead of guessing
+  setup order. If art_run=missing, call photoshop_guard_set_art_run. Brush preflight is an
+  execution dependency of brush-based strokes/dabs, not of unrelated preparation or region/fill
+  operations. On a nontrivial run, complete/persist brush_preflight before the first operation
+  that actually uses that dependency.
 - Painting commentary is sticky within the current art run. Switch with
   \`режим техника\`, \`режим художник\`, or \`режим вместе\`; \`коротко\` / \`обычно\` /
   \`подробно\` change only detail; \`режим кратко\` preserves content mode and makes it
@@ -174,7 +187,10 @@ Multi-step etiquette
   from both the technical execution record and the model's artistic observation.
 - Report execution and visual improvement separately. Tool success does not prove
   the image improved. Bound one visual bundle to one problem, then inspect a preview.
-- For painting/drawing visual mutations, use a stable \`problem_id\`. Progress is measured
+- For painting/drawing visual mutations, use a stable \`problem_id\` across attempts at the same
+  unresolved visual problem, while every distinct attempt gets a distinct \`request_key\`.
+  Re-delivery of one request_key is idempotent; a new request_key with the same problem_id is a
+  new attempt on the same tracked problem. Progress is measured
   primarily by resolved visual problems, not by MCP/tool-call count, reports, previews or
   checkpoints. A problem is resolved only after a meaningful decoded before/after change,
   \`improvement\`, \`accept\`, and \`target_resolved=yes\`. That resolves only the current
@@ -183,17 +199,20 @@ Multi-step etiquette
 - For a new subject, use Recognition Block-In before ordinary refinement: derive 3–7
   discriminative recognition features (small features may be high-priority), include one large
   style cue when style is requested, and rough in the whole subject before polishing one contour.
-  \`photoshop_paint_regions\` is temporary broad closed-mass scaffolding only during
-  RECOGNITION_BLOCK_IN / COMPOSITION / SHAPE / GLOBAL_BLOCK_IN. Exit this mode only when the
-  whole preview reads without relying on the prompt; later form/edge/material work must change
-  representation instead of continuing to decorate flat region fills.
+  \`photoshop_paint_regions\` is broad closed-mass scaffolding during
+  RECOGNITION_BLOCK_IN / COMPOSITION / SHAPE / GLOBAL_BLOCK_IN. Exit broad ADD block-in only when
+  the whole preview reads without relying on the prompt. At later stages region painting is legal
+  only for an explicit bounded REPLACE/ERASE correction with exact layer target and clip_bounds;
+  it must not continue flat block-in under a false earlier stage.
   Recognition-stage verdicts record subject/style recognizability plus visible/lost cues so
   status can derive time-to-first-recognition and feature-destruction metrics from the journal.
-- Non-trivial art runs default to \`painting_profile=nontrivial_painting\`. Before paint, inspect
+- Non-trivial art runs default to \`painting_profile=nontrivial_painting\`. Before the first
+  brush-dependent stroke/dab operation, inspect
   the live installed preset inventory, assign a compact material-aware brush role map, verify
   selected preset effective settings, selectively footprint-probe unfamiliar/high-impact roles,
   then re-call \`photoshop_guard_set_art_run\` with the same process_dir and completed
-  \`brush_preflight\`. Paint is fail-closed until this durable preflight exists.
+  \`brush_preflight\`. Brush-dependent painting is fail-closed until this durable preflight exists;
+  brush-independent region/fill construction is not blocked merely because brush_preflight is absent.
 - Route non-trivial strokes/dabs/region construction through \`photoshop_execute_visual_microplan\`.
   On compact \`next_pass\`, Guard may choose the durable preflighted brush role by working scale
   (or the optional \`brush_role\` hint), insert preset selection, and compile \`paint_strategy\`.

@@ -46,7 +46,7 @@
     "test:painting-batching": "node scripts/test-painting-batching.mjs",
     "test:painting-batching-live": "node scripts/test-painting-batching-live.mjs",
     "test:embedded-guard-mcp": "node scripts/test-embedded-guard-mcp.mjs",
-    "test:acceptance": "vitest run tests/embedded-guard.test.ts tests/session-store-regressions.test.ts tests/recovery-state-machine.test.ts tests/microplan-recovery.test.ts tests/preview-barriers.test.ts tests/execution-lease.test.ts tests/legacy-consumer-retirement.test.ts tests/legacy-transport-retirement.test.ts tests/uxp-migration-completeness.test.ts src/platform/uxp-bridge-server.test.ts",
+    "test:acceptance": "vitest run tests/compact-contract-regressions.test.ts tests/embedded-guard.test.ts tests/session-store-regressions.test.ts tests/recovery-state-machine.test.ts tests/microplan-recovery.test.ts tests/preview-barriers.test.ts tests/execution-lease.test.ts tests/legacy-consumer-retirement.test.ts tests/legacy-transport-retirement.test.ts tests/uxp-migration-completeness.test.ts src/platform/uxp-bridge-server.test.ts",
     "test:document-targeting": "node scripts/test-document-targeting.mjs",
     "test:document-targeting-live": "node scripts/test-document-targeting-live.mjs",
     "test:color-sampling": "node scripts/test-color-sampling.mjs",

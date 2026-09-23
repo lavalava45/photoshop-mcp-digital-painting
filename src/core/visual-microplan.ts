@@ -124,6 +124,7 @@ export const VISUAL_MICROPLAN_MUTATION_TOOLS = new Set([
 export const VISUAL_MICROPLAN_CAPTURE_TOOL = 'photoshop_get_preview';
 export const VISUAL_MICROPLAN_MAX_STEPS = 12;
 export const VISUAL_MICROPLAN_MAX_MUTATIONS = 4;
+export const VISUAL_MICROPLAN_MAX_LAYER_CREATIONS = 1;
 
 export interface VisualMicroPlanStep {
   id: string;
@@ -243,7 +244,9 @@ function parseEnum<T extends readonly string[]>(value: unknown, name: string, va
   return parsed as T[number];
 }
 
-function methodClassForStep(step: VisualMicroPlanStep): VisualMicroPlanMethodClass | undefined {
+export function visualMicroPlanMethodClassForStep(
+  step: Pick<VisualMicroPlanStep, 'tool' | 'args'>
+): VisualMicroPlanMethodClass | undefined {
   if (step.tool === 'photoshop_undo') return 'rollback';
   if (step.tool === 'photoshop_fill_layer') return 'fill';
   if (step.tool === 'photoshop_paint_regions') return 'region';
@@ -264,6 +267,28 @@ function methodClassForStep(step: VisualMicroPlanStep): VisualMicroPlanMethodCla
     if (mode === 'BRUSH') return 'paint';
   }
   return undefined;
+}
+
+export function visualMicroPlanRequiresBrushPreflight(args: unknown): boolean {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return false;
+  const record = args as Record<string, unknown>;
+  const declaredMethodClass = typeof record.method_class === 'string'
+    ? record.method_class.trim().toLowerCase()
+    : undefined;
+  if (declaredMethodClass === 'paint' || declaredMethodClass === 'preset-brush') return true;
+  const steps = record.steps;
+  if (!Array.isArray(steps)) return false;
+  return steps.some(step => {
+    if (!step || typeof step !== 'object' || Array.isArray(step)) return false;
+    const record = step as Record<string, unknown>;
+    const tool = record.tool;
+    if (tool === 'photoshop_paint_dabs') return true;
+    if (tool !== 'photoshop_paint_strokes') return false;
+    const stepArgs = record.args && typeof record.args === 'object' && !Array.isArray(record.args)
+      ? record.args as Record<string, unknown>
+      : {};
+    return visualMicroPlanMethodClassForStep({ tool, args: stepArgs }) === 'paint';
+  });
 }
 
 function riskRank(risk: VisualMicroPlanRisk): number {
@@ -348,7 +373,10 @@ function sameFocusRegion(a: Record<string, number>, b: Record<string, number>): 
   return a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
 }
 
-function requiresLocalInspection(scale: string, significanceMode: VisualMicroPlanSignificanceMode): boolean {
+export function visualMicroPlanRequiresLocalInspection(
+  scale: string,
+  significanceMode: VisualMicroPlanSignificanceMode
+): boolean {
   return significanceMode === 'subtle_local' || /(^|[-_\s])(small|micro|detail|local)([-_\s]|$)/i.test(scale);
 }
 
@@ -732,9 +760,26 @@ export function parseVisualMicroPlan(args: Record<string, unknown>): VisualMicro
     throw new Error('the final visual mutation must be immediately followed by the final preview');
   }
   if (mutationIndexes.some(index => steps[index]!.tool === 'photoshop_paint_regions') && !isRegionBlockInStage(stage)) {
-    throw new Error(
-      'photoshop_paint_regions is a temporary block-in scaffold and is allowed only in RECOGNITION_BLOCK_IN, COMPOSITION, SHAPE, or GLOBAL_BLOCK_IN; use brush/form/edge/material methods for later stages'
-    );
+    const lateRegionSteps = mutationIndexes
+      .map(index => steps[index]!)
+      .filter(step => step.tool === 'photoshop_paint_regions');
+    const explicitTargets = lateRegionSteps.every(step => {
+      const refs = rawMutationTargetRefs(step);
+      return refs.length > 0 && refs.every(ref =>
+        (typeof ref === 'number' && Number.isSafeInteger(ref) && ref > 0)
+        || (typeof ref === 'string' && /^\$steps\.[A-Za-z0-9_-]+\.details\.layerId$/.test(ref))
+      );
+    });
+    const bounded = lateRegionSteps.every(step => {
+      const clip = step.args.clip_bounds;
+      return !!clip && typeof clip === 'object' && !Array.isArray(clip);
+    });
+    const corrective = actionClassRaw === 'REPLACE' || actionClassRaw === 'ERASE';
+    if (!corrective || !explicitTargets || !bounded) {
+      throw new Error(
+        'photoshop_paint_regions outside block-in stages is allowed only for an explicit REPLACE/ERASE correction with exact layer targets and clip_bounds on every region mutation'
+      );
+    }
   }
   if (beforeCaptureIndex !== undefined && beforeCaptureIndex !== mutationIndex - 1) {
     throw new Error('the optional before preview must be immediately before the visual mutation');
@@ -830,7 +875,7 @@ export function parseVisualMicroPlan(args: Record<string, unknown>): VisualMicro
     if (step.region !== undefined && step.region !== region) {
       throw new Error(`step "${step.id}" region must match micro-plan region "${region}"`);
     }
-    const actualMethodClass = methodClassForStep(step);
+    const actualMethodClass = visualMicroPlanMethodClassForStep(step);
     const declaredMethodClass = step.methodClass ?? methodClass;
     const presetBrushCompatible =
       methodClass === 'preset-brush' &&
@@ -895,7 +940,7 @@ export function parseVisualMicroPlan(args: Record<string, unknown>): VisualMicro
     }
   }
 
-  if (requiresLocalInspection(scale, significanceMode)) {
+  if (visualMicroPlanRequiresLocalInspection(scale, significanceMode)) {
     if (beforeCaptureIndex === undefined) {
       throw new Error('small/local VisualMicroPlan requires an immediately-before preview for visual significance measurement');
     }

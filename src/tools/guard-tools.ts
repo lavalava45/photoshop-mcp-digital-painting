@@ -10,6 +10,11 @@ import {
 } from '../core/guard/protocol-version.js';
 import { PAINTING_VISUAL_INTENTS } from '../core/painting-method-palette.js';
 import {
+  VISUAL_MICROPLAN_ACTION_CLASSES,
+  VISUAL_MICROPLAN_MAX_LAYER_CREATIONS,
+  VISUAL_MICROPLAN_MAX_MUTATIONS,
+} from '../core/visual-microplan.js';
+import {
   REFINEMENT_CHECK_STATUSES,
   REFINEMENT_CRITERIA,
   REFINEMENT_CRITERION_STATUSES,
@@ -151,7 +156,11 @@ function compactPassSchema(): Record<string, unknown> {
     properties: {
       request_key: {
         type: 'string',
-        description: 'Stable idempotency key for this semantic pass.',
+        description: 'Unique stable idempotency key for this execution attempt. Re-delivering the same request_key must not repeat a mutation. Do not reuse it for a new attempt.',
+      },
+      problem_id: {
+        type: 'string',
+        description: 'Stable artistic problem identity shared across multiple distinct attempts at the same unresolved visual problem. Omit only when request_key intentionally also names the problem.',
       },
       document_id: { type: 'number', minimum: 1 },
       goal: {
@@ -173,7 +182,16 @@ function compactPassSchema(): Record<string, unknown> {
       },
       protected_regions: { type: 'array', items: { type: 'string' } },
       protected_layer_ids: { type: 'array', items: { type: 'number', minimum: 1 } },
-      replace_protected_layer_ids: { type: 'array', items: { type: 'number', minimum: 1 } },
+      replace_protected_layer_ids: {
+        type: 'array',
+        items: { type: 'number', minimum: 1 },
+        description: 'Exact protected layer ids intentionally replaced/erased by this pass. Every id must also be in protected_layer_ids and action_class must explicitly be REPLACE or ERASE.',
+      },
+      action_class: {
+        type: 'string',
+        enum: [...VISUAL_MICROPLAN_ACTION_CLASSES],
+        description: 'Optional explicit artistic mutation intent. Required for protected-layer REPLACE/ERASE exceptions and late-stage paint_regions corrections. Omit for ordinary ADD inference.',
+      },
       stage: {
         type: 'string',
         description: 'Optional override when no durable current stage exists; normally inherited from the art run.',
@@ -207,6 +225,7 @@ function compactPassSchema(): Record<string, unknown> {
         type: 'array',
         minItems: 1,
         maxItems: 11,
+        description: `Ordered actions for one bounded Guard pass, not an entire artistic stage. The current VisualMicroPlan executor supports at most ${VISUAL_MICROPLAN_MAX_MUTATIONS} contiguous visual mutations and at most ${VISUAL_MICROPLAN_MAX_LAYER_CREATIONS} created logical layer in one rollback unit. Preparation must precede the visual transaction. These are executor constraints, not pass-type labels.`,
         items: {
           type: 'object',
           properties: {
@@ -467,7 +486,7 @@ export function createGuardTools(runtime: EmbeddedGuardRuntime): ToolDefinition[
     {
       tool: {
         name: 'photoshop_guard_status',
-        description: 'Read compact durable continuation state for an established local Photoshop workflow. Use after host/tool interruption before concluding the Photoshop/CoS route is unavailable. Includes recoverable exact pending receipt tokens and preview SHA/path needed after a lost async poll result; never replay a prior mutation to recover state.',
+        description: 'Read compact durable continuation state plus paint_readiness for an established local Photoshop workflow. paint_readiness reports document/art-run/brush-preflight status and distinguishes brush-independent from brush-dependent visual readiness instead of treating missing brush preflight as a global paint blocker. Use after host/tool interruption before concluding the Photoshop/CoS route is unavailable. Includes recoverable exact pending receipt tokens and preview SHA/path needed after a lost async poll result; never replay a prior mutation to recover state.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       },
       handler: async () => json(await runtime.statusWithCapabilitySnapshots()),
@@ -497,7 +516,7 @@ export function createGuardTools(runtime: EmbeddedGuardRuntime): ToolDefinition[
     {
       tool: cycleTool(
         'photoshop_guard_cycle_auto',
-        'Preferred normal entry point for local Photoshop creation/editing/painting/continuation. In an established workflow stay on this route unless the user explicitly changes execution mode. Start with next_pass={request_key,document_id,goal,region/protection,actions}; after inspecting the returned frame continue/finalize with previous_operation_id + previous_observation and optionally another next_pass. Guard derives technical report, exact receipt acknowledgement and internal visual closure. Short work runs synchronously; longer work returns a durable job_id for photoshop_guard_job_poll.'
+        'Preferred normal entry point for local Photoshop creation/editing/painting/continuation. In an established workflow stay on this route unless the user explicitly changes execution mode. One Guard pass is NOT an entire artistic stage: a whole-canvas/recognition block-in may require several sequential passes. request_key identifies the unique execution attempt; problem_id identifies the stable artistic problem across attempts. Guard derives technical method/preview requirements from the actual actions. Start with next_pass={request_key,problem_id?,document_id,goal,region/protection,action_class?,actions}; after inspecting the returned frame continue/finalize with previous_operation_id + previous_observation and optionally another next_pass. Guard derives technical report, exact receipt acknowledgement and internal visual closure. Short work runs synchronously; longer work returns a durable job_id for photoshop_guard_job_poll.'
       ),
       handler: async (args) => {
         try { return json(await runtime.cycleAuto(compactCycleArgs(args))); }

@@ -207,6 +207,68 @@ export class EmbeddedGuardRuntime {
     };
   }
 
+  async paintReadiness(documentId?: number): Promise<Record<string, unknown>> {
+    const readiness = await this.uxpReadinessProbe({});
+    const activeDocumentId = positiveDocumentId(readiness.active_document?.id)
+      ? readiness.active_document!.id
+      : null;
+    const targetDocumentId = positiveDocumentId(documentId) ? documentId : activeDocumentId;
+    const documentStatus = !readiness.ready || !readiness.revision_match
+      ? 'unavailable'
+      : !targetDocumentId
+        ? 'missing'
+        : activeDocumentId === targetDocumentId
+          ? 'ready'
+          : 'mismatch';
+    const artRun = targetDocumentId
+      ? this.store.artRunState(targetDocumentId, undefined)
+      : undefined;
+    const artRunBound = typeof artRun?.process_dir === 'string' && artRun.process_dir.length > 0;
+    const paintingProfile = typeof artRun?.painting_profile === 'string'
+      ? artRun.painting_profile
+      : artRunBound ? 'nontrivial_painting' : null;
+    const brushPreflightComplete = artRun?.brush_preflight?.completed === true;
+    const brushRoleContractActive = paintingProfile === 'nontrivial_painting';
+    const documentReady = documentStatus === 'ready';
+    const canSubmitBrushIndependentVisualPass = documentReady && artRunBound;
+    const canSubmitBrushDependentVisualPass = documentReady
+      && artRunBound
+      && (!brushRoleContractActive || brushPreflightComplete);
+
+    let nextRequiredAction = 'photoshop_guard_cycle_auto';
+    if (documentStatus === 'missing') {
+      nextRequiredAction = 'photoshop_guard_cycle_auto setup pass with photoshop_create_document or photoshop_open_image';
+    } else if (documentStatus === 'unavailable') {
+      nextRequiredAction = 'restore matching UXP bridge readiness before any Photoshop mutation';
+    } else if (documentStatus === 'mismatch') {
+      nextRequiredAction = 'restore the pinned document as the active Photoshop document before mutation';
+    } else if (!artRunBound) {
+      nextRequiredAction = 'photoshop_guard_set_art_run';
+    } else if (brushRoleContractActive && !brushPreflightComplete) {
+      nextRequiredAction = 'submit a brush-independent visual pass if that matches the artistic need, or complete brush_preflight before photoshop_paint_strokes/photoshop_paint_dabs';
+    }
+
+    return {
+      document: documentStatus,
+      document_id: targetDocumentId,
+      active_document_id: activeDocumentId,
+      art_run: artRunBound ? 'ready' : 'missing',
+      brush_preflight: brushRoleContractActive
+        ? brushPreflightComplete ? 'ready' : 'missing'
+        : artRunBound ? 'not_required' : 'missing',
+      painting_profile: paintingProfile,
+      can_submit_visual_pass: canSubmitBrushIndependentVisualPass,
+      can_submit_brush_independent_visual_pass: canSubmitBrushIndependentVisualPass,
+      can_submit_brush_dependent_visual_pass: canSubmitBrushDependentVisualPass,
+      brush_preflight_dependency: {
+        photoshop_paint_dabs: 'required',
+        photoshop_paint_strokes: 'required_when_stroke_mechanism_is_BRUSH',
+        non_brush_stroke_mechanisms: ['PENCIL', 'SMUDGE', 'ERASER'],
+      },
+      next_required_action: nextRequiredAction,
+    };
+  }
+
   private capabilitySnapshotDependencyKey(input: Record<string, unknown>): string {
     return createHash('sha256').update(JSON.stringify(input)).digest('hex');
   }
@@ -369,7 +431,11 @@ export class EmbeddedGuardRuntime {
         snapshots[key] = await this.capabilitySnapshot(documentId);
       }
     }
-    return { ...status, capability_snapshots: snapshots };
+    return {
+      ...status,
+      paint_readiness: await this.paintReadiness(),
+      capability_snapshots: snapshots,
+    };
   }
 
   async artRunWithCapabilitySnapshot(input: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -377,6 +443,7 @@ export class EmbeddedGuardRuntime {
     const documentId = Number(input.document_id);
     return {
       ...response,
+      paint_readiness: await this.paintReadiness(documentId),
       capability_snapshot: await this.capabilitySnapshot(documentId),
     };
   }

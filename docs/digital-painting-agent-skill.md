@@ -1,10 +1,7 @@
 # Digital Painting Visual Control Skill
 
-This is the working entry point for Photoshop painting. The MCP prompt
-`ps.digital_painting_control` supplies the session guide. Keep this kernel active;
-consult the linked detailed section only when its condition applies. Do not read
-all policy modules or source files as routine preparation for every pass.
-The modules preserve the detailed policy; their applicable rules are mandatory.
+Photoshop painting entry point; `ps.digital_painting_control` supplies the session guide.
+Consult linked detail only when applicable; its rules remain mandatory.
 
 ## Execute the next valid action
 
@@ -19,28 +16,29 @@ The modules preserve the detailed policy; their applicable rules are mandatory.
 3. Bind one immutable `processes/<subject>-process/<run>/` through
    `photoshop_guard_set_art_run`; keep frames, same-stem commentary sidecars,
    checkpoints, final exports and painting-state there.
-4. For non-trivial painting, complete bounded brush preflight and persist its role
-   map on the same art run. Do not select `simple_graphic` to bypass painting rules.
+4. In non-trivial painting, persist bounded brush preflight before the first Brush/dab.
+   Region/fill and unrelated preparation do not inherit that dependency.
+   Do not use `simple_graphic` to bypass painting rules.
    Establish the brief/style, recognition cues and required Art Director directive.
-5. Construct one semantic pass through the compact `next_pass` contract. Supply
-   one stable `request_key`, pinned `document_id`, one root `goal`, the affected
-   region/protected ids when needed, and an ordered `actions` array. Step
-   `description` is explanatory prose, not a second intent. Do not repeat
-   summary/purpose/problem_id/plan_id/method/risk/report/receipt metadata.
+5. Build one compact `next_pass`: unique attempt `request_key`, stable `problem_id`
+   for one problem, pinned `document_id`, root `goal`, optional region/protection,
+   ordered `actions`. Step `description` is explanatory only;
+   do not repeat summary/purpose/plan/method/risk/report/receipt metadata.
 6. Execute through `photoshop_guard_cycle_auto`. The compiler expands
    `next_pass`, derives technical bindings and runs preflight/runtime. The removed
    full operation payload is not part of the public model contract.
 
 ## When the user delegates the subject
 
-Before art-run, compare 4–6 candidates across four families; at most one scenic vista. Never browse
-old runs. Reject repeats and atmosphere-only premises; commit to subject + setting + action + spatial
-problem. Ease never decides. Not a Guard gate. [Details](painting-policy/foundations.md#open-brief-subject-selection).
+Before art-run, compare 4–6 candidates across four families; at most one scenic vista.
+Never browse old runs; reject repeats/atmosphere-only premises. Commit to subject +
+setting + action + spatial problem. [Details](painting-policy/foundations.md#open-brief-subject-selection).
 
 ## One normal cycle
 
 - Choose one problem, region or tightly coupled region set, stage/scale, action
-  class and acceptance question. Keep one stable problem id across attempts.
+  class and acceptance question. Keep stable `problem_id`; use a new `request_key`
+  for each new attempt. Re-delivery of the same request_key is idempotent.
 - Record a brief prediction: expected visible change, what must survive, and
   failure signals. Select an available method for that effect; never invent APIs.
 - In artistic or mixed mode, emit the compact root `goal` as the visible
@@ -89,7 +87,7 @@ Do not insert standalone report/ack/verdict, status, state, or schema calls betw
 healthy compact passes. Public standalone closure providers have been retired; closure
 remains behind the compact facade.
 
-Minimal shape: `next_pass={request_key,document_id,goal,region,stage,scale,actions}`.
+Minimal shape: `next_pass={request_key,problem_id?,document_id,goal,region,stage,scale,action_class?,actions}`.
 
 A required art-run bind, brush preflight, checkpoint or recovery step may still
 intervene. Do not fuse calls illegally or bypass obligations for lower latency.

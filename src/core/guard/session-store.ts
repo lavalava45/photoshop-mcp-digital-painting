@@ -18,6 +18,10 @@ import { parseEdgeIntents, validateEdgeObservations } from '../edge-control.js';
 import { VALUE_CHECK_CRITERIA, VALUE_CHECK_STATUSES, VALUE_CRITERION_STATUSES, isDetailStage } from '../value-check.js';
 import { isRefinementGatedStage, normalizeRefinementCheck } from '../refinement-check.js';
 import { PAINTING_VISUAL_INTENTS } from '../painting-method-palette.js';
+import {
+  visualMicroPlanMethodClassForStep,
+  visualMicroPlanRequiresBrushPreflight,
+} from '../visual-microplan.js';
 import { RUNTIME_STATE_VERSION } from './protocol-version.js';
 import {
   comparisonSpecificationForOperation,
@@ -339,14 +343,16 @@ function validateBrushStrategyAgainstPreflight(artRun, request) {
   }
 }
 
-function isRegionOnlyScaffold(request) {
-  if (request?.tool !== 'photoshop_execute_visual_microplan' || request.args?.method_class !== 'region') return false;
-  const stage = String(request.args.stage ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
-  if (!['RECOGNITION_BLOCK_IN', 'COMPOSITION', 'SHAPE', 'GLOBAL_BLOCK_IN'].includes(stage)) return false;
-  const steps = request.args.steps;
-  const allowed = new Set(['photoshop_paint_regions', 'photoshop_create_layer', 'photoshop_get_preview', 'photoshop_get_state', 'photoshop_get_layers']);
-  return Array.isArray(steps) && steps.some(step => step?.tool === 'photoshop_paint_regions')
-    && steps.every(step => allowed.has(step?.tool));
+function requestRequiresBrushPreflight(request) {
+  if (request?.tool === 'photoshop_execute_visual_microplan') {
+    return visualMicroPlanRequiresBrushPreflight(request.args);
+  }
+  if (request?.tool === 'photoshop_paint_dabs') return true;
+  if (request?.tool !== 'photoshop_paint_strokes') return false;
+  const args = request?.args && typeof request.args === 'object' && !Array.isArray(request.args)
+    ? request.args
+    : {};
+  return visualMicroPlanMethodClassForStep({ tool: request.tool, args }) === 'paint';
 }
 
 function parseValueCheck(raw) {
@@ -2989,13 +2995,16 @@ export class SessionStore {
         && !rollbackMutation
         && (request?.tool === 'photoshop_execute_visual_microplan' || NONTRIVIAL_DIRECT_PAINT_TOOLS.has(request?.tool))
       ) {
-        if (!artRun.brush_preflight?.completed && !isRegionOnlyScaffold(request)) {
-          add('brush_preflight_required: non-trivial painting is blocked until the same art run records a completed live brush_preflight from the installed Photoshop preset inventory');
+        const brushPreflightRequired = requestRequiresBrushPreflight(request);
+        if (brushPreflightRequired && !artRun.brush_preflight?.completed) {
+          add('brush_preflight_required: this brush-dependent mutation is blocked until the same art run records a completed live brush_preflight from the installed Photoshop preset inventory');
         }
         if (NONTRIVIAL_DIRECT_PAINT_TOOLS.has(request?.tool)) {
           add('visual_microplan_required: non-trivial painting must route strokes, dabs and region block-in through photoshop_execute_visual_microplan so method, brush-role and stage contracts are enforced');
         }
-        capture(() => validateBrushStrategyAgainstPreflight(artRun, request));
+        if (brushPreflightRequired && artRun.brush_preflight?.completed) {
+          capture(() => validateBrushStrategyAgainstPreflight(artRun, request));
+        }
       }
       if (
         artRun?.process_dir

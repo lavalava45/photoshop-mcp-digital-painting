@@ -68,6 +68,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 2026-09-23: repair the public compact Guard contract so schema, compiler, VisualMicroPlan
+  validation and runtime agree. `request_key` now remains the unique idempotency identity of one
+  attempt while public `problem_id` persists artistic-problem identity across later attempts;
+  explicit `action_class=REPLACE|ERASE` makes protected-layer replacement expressible without
+  weakening exact target protection. Brush preflight is derived from actual brush-dependent
+  actions rather than a narrow region-only allowlist, normal local passes receive the same required
+  BEFORE/AFTER focus evidence without pretending to be `subtle_local`, and bounded late-stage
+  `paint_regions` is allowed only as an exact-target clipped REPLACE/ERASE correction. The earlier
+  experimental `pass_type`/automatic split-plan layer was removed: executable limits are reported
+  from the VisualMicroPlan contract instead of a duplicate caller classification.
 - 2026-09-23: keep document bootstrap outside the artistic-method selector. `photoshop_create_document`
   and `photoshop_open_image` now ignore accidental `visual_intent` / `impact_class` /
   `preferred_method_id` metadata carried from a painting request instead of being misclassified as
