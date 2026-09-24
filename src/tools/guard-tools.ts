@@ -969,7 +969,8 @@ export function createGuardTools(runtime: EmbeddedGuardRuntime): ToolDefinition[
               properties: {
                 trigger: { type: 'string', enum: ['stage_boundary', 'global_change', 'final_review'] },
                 observation: { type: 'string' },
-                operation_id: { type: 'string' },
+                operation_id: { type: 'string', description: 'Exact artistic-frame operation id. Required when satisfying a pending whole-image boundary.' },
+                frame_sha256: { type: 'string', description: 'Exact 64-hex artistic-frame SHA. Required when satisfying a pending whole-image boundary.' },
               },
               required: ['trigger', 'observation'],
               additionalProperties: false,
