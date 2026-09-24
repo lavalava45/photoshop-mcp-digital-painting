@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { SessionStore } from '../src/core/guard/session-store.js';
@@ -60,7 +61,8 @@ function fixture() {
 
 function capturedPreview(dir: string, capture: any, patch: Record<string, unknown> = {}) {
   const crop = path.join(dir, `${capture.role}.jpg`);
-  writeFileSync(crop, capture.role);
+  const cropBytes = Buffer.from(String(capture.role));
+  writeFileSync(crop, cropBytes);
   return {
     sha256: 'a'.repeat(64),
     materialized_path: path.join(dir, 'whole.jpg'),
@@ -70,7 +72,7 @@ function capturedPreview(dir: string, capture: any, patch: Record<string, unknow
     canvas_width: 400,
     canvas_height: 300,
     focus: {
-      sha256: String(capture.role).startsWith('micro') ? 'c'.repeat(64) : 'b'.repeat(64),
+      sha256: createHash('sha256').update(cropBytes).digest('hex'),
       materialized_path: crop,
       region: capture.effective_region,
       width: capture.effective_region.right - capture.effective_region.left,
@@ -114,6 +116,7 @@ describe('durable multiscale review escalation state', () => {
       kind: 'edge_transition',
       severity: 'must-fix',
       level: 'micro',
+      requested_region: { left: 50, top: 50, right: 150, bottom: 150 },
     });
     expect(plan.captures[1]).toMatchObject({ kind: 'proportion', level: 'object' });
     expect(plan.remaining_after_round).toBe(1);
@@ -167,6 +170,40 @@ describe('durable multiscale review escalation state', () => {
     });
     expect((restarted.planReviewEscalation as any)('review-op', [], { persist: false }).required).toBe(false);
     expect((restarted.resume(42) as any).pending_visual_verdict.review_state.state).toBe('awaiting_observation');
+  });
+
+  it('invalidates persisted crop evidence after deletion or byte replacement and accepts only the unchanged file', () => {
+    const { dir, controller, store } = fixture();
+    const finding = {
+      kind: 'edge_transition',
+      severity: 'must-fix',
+      region_bounds: { left: 100, top: 80, right: 160, bottom: 140 },
+    };
+    const plan = store.planReviewEscalation('review-op', [finding], { persist: true }) as any;
+    const capture = plan.captures[0];
+    const preview = capturedPreview(dir, capture);
+    store.attachReviewEvidence('review-op', capture, preview);
+    const cropPath = preview.focus.materialized_path;
+
+    const unchanged = new SessionStore(controller, {
+      visualBarrierDirectory: path.join(dir, 'barriers'),
+      workspaceRoot: dir,
+    });
+    expect((unchanged.planReviewEscalation as any)('review-op', [], { persist: false }).required).toBe(false);
+
+    rmSync(cropPath);
+    const afterDeletion = new SessionStore(controller, {
+      visualBarrierDirectory: path.join(dir, 'barriers'),
+      workspaceRoot: dir,
+    });
+    expect((afterDeletion.planReviewEscalation as any)('review-op', [], { persist: false }).required).toBe(true);
+
+    writeFileSync(cropPath, 'replacement-bytes');
+    const afterReplacement = new SessionStore(controller, {
+      visualBarrierDirectory: path.join(dir, 'barriers'),
+      workspaceRoot: dir,
+    });
+    expect((afterReplacement.planReviewEscalation as any)('review-op', [], { persist: false }).required).toBe(true);
   });
 
   it('requires fresh evidence when the requested region changes', () => {
