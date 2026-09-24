@@ -40,6 +40,25 @@ describe('full UXP migration completeness', () => {
     }
   });
 
+  it('checks the pinned document before any UXP command handler can dispatch', async () => {
+    const plugin = await readFile(join(ROOT, 'uxp-plugin', 'main.js'), 'utf8');
+    const handleStart = plugin.indexOf('async function handleCommand(cmd)');
+    const targetGuard = plugin.indexOf(
+      'await assertPinnedActiveDocument(cmdAction, params);',
+      handleStart
+    );
+    const firstHandler = plugin.indexOf(
+      'tryHandleP1DocumentOperation(cmdAction, params)',
+      handleStart
+    );
+    expect(handleStart).toBeGreaterThanOrEqual(0);
+    expect(targetGuard).toBeGreaterThan(handleStart);
+    expect(firstHandler).toBeGreaterThan(targetGuard);
+    expect(plugin).toContain("if (actionName === 'set_active_document') return;");
+    expect(plugin).toContain('document_not_active: pinned document');
+    expect(plugin).toContain('document_not_found: no open document with id');
+  });
+
   it('has no stale production-tool guard that disables the pre-dispatch legacy fallback', async () => {
     const toolsDir = join(ROOT, 'src', 'tools');
     const names = (await readdir(toolsDir)).filter((name) => name.endsWith('-tools.ts'));

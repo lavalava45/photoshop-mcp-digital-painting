@@ -5,12 +5,13 @@ import {
   cancelUxpBridgeCommandIfQueued,
   ensureUxpBridgeServer,
   getUxpBridgeCommandReceipt,
-  invokeUxpBridge,
+  invokeUxpBridge as invokeRawUxpBridge,
   probeUxpBridgeCommandReceipt,
   type UxpBridgeCommandReceipt,
   type UxpBridgeCommandProbe,
 } from './uxp-bridge-server.js';
 import { UXP_BRIDGE_REVISION } from '../core/guard/protocol-version.js';
+import { bindPinnedDocumentId } from '../core/document-target.js';
 
 const HEALTH_TIMEOUT_MS = 800;
 const READINESS_CACHE_TTL_MS = 2_000;
@@ -37,6 +38,27 @@ export interface UxpBridgeReadiness {
 }
 
 let readinessCache: { checkedAtMs: number; value: Omit<UxpBridgeReadiness, 'cache'> } | undefined;
+
+const UXP_DOCUMENT_TARGET_EXEMPT_ACTIONS = new Set([
+  // These actions either create the target or explicitly navigate to another
+  // document. Their document_id, when any, is not the request-scoped mutation
+  // target enforced for ordinary document-bound operations.
+  'create_document',
+  'open_image',
+  'set_active_document',
+]);
+
+async function invokeUxpBridge(
+  action: string,
+  params: Record<string, unknown>,
+  timeoutMs?: number,
+  options?: Parameters<typeof invokeRawUxpBridge>[3]
+) {
+  const dispatchParams = UXP_DOCUMENT_TARGET_EXEMPT_ACTIONS.has(action)
+    ? params
+    : bindPinnedDocumentId(params);
+  return invokeRawUxpBridge(action, dispatchParams, timeoutMs, options);
+}
 
 function withReadinessCacheMeta(
   value: Omit<UxpBridgeReadiness, 'cache'>,

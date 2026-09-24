@@ -118,6 +118,16 @@ async function main() {
     }
   }
 
+  const compiledTestArtifacts = [...published].filter(
+    (file) =>
+      file.startsWith('dist/') &&
+      (/(?:^|\/)[^/]+\.(?:test|spec)\.(?:js|d\.ts)(?:\.map)?$/.test(file) ||
+        file.includes('/__tests__/'))
+  );
+  for (const file of compiledTestArtifacts) {
+    problems.push(`production package must not include compiled test artifact ${file}`);
+  }
+
   const jsFiles = [...published].filter((file) => file.startsWith('dist/') && file.endsWith('.js'));
   for (const file of jsFiles) {
     const source = readFileSync(join(ROOT, file), 'utf8');

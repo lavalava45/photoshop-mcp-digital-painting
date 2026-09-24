@@ -27,6 +27,7 @@ import type { GuardProjectionContext } from './projection-context.js';
 import {
   collectOperationContractViolations,
 } from './operation-contract.js';
+import { guardExecutionPolicyError } from './execution-policy.js';
 import {
   createJob,
   JOB_HEARTBEAT_INTERVAL_MS,
@@ -746,6 +747,10 @@ export class EmbeddedGuardRuntime {
     timeoutMs: number,
     context: { guardOperationId?: string } = {}
   ): Promise<ToolResult> {
+    const executionPolicyError = guardExecutionPolicyError(name);
+    if (executionPolicyError) {
+      throw new Error(`${executionPolicyError.code}: ${executionPolicyError.message}`);
+    }
     const definition = this.registry.get(name);
     if (!definition) throw new Error(`Tool ${name} missing from this fork catalog`);
     if (name !== 'photoshop_get_state' && toolAcceptsDocumentId(this.registry, name) && !positiveDocumentId(args.document_id)) {

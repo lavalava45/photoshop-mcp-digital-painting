@@ -1,3 +1,5 @@
+import { guardExecutionPolicyError } from './execution-policy.js';
+
 export interface GuardOperationContractViolation {
   code: string;
   message: string;
@@ -26,5 +28,6 @@ export function collectOperationContractViolations(
       message: `Generative tool ${tool} is disabled by the Guard contract.`,
     }];
   }
-  return [];
+  const policyError = guardExecutionPolicyError(tool);
+  return policyError ? [policyError] : [];
 }

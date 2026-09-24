@@ -577,7 +577,7 @@ async function saveSelection(
       if (failure) return failure;
       const name = typeof result.data.channel_name === 'string' ? result.data.channel_name : channelName;
       return atomicSuccess(
-        name ? `Selection saved to channel \"${name}\"` : 'Selection saved to new alpha channel',
+        name ? `Selection saved to channel "${name}"` : 'Selection saved to new alpha channel',
         parseSelectionBounds(result.data)
       );
     }

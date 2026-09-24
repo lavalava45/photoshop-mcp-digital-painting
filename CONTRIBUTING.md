@@ -111,12 +111,18 @@ Tests are tiered by whether Photoshop must be running:
 ### Required (no Photoshop needed)
 
 ```bash
-npm run build:server
-npm run lint
-npm run verify:photoshop-prompts
+npm run verify:canonical
 ```
 
-Run these before every PR.
+Run this before every PR. It performs a clean server build, verifies the package surface,
+runs lint and the complete source Vitest acceptance inventory, checks acceptance-matrix
+test references for drift, and runs the compact-v2, painting-policy, prompt and tool-count
+verifiers.
+
+`npm run format:check` is currently **advisory/non-gating** while the inherited repository
+format baseline is being normalized. Do not treat a repository-wide Prettier failure as a
+canonical verification failure unless formatting is explicitly promoted into
+`verify:canonical`.
 
 ### Recommended (Photoshop must be running)
 
@@ -132,9 +138,7 @@ Integration tests communicate with a live Photoshop instance over stdio — the 
 
 - [ ] PR title, description, and commit messages are in **English**
 - [ ] Code comments and user-facing strings are in **English**
-- [ ] `npm run lint` passes
-- [ ] `npm run build:server` passes
-- [ ] `npm run verify:photoshop-prompts` passes
+- [ ] `npm run verify:canonical` passes
 - [ ] Integration tests run (if applicable — requires Photoshop)
 - [ ] Screenshots attached for UI changes
 

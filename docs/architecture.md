@@ -119,7 +119,7 @@ The 2026-09-23 P1/P2/P3 catalog migration extends this same policy across docume
 selection/masks, layer transforms/merge, adjustments, filters, text/export, guides/actions,
 datasets/image placement, Smart Objects, styles, crop/resize and the remaining migrated catalog
 surface. Source migration is complete. The current rebuilt child is live on bridge revision
-`compact-v2-20260923-full`; the load/revision preflight is accepted, while the final
+`compact-v2-20260924-targeting`; the load/revision preflight must be repeated for this source revision before the final
 representative post-migration behavior/no-focus-steal trace remains a separate live gate.
 
 Document-bound semantic mutations do not silently activate another tab to satisfy

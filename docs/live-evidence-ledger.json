@@ -1,0 +1,67 @@
+{
+  "schema": "photoshop-mcp.live-evidence-ledger.v1",
+  "recorded_at": "2026-09-24",
+  "purpose": "Committed hashes for small gitignored runtime/process evidence cited by roadmap-final-acceptance-matrix.md. Large PSD/JPEG payloads remain uncommitted.",
+  "entries": [
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-01/live-acceptance-ledger.json",
+      "bytes": 9901,
+      "sha256": "c521076bac6fff4f38a81415ade6ba32f023d54922830f3ac07e803c0064c43f",
+      "claims": ["13a.1.2", "13c.2", "15b.2"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-01/call-ledger.ndjson",
+      "bytes": 9237,
+      "sha256": "50903214f0d49e1c3b13dc43abc494194b50ee29aec1d513a66de449e6f2a840",
+      "claims": ["13a.1.2", "13c.2"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-02/live-acceptance-ledger.json",
+      "bytes": 12323,
+      "sha256": "984dd85b7752dca672cc612f4ebb21aee1f67475385661aca31c4468d7bedb79",
+      "claims": ["13a.1B.1", "13a.1B.3", "13b.7", "13c.3", "13c.4", "13c.5", "Task21"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-02/call-ledger.ndjson",
+      "bytes": 10697,
+      "sha256": "126f7ff4342a771992ad120fc3b8b631944a065f0cb5212f37601f643312b0ad",
+      "claims": ["13a.1B.1", "13b.7", "13c.3", "13c.4", "13c.5"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-05/runtime-window-smoke.json",
+      "bytes": 4913,
+      "sha256": "f705a94c406857e5567006aa1ea27bddd0bf8135a935157f5909caa0e3e50720",
+      "claims": ["recycled-document-id-smoke", "P0-2-prerequisite-smoke"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-05/evidence/recycled-id-runtime-window.json",
+      "bytes": 2864,
+      "sha256": "e4f2a6f9796e40f4374beff8b0e38f09362433b7cb6c05d4aefe8e2a98d8005d",
+      "claims": ["recycled-document-id-smoke"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-05/evidence/post-fix-visual-runtime-window.json",
+      "bytes": 2172,
+      "sha256": "a41b67e2d31f1fb21b372e6aa204524cff3d48452384e277ac689b1b945485f8",
+      "claims": ["recycled-document-id-smoke", "P0-2-prerequisite-smoke"]
+    },
+    {
+      "path": ".photoshop-runtime/controller/operations/multiscale-live-20260924-composition-01.json",
+      "bytes": 16706,
+      "sha256": "657b9b68d10ceaf5ff5fccee6349201f7a97e88b534c11b9b540d6ec34e97613",
+      "claims": ["MR.4-composition"]
+    },
+    {
+      "path": ".photoshop-runtime/controller/operations/multiscale-live-20260924-host-refresh-02.json",
+      "bytes": 20263,
+      "sha256": "954ca83edda52c5799a7b2719894a90dad7005d84636b5fe71d30993f06d72d6",
+      "claims": ["MR.4-object-micro-escalation"]
+    },
+    {
+      "path": "processes/runtime-v2-cutover-process/2026-09-22/archive-before-v2/archive-manifest.json",
+      "bytes": 504724,
+      "sha256": "4fbe96be148e89f274518d474b266d8c19077f5acf8b93bf6dcdc3c050757978",
+      "claims": ["runtime-v2-cutover-archive"]
+    }
+  ]
+}

@@ -23,40 +23,36 @@ evidence belongs in `CHANGELOG.md` and the acceptance matrix.
 
 ## Priority order
 
-The remaining work should be executed in this order:
+The remaining work should be executed in this order. **P0-0 is closed as a code-integrity block and
+is retained below only as a canonical architecture invariant. P0-1 is closed and recorded in
+`CHANGELOG.md` / the acceptance matrix.**
 
-1. **P0-0 — canonical execution integrity:** close the global-audit blockers in document targeting,
-   Guard executable policy/raw-script retirement and recipe execution architecture.
-2. **P0-1 — repository verification integrity:** make the machine gates source-stable and ensure the
-   acceptance suite actually covers the invariants used to claim compact-v2/UXP completion.
-3. **P0-2 — final UXP migration live acceptance:** rerun the remaining real-Photoshop
-   **13a.6.1 / 13c.7** gate only after P0-0/P0-1 are closed.
-4. **P0-A — host routing / CoS attribution:** Tasks **1 → 3 → 2 → 4**.
-5. **P0-B — Guard state/evidence correctness:** close the residual multiscale/recovery/frame/evidence
-   defects found by the global audit before expanding recovery or critic authority.
-6. **P0-C — accepted-state recovery:** Task **21a**.
-7. **P0-D — human critic calibration / stop-decision calibration:** Tasks **8 / 8a → 8b**, then
+1. **P0-2 — final UXP migration live acceptance:** rerun the remaining real-Photoshop
+   **13a.6.1 / 13c.7** gate against the current rebuilt runtime.
+2. **P0-A — host routing / CoS attribution:** Tasks **1 → 3 → 2 → 4**.
+3. **P0-B — Guard state/evidence/review correctness:** close the residual
+   multiscale/recovery/frame/evidence defects found by the global audit **and** the reproduced
+   mechanical-patterning review failure before expanding recovery or critic authority.
+4. **P0-C — accepted-state recovery:** Task **21a**.
+5. **P0-D — human critic calibration / stop-decision calibration:** Tasks **8 / 8a → 8b**, then
    close the residual human claims from Tasks **6, 11 and 13a.1A/13a.1C** from the same labelled
    evidence where possible.
-8. **P1 — human artistic acceptance:** Task **23 human pack → 22 → 15d.3**,
+6. **P1 — human artistic acceptance:** Task **23 human pack → 22 → 15d.3**,
    then the real-artwork artistic-preference part of Task **21**.
-9. **Conditional / P2 only after evidence:** Task **5** if ordinary ChatGPT/CoS routing remains
+7. **Conditional / P2 only after evidence:** Task **5** if ordinary ChatGPT/CoS routing remains
    unreliable; Task **10** only if Task 8/8a demonstrates measurable decision-quality gain; Task
    **15c** remains optional exploration.
 
 Rationale:
 
-- The global audit supersedes the previous assumption that the UXP migration is source-complete:
-  central document pinning is not enforced end-to-end, the compact Guard can still compile an
-  internally registered raw-script operation, and recipe tools still execute monolithic legacy
-  scripts rather than the documented primitive/router path. These are code-integrity blockers, not
-  live-only gaps.
-- Repository verification must become deterministic before the final migration claim: the default
-  unit run currently depends on compiled `dist` test residue, production packaging includes compiled
-  tests, and the canonical acceptance command does not cover several test files cited by the
-  acceptance matrix.
-- Final UXP live acceptance therefore moves after those code/test blockers. A live trace performed
-  before they are closed cannot prove the canonical path that the roadmap claims.
+- The global-audit P0-0 blockers are now closed at the code-contract level: pinned document identity
+  is enforced at the actual UXP/legacy dispatch boundaries, Guard execution is explicit/default-deny,
+  raw script is retired from compact-v2, and upstream `photoshop_recipe_*` workflows are deliberately
+  excluded from the canonical painting lane rather than migrated into it.
+- Repository verification is now deterministic: source-only Vitest discovery is fixed, production
+  builds/packages exclude compiled tests, matrix-cited tests are drift-checked, CI runs the canonical
+  gate, and gitignored live evidence has a committed hash ledger.
+- Final UXP live acceptance is therefore the next remaining gate.
 - Host routing comes next because losing the established Photoshop/CoS route can bypass the entire
   painting architecture regardless of its internal quality.
 - Guard state/evidence correctness comes before higher-level recovery/calibration because a review
@@ -75,13 +71,12 @@ Rationale:
 
 ---
 
-## P0-0 — Canonical execution integrity blockers
+## P0-0 — Canonical execution integrity invariants — **closed 2026-09-24**
 
-The 2026-09-24 global architecture/logic audit found three production-reachability gaps that
-invalidate the previous “source-complete, live-only remaining” interpretation of the UXP migration.
-Document targeting and executable permission need central enforcement rather than handler-by-handler
-patches; recipes need canonical orchestration through primitives/router, with temporary fail-closed
-denial allowed only as an intermediate safety measure.
+The 2026-09-24 global architecture/logic audit found three production-reachability gaps. The code
+block is now closed and the rules below are retained as non-regression architecture constraints.
+Painter/Art Director should gain expressive power by composing semantic primitives, not by acquiring
+pre-baked upstream workflow macros.
 
 ### P0-0.1 — Systemic fail-closed document targeting
 
@@ -131,75 +126,38 @@ forbidden. `photoshop_execute_script` must be unreachable from production compac
   execution is retired and unreachable from the canonical production lane;
 - tests prove the denial at compiler/runtime boundaries without relying only on outer MCP mode.
 
-### P0-0.3 — Recipes must match the documented canonical architecture
+### P0-0.3 — Recipes are excluded from the canonical painting lane
 
-All maintained `photoshop_recipe_*` tools currently route through monolithic ExtendScript helpers,
-while the migration inventory describes recipes as Node orchestration over registered primitives.
-This bypasses BackendRouter/UXP selection and the systemic invariants expected from primitives.
+The 16 upstream `photoshop_recipe_*` tools are general Photoshop convenience workflows, not Painter
+capabilities. Their pre-baked behavior conflicts with the project goal that Painter/Art Director
+choose and compose expressive semantic operations themselves.
 
-The end state is real orchestration through canonical semantic primitives/router paths. A temporary
-fail-closed denial of legacy recipes inside the canonical Guard path is acceptable as an intermediate
-safety step, but does not close this item.
+They may remain registered on the general MCP compatibility surface for upstream compatibility, even
+if their upstream implementation uses legacy/monolithic scripting. **Registration does not make them
+eligible for compact-v2/Guard execution.** No recipe migration is required for the painting project.
+If a useful capability exists only inside a recipe, extract or implement the smallest reusable
+semantic primitive instead of admitting that recipe into Painter.
 
-**Acceptance**
+**Permanent invariant / acceptance**
 
-- no maintained canonical recipe dispatches a monolithic legacy script body directly;
-- recipe execution remains one Guard-owned durable operation; every Photoshop sub-dispatch uses the
-  canonical primitive/router path with pinned targeting and backend policy, and any dispatched or
-  uncertain UXP sub-dispatch is never replayed through a legacy backend;
-- the migration inventory and actual runtime route agree;
-- representative recipe tests prove the canonical route rather than merely tool success.
-
----
-
-## P0-1 — Repository verification integrity
-
-The global audit also found that the current machine baseline can report misleading totals or omit
-claimed invariants: default Vitest discovers compiled tests in `dist`, production build/package
-contains compiled test artifacts, and `test:acceptance` does not include several test files cited by
-the acceptance matrix. There is currently no repository CI workflow enforcing the full gate.
-
-Close this before using repository-green status as evidence for P0-2.
-
-**Acceptance**
-
-1. source test discovery is deterministic and excludes `dist/**`;
-2. production TypeScript/package output does not ship co-located test artifacts unless explicitly
-   required and justified;
-3. the canonical acceptance command includes every machine-verifiable test family used by the
-   acceptance matrix for compact-v2/Guard/UXP completion, including artistic recovery, pass-check,
-   planner/refinement and multiscale review invariants where those rows cite them, and a drift check
-   prevents newly cited repo-pass tests from silently falling outside the canonical gate;
-4. `verify-compact-v2-contract-audit.mjs` is wired into a canonical verification command rather than
-   being a manual-only script;
-5. the current four maintained production-source lint errors are fixed; exclusions are allowed only
-   for explicitly non-maintained/generated paths and may not hide errors in active `src/tools` code;
-6. required local checks are aligned in `CONTRIBUTING.md` and PR guidance, and an automated workflow
-   runs the canonical machine gate for maintained PR/push paths;
-7. the same source checkout produces the same test inventory/result before and after removing stale
-   build artifacts such as `dist`; verification must not depend on compiled residue;
-8. `docs/roadmap-final-acceptance-matrix.md` explicitly accounts for every active forward-roadmap
-   item that has a machine/live/human acceptance claim, including new P0-0.1/.2/.3, P0-1, P0-2,
-   P0-B.1–P0-B.7, Task 8b, Tasks 1–5, 21a and 22, or states an explicit scope boundary instead of
-   silently omitting them;
-9. live-pass claims that depend on gitignored `.photoshop-runtime/` / `processes/` evidence have a
-   small committed manifest/hash ledger sufficient to audit the claimed run without committing large
-   PSD/JPEG payloads;
-10. tool-count/contract verifiers cover the maintained documents that publish canonical counts or
-    contract claims, and formatting is either brought under an intentional gate or explicitly kept
-    non-gating rather than remaining an ambiguous repository-wide failure;
-11. executable-topology regressions explicitly prove all three P0-0 holes stay closed: raw script is
-    denied through Guard's internal registry path, pinned `document_id` reaches real UXP/legacy
-    dispatch and mismatch yields zero mutation, and maintained canonical recipes cannot execute
-    monolithic `PhotoshopAPIFactory`/ExtendScript bodies.
+- every `photoshop_recipe_*` name is `forbidden` by the authoritative Guard execution policy;
+- compact compilation/runtime rejects a recipe before any Photoshop dispatch, regardless of whether
+  the recipe remains registered in the general ToolRegistry;
+- no recipe is part of Painter/Art Director capability selection, method selection or fallback;
+- the migration inventory explicitly labels recipes as general-MCP compatibility surface and outside
+  canonical painting acceptance;
+- adding a new upstream recipe does not make it executable through Guard without an explicit
+  architecture change; the default-deny regression must catch this automatically;
+- artistic functionality needed by Painter is provided as semantic primitives, leaving the artistic
+  decision and composition of those primitives to Painter rather than to fixed recipes.
 
 ---
 
 ## P0-2 — Final UXP migration live acceptance
 
 The P1/P2/P3 migration already has substantial source and live evidence, but the final migration
-claim is now blocked by P0-0/P0-1. After those are closed, run one final **real Photoshop behavioral
-acceptance** on a disposable document against the exact rebuilt runtime under test.
+claim still needs one final **real Photoshop behavioral acceptance** on a disposable document against
+the exact rebuilt runtime under test. P0-0 and P0-1 are now closed.
 
 The 2026-09-24 read-only audit preflight also observed the UXP companion currently disconnected
 (`uxp_plugin_not_connected`). Treat that as environment readiness, not proof of a code defect: the
@@ -379,11 +337,15 @@ Never repair binding by repainting or replaying a successful mutation.
 
 ---
 
-## P0-B — Guard state/evidence correctness
+## P0-B — Guard state/evidence/review correctness
 
 The global audit found several runtime-semantic gaps that do not invalidate the existence of the
 multiscale/recovery machinery, but do weaken the correctness guarantees built on top of it. Close
-these before Task 21a or critic authority is expanded.
+these before Task 21a or critic authority is expanded. A 2026-09-24 live painting run also exposed
+an independent review failure: repeated object geometry, parameter-jitter variants and uniform
+thin-line detailing could satisfy narrow operation-local goals while the visible result became
+obviously mechanical at object scale. That failure is tracked below as P0-B.8 rather than being
+treated as a generic aesthetic preference.
 
 ### P0-B.1 — Preserve broad review coverage during nested deduplication
 
@@ -495,9 +457,71 @@ stale or mismatched glance must not clear the pending requirement.
 - Task 11 scheduling/state mechanics are not treated as fully machine-complete until this invariant
   is covered, while perceptual usefulness remains a separate human calibration claim.
 
+### P0-B.8 — Mechanical-patterning / copy-geometry guard with mandatory instance-scale review
+
+The live pink-city failure showed that the current loop can accept a pass because it visibly added
+characters, birds, architectural marks or “detail” while missing that several visible objects were
+constructed from the same geometric template. Whole-frame review can hide this because the repeated
+instances are small; later passes then amplify the defect by adding more lines to the same weak
+construction.
+
+The canonical painting lane must distinguish **semantic reuse** from **visible geometry reuse**:
+Painter may reuse the concept “flying bird”, “ninja”, “balcony” or “roof”, but independent visible
+instances must not silently reuse the same normalized stroke/region geometry unless deliberate
+uniform repetition is part of the user/design intent. Translation, uniform scale, small rotation,
+color swaps or small coordinate jitter do **not** count as structural variation.
+
+Implement a bounded mechanical-patterning check around admitted compact visual actions:
+
+1. derive normalized signatures for repeated stroke/region constructions by removing incidental
+   placement/scale and comparing topology, proportions, relative angles and primitive ordering;
+2. prefer Guard-derived grouping from admitted action structure; add only the smallest optional
+   instance/motif identity metadata if reliable grouping cannot otherwise be recovered;
+3. detect exact copies and near-copies that differ only by transform, color or parameter jitter;
+4. when repeated **character / creature / organic / irregular decorative** instances are introduced,
+   choose representative source-document crops automatically (at minimum the closest/largest
+   instance and the most-similar pair) even if whole-frame review did not already produce a local
+   finding;
+5. review those crops for silhouette/pose/construction variation, accidental tangencies or
+   intersections, line-weight hierarchy and whether the objects read as actual forms rather than
+   wireframe glyphs;
+6. treat intentional regular systems such as window grids, rail posts, tiles, machine-made modules
+   or an explicitly requested clone/uniform formation as allowed rhythm, not as an automatic defect;
+7. never “fix” repetition by injecting random noise. Variation must come from a structural reason
+   such as pose, viewpoint, wing phase, occlusion, perspective, role, depth or differing construction;
+8. do not accept “more detail” merely because primitive/stroke count increased. A detail pass must
+   add readable form, plane/material information, spatial relation or deliberately useful texture.
+
+This is a review gate, not a universal numeric beauty score. Deterministic geometry similarity may
+raise review debt; the artistic conclusion still comes from the exact visual evidence at the
+appropriate scale. Existing COMPOSITION / OBJECT / MICRO crop machinery should be reused rather than
+creating a second review subsystem.
+
+**Acceptance**
+
+- four identical distant-bird glyphs at different positions trigger mechanical-patterning review;
+- the same glyphs with only scale/rotation/color/jitter changes still trigger;
+- structurally different birds with meaningfully different wing phase/silhouette do not fail merely
+  because they share the same semantic class;
+- a legitimate regular window/railing/tile rhythm remains admissible under an explicit/derived
+  regular-pattern classification;
+- a fixture of repeated block-character skeletons analogous to the pink-city ninjas forces
+  instance-scale crop evidence before the pass can be artistically accepted;
+- a crop exposing a railing/architecture line passing through a key character cannot be closed as
+  “character readability resolved” from whole-frame evidence alone;
+- local crop selection uses exact source-document coordinates and does not replay the artistic
+  mutation;
+- parameter jitter/randomization alone is never recorded as structural variation;
+- tool success, pixel delta, primitive count or a satisfied operation-local “objects were added”
+  target cannot by themselves close the artistic review;
+- repository tests cover exact-copy, transform-only-copy, jitter-only-copy, structural-variation and
+  intentional-rhythm controls, while held-out human calibration covers whether borderline repeated
+  patterns are perceptually objectionable.
+
 **Internal ordering inside P0-B:** close frame/evidence/incarnation/restore-proof invariants
-(P0-B.3/.4/.5/.6/.7) before making P0-B.2 recovery policy authoritative. P0-B.1 may proceed in
-parallel because it is an independent review-coverage defect.
+(P0-B.3/.4/.5/.6/.7) before making P0-B.2 recovery policy authoritative. P0-B.1 and P0-B.8 may
+proceed in parallel because they are independent review-correctness defects; P0-B.8 must be closed
+before using repeated small-object/character passes as evidence for human artistic acceptance.
 
 ---
 
@@ -586,6 +610,9 @@ The held-out set must include:
 - locally successful edits that weaken the whole;
 - useful simplifications;
 - lost accidental strengths;
+- mechanically repeated character/creature/decorative motifs, including transform-only and
+  parameter-jitter variants;
+- legitimate intentional regular rhythms, so calibration measures false alarms as well as detection;
 - stylized/surreal cases where ordinary-world assumptions should not trigger correction.
 
 Human reference judgments must be recorded before critic answers are used to adjudicate disputed
@@ -976,6 +1003,9 @@ Every implemented item should include, as applicable:
 8. human-labelled evidence when the claim is perceptual/artistic/calibration-related;
 9. updates to this roadmap, `CHANGELOG.md` and canonical acceptance docs rather than accumulating
    another temporary completion log.
+10. for anti-mechanical-patterning work, paired controls for exact/near copy, transform/jitter-only
+    variation, genuine structural variation and intentional regular rhythm; randomization is not an
+    accepted substitute for structural artistic variation.
 
 Tool success, comparison SHA, pixel delta, layer creation and mocked critic verdicts are never, by
 themselves, proof of artistic correctness.

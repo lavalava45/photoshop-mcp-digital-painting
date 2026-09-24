@@ -63,7 +63,7 @@ Current 2026-09-23 cutover evidence:
 - loaded `dist/cos-plugin.js` SHA-256: `9023114D837A4307EBBE81D280226E1A6AD8F02DFAB35E4EC12208C0F8118801`, mtime `2026-09-22T23:20:10.3060645Z`;
 - Guard protocol: `photoshop.guard.compact.v2`; runtime state: `photoshop.guard.runtime-state.v2`; mode: `required`; raw mutation bypass blocked;
 - live Photoshop route: `connected=true`, `ready=true`, selected transport `uxp`, bridge transport `long-poll`;
-- expected bridge revision = actual bridge revision = `compact-v2-20260923-full`;
+- expected bridge revision = actual bridge revision = `compact-v2-20260924-targeting`;
 - Guard status at preflight: no pending reports, operation acknowledgements, report-delivery acknowledgements, uncertain operations, visual verdicts, or active jobs.
 
 Therefore the loaded-build/revision portion of preflight is complete. The no-COM/foreground monitored behavioral trace and representative P1/P2/P3 acceptance steps below remain to be executed.
@@ -94,7 +94,7 @@ Acceptance:
 2. Commit/build/hash are the intended current build.
 3. Call `photoshop_guard_capabilities` once before the timed Painter loop and record:
    - `compact_guard_protocol_version`
-   - `expected_uxp_bridge_revision` (current source target: `compact-v2-20260923-full`)
+   - `expected_uxp_bridge_revision` (current source target: `compact-v2-20260924-targeting`)
    - `runtime_state_version`
    - Guard mode
    - `raw_mutation_bypass_blocked`

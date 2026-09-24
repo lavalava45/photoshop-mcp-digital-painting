@@ -860,6 +860,143 @@ describe('Guard session-store regressions', () => {
     expect(s.visualBarrier(42)?.operationId).toBe('timeout-plan');
   });
 
+  it('attaches fresh recovery preview when a visual timeout is reconciled as partial', () => {
+    const s = store();
+    s.setArtRunState({
+      document_id: 42,
+      process_dir: 'processes/session-regression-process/partial-preview-recovery',
+      commentary_mode: 'technical',
+      painting_profile: 'simple_graphic',
+    });
+    const uncertain = s.begin({
+      ...request('partial-preview-plan', 'photoshop_execute_visual_microplan', {
+        document_id: 42,
+        plan_id: 'partial-preview-plan',
+      }),
+      problem_id: 'partial-preview-recovery',
+    }).record;
+    s.markDispatched(uncertain);
+    s.fail(uncertain, new Error('simulated timeout after partial visual mutation'));
+    closeReportAndAck(s, 'partial-preview-plan');
+
+    const state = s.begin(request('partial-preview-state', 'photoshop_get_state', { document_id: 42 })).record;
+    s.complete(state, { content: [{ type: 'text', text: JSON.stringify({ ok: true, hasDocument: true }) }] });
+    closeReportAndAck(s, 'partial-preview-state');
+
+    const previewPath = path.join(s.directory, 'partial-recovery-frame.jpg');
+    writeFileSync(previewPath, 'partial-recovery-frame');
+    const sha256 = createHash('sha256').update('partial-recovery-frame').digest('hex');
+    const preview = s.begin(request('partial-preview-frame', 'photoshop_get_preview', { document_id: 42 })).record;
+    s.complete(preview, {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({ ok: true, sha256, materialized_path: previewPath, width: 1, height: 1, mime_type: 'image/jpeg' }),
+      }],
+    });
+    closeReportAndAck(s, 'partial-preview-frame');
+
+    s.reconcile({
+      id: 'partial-preview-plan',
+      state_id: 'partial-preview-state',
+      preview_id: 'partial-preview-frame',
+      outcome: 'partial',
+      reason: 'Fresh same-document state and preview prove that a partial visual result remains and is safe to classify.',
+    });
+
+    const recovered = s.read('partial-preview-plan')!;
+    expect(recovered.phase).toBe('completed');
+    expect(recovered.execution).toBe('partial');
+    expect(recovered.preview?.sha256).toBe(sha256);
+    expect(recovered.preview?.document_id).toBe(42);
+    expect(s.visualBarrier(42)).toMatchObject({
+      operationId: 'partial-preview-plan',
+      sha256,
+      requiresExternalPreview: false,
+    });
+  });
+
+  it('upgrades a legacy reconciled partial visual record that is missing its attached recovery preview', () => {
+    const s = store();
+    s.setArtRunState({
+      document_id: 42,
+      process_dir: 'processes/session-regression-process/legacy-partial-preview-recovery',
+      commentary_mode: 'technical',
+      painting_profile: 'simple_graphic',
+    });
+    const uncertain = s.begin({
+      ...request('legacy-partial-preview-plan', 'photoshop_execute_visual_microplan', {
+        document_id: 42,
+        plan_id: 'legacy-partial-preview-plan',
+      }),
+      problem_id: 'legacy-partial-preview-recovery',
+    }).record;
+    s.markDispatched(uncertain);
+    s.fail(uncertain, new Error('simulated timeout after partial visual mutation'));
+    closeReportAndAck(s, 'legacy-partial-preview-plan');
+
+    const state = s.begin(request('legacy-partial-preview-state', 'photoshop_get_state', { document_id: 42 })).record;
+    s.complete(state, { content: [{ type: 'text', text: JSON.stringify({ ok: true, hasDocument: true }) }] });
+    closeReportAndAck(s, 'legacy-partial-preview-state');
+
+    const previewPath = path.join(s.directory, 'legacy-partial-recovery-frame.jpg');
+    writeFileSync(previewPath, 'legacy-partial-recovery-frame');
+    const sha256 = createHash('sha256').update('legacy-partial-recovery-frame').digest('hex');
+    const preview = s.begin(request('legacy-partial-preview-frame', 'photoshop_get_preview', { document_id: 42 })).record;
+    s.complete(preview, {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({ ok: true, sha256, materialized_path: previewPath, width: 1, height: 1, mime_type: 'image/jpeg' }),
+      }],
+    });
+    closeReportAndAck(s, 'legacy-partial-preview-frame');
+
+    const legacy = s.read('legacy-partial-preview-plan')!;
+    legacy.phase = 'completed';
+    legacy.failed = false;
+    legacy.execution = 'partial';
+    legacy.resolved = {
+      id: 'legacy-partial-preview-plan',
+      state_id: 'legacy-partial-preview-state',
+      preview_id: 'legacy-partial-preview-frame',
+      outcome: 'partial',
+      reason: 'Legacy runtime settled the partial execution but failed to attach its recovery preview.',
+      at: new Date().toISOString(),
+    };
+    if (legacy.error) {
+      legacy.recovery_original_error = legacy.error;
+      delete legacy.error;
+    }
+    delete legacy.preview;
+    delete legacy.preview_attached_at;
+    s.write(legacy);
+
+    s.reconcile({
+      id: 'legacy-partial-preview-plan',
+      state_id: 'legacy-partial-preview-state',
+      preview_id: 'legacy-partial-preview-frame',
+      outcome: 'partial',
+      reason: 'Idempotent recovery upgrade attaches the already verified fresh preview without changing the settled partial outcome.',
+    });
+
+    const recovered = s.read('legacy-partial-preview-plan')!;
+    expect(recovered.phase).toBe('completed');
+    expect(recovered.execution).toBe('partial');
+    expect(recovered.preview?.sha256).toBe(sha256);
+    expect(recovered.preview?.document_id).toBe(42);
+    expect(s.visualBarrier(42)).toMatchObject({
+      operationId: 'legacy-partial-preview-plan',
+      sha256,
+      requiresExternalPreview: false,
+    });
+    expect(() => s.reconcile({
+      id: 'legacy-partial-preview-plan',
+      state_id: 'legacy-partial-preview-state',
+      preview_id: 'legacy-partial-preview-frame',
+      outcome: 'completed',
+      reason: 'A legacy preview attachment must not be allowed to upgrade the already settled execution outcome.',
+    })).toThrow('Expected an interrupted or uncertain operation');
+  });
+
   it('does not clear a newer barrier that reuses the same plan id', () => {
     const s = store();
     s.setArtRunState({

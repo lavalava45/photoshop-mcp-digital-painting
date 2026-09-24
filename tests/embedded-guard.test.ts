@@ -3196,6 +3196,126 @@ describe('embedded Photoshop Guard', () => {
     expect(runtime.store.activeJobs(undefined)).toHaveLength(0);
   });
 
+  it('rejects retired raw script, recipes, and unknown registered tools at compiler and runtime boundaries', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-execution-policy-'));
+    dirs.push(dir);
+    const { registry } = fakeRegistry(dir);
+    let rawCalls = 0;
+    let recipeCalls = 0;
+    let debugCalls = 0;
+    registry.register('photoshop_execute_script', {
+      tool: {
+        name: 'photoshop_execute_script',
+        description: 'retired raw script fixture',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            document_id: { type: 'number' },
+            code: { type: 'string' },
+          },
+          required: ['code'],
+        },
+      },
+      handler: async () => {
+        rawCalls += 1;
+        return { content: [{ type: 'text', text: 'should not execute' }] };
+      },
+    });
+    registry.register('photoshop_recipe_dodge_burn', {
+      tool: {
+        name: 'photoshop_recipe_dodge_burn',
+        description: 'registered upstream recipe fixture',
+        inputSchema: {
+          type: 'object',
+          properties: { document_id: { type: 'number' } },
+        },
+      },
+      handler: async () => {
+        recipeCalls += 1;
+        return { content: [{ type: 'text', text: 'should not execute' }] };
+      },
+    });
+    registry.register('photoshop_debug_future_tool', {
+      tool: {
+        name: 'photoshop_debug_future_tool',
+        description: 'registered but not authorized fixture',
+        inputSchema: {
+          type: 'object',
+          properties: { document_id: { type: 'number' } },
+        },
+      },
+      handler: async () => {
+        debugCalls += 1;
+        return { content: [{ type: 'text', text: 'should not execute' }] };
+      },
+    });
+    const runtime = runtimeFor(registry, dir);
+
+    const rawRejected = await runtime.cycle({
+      next_pass: {
+        request_key: 'retired-raw-script',
+        document_id: 42,
+        goal: 'Attempt retired raw script execution',
+        actions: [{
+          tool: 'photoshop_execute_script',
+          args: { code: 'app.activeDocument.flatten();' },
+        }],
+      },
+    }) as any;
+    expect(rawRejected.preflight_rejection.error_codes).toContain('guard_tool_retired');
+    expect(rawRejected.preflight_rejection.next_operation_dispatched).toBe(false);
+    expect(rawCalls).toBe(0);
+
+    const recipeRejected = await runtime.cycle({
+      next_pass: {
+        request_key: 'forbidden-upstream-recipe',
+        document_id: 42,
+        goal: 'Attempt a pre-baked upstream recipe',
+        actions: [{ tool: 'photoshop_recipe_dodge_burn', args: {} }],
+      },
+    }) as any;
+    expect(recipeRejected.preflight_rejection.error_codes).toContain('guard_tool_not_executable');
+    expect(recipeRejected.preflight_rejection.next_operation_dispatched).toBe(false);
+    expect(recipeCalls).toBe(0);
+
+    const unknownRejected = await runtime.cycle({
+      next_pass: {
+        request_key: 'unknown-registered-tool',
+        document_id: 42,
+        goal: 'Attempt an unclassified registered tool',
+        actions: [{ tool: 'photoshop_debug_future_tool', args: {} }],
+      },
+    }) as any;
+    expect(unknownRejected.preflight_rejection.error_codes).toContain('guard_tool_not_executable');
+    expect(unknownRejected.preflight_rejection.next_operation_dispatched).toBe(false);
+    expect(debugCalls).toBe(0);
+
+    await expect(
+      (runtime as any).invoke(
+        'photoshop_execute_script',
+        { document_id: 42, code: 'app.activeDocument.flatten();' },
+        1_000
+      )
+    ).rejects.toThrow('guard_tool_retired');
+    await expect(
+      (runtime as any).invoke(
+        'photoshop_recipe_dodge_burn',
+        { document_id: 42 },
+        1_000
+      )
+    ).rejects.toThrow('guard_tool_not_executable');
+    await expect(
+      (runtime as any).invoke(
+        'photoshop_debug_future_tool',
+        { document_id: 42 },
+        1_000
+      )
+    ).rejects.toThrow('guard_tool_not_executable');
+    expect(rawCalls).toBe(0);
+    expect(recipeCalls).toBe(0);
+    expect(debugCalls).toBe(0);
+  });
+
   it('starts and completes an in-process durable job without a second MCP daemon', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-job-'));
     dirs.push(dir);

@@ -438,7 +438,7 @@ contract.
 maintain backward compatibility.** The following known consumers explain why removal must
 be staged, but they are migration work rather than reasons to retain the route:
 
-- `package.json` still includes the controller/daemon suites in `test:acceptance`;
+- `package.json` now uses source-wide compact-native Vitest discovery for `test:acceptance`;
 - Stage C/D and controller acceptance tests execute `photoshop-session.mjs` directly;
 - `test-mcp-daemon.mjs` and multiple live-test utilities use `PersistentMcpClient`;
 - controller/session-store tests still cover durable journal, async-job, recovery,

@@ -121,7 +121,7 @@ Current 2026-09-23 post-migration cutover check: the restarted Photoshop MCP chi
 with `dist/cos-plugin.js` SHA-256
 `9023114D837A4307EBBE81D280226E1A6AD8F02DFAB35E4EC12208C0F8118801`.
 `photoshop_ping` reports `connected=true`, `ready=true`, selected transport `uxp`,
-long-poll bridge revision `compact-v2-20260923-full`, and an exact expected/actual revision
+long-poll bridge revision `compact-v2-20260924-targeting`, and an exact expected/actual revision
 match. Guard reports compact protocol `photoshop.guard.compact.v2`, runtime state
 `photoshop.guard.runtime-state.v2`, required mode with raw mutation bypass blocked, and no
 pending/uncertain work at the cutover check. This verifies code/companion freshness; it is not
@@ -304,8 +304,8 @@ Local MCP integration tests run against a live Photoshop instance over stdio
 |-------|---------|--------|
 | Issue #2 regression | `npm run spike:issue-2` | Targeted checks (metadata, layers, place, Smart Object transform, jsString escapes, fonts, alert, CJK names) |
 | Full tool + recipe sweep | `npm run test:mcp-all` | **119 pass**, **0 fail**, **4 skip** (123 total) |
-| Prompt-layer smoke | `npm run test:mcp-local` | 16 prompt templates + core recipes |
-| Prompt ↔ recipe parity | `npm run verify:photoshop-prompts` | 12↔12 strict match + 4 guides |
+| Prompt-layer smoke | `npm run test:mcp-local` | 21 prompt templates + core recipes |
+| Prompt ↔ recipe parity | `npm run verify:photoshop-prompts` | 16↔16 strict match + 5 guides |
 
 **Tool coverage:** 145 total tools (129 atomic/non-recipe `photoshop_*` + 16 recipe
 `photoshop_recipe_*`) — re-run `npm run test:mcp-all` for a fresh pass count.

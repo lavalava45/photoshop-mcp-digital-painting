@@ -83,6 +83,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 2026-09-24: close P0-1 repository verification integrity. Vitest now discovers only source tests
+  under `src/**` and `tests/**` and excludes `dist/**`; production TypeScript output no longer
+  compiles co-located tests, and package verification rejects any compiled test artifact. The
+  canonical acceptance command is source-wide and checks acceptance-matrix citations for drift;
+  compact-v2, package, lint, painting-policy, prompt, catalog-count and committed live-evidence hash
+  verifiers are composed under `npm run verify:canonical` and enforced by the GitHub PR/push
+  workflow. Required contributor/PR guidance now points to that single gate; repository-wide
+  Prettier remains explicitly advisory/non-gating. The final canonical run passed **575/575 tests
+  across 62 source files**, 0 lint errors, and all verification scripts. A committed
+  `docs/live-evidence-ledger.json` records hashes for the small gitignored runtime/process artifacts
+  cited by live-pass claims without committing large PSD/JPEG payloads.
+- 2026-09-24: close the P0-0 canonical-execution integrity block. Request-scoped `document_id` is now
+  enforced centrally at real legacy and UXP dispatch boundaries; Guard execution uses an explicit
+  default-deny classification so registry membership does not grant execution authority; raw
+  `photoshop_execute_script` is retired from compact-v2. The upstream `photoshop_recipe_*` workflows
+  are intentionally kept outside the canonical painting lane rather than migrated: they may remain
+  on the general MCP compatibility surface, but Guard/Painter/Art Director cannot invoke them.
+  Painting functionality must be expressed through reusable semantic primitives so the Painter
+  chooses the artistic operation instead of delegating to pre-baked recipes.
+
 - 2026-09-24: treat every successful guarded `photoshop_create_document` / `photoshop_open_image`
   bootstrap as a new Photoshop document incarnation even when Photoshop recycles a historical
   numeric `document_id`. Guard now clears stale document-scoped painting state and visual barriers,
@@ -665,4 +685,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 1.1.1 (`5cac9c1`)
 - 1.1.0 (`6e1c1f0`)
 - 1.0.0 (`17d8d91`)
-

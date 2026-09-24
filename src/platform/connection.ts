@@ -4,6 +4,7 @@ import { PhotoshopDetector } from './detector.js';
 import type { ScriptExecutor } from './script-executor.js';
 import { WindowsExecutor } from './windows-executor.js';
 import { MacOSExecutor } from './macos-executor.js';
+import { guardPinnedLegacyScript } from '../core/document-target.js';
 
 export interface PhotoshopInfo {
   version: string;
@@ -92,7 +93,7 @@ export class PhotoshopConnection {
         this.logger.info('Photoshop not running, launching...');
         await executor.launchPhotoshop(this.photoshopInfo.path);
       }
-      return await executor.execute(script, timeout);
+      return await executor.execute(guardPinnedLegacyScript(script), timeout);
     } catch (error) {
       this.logger.error('Script execution failed:', error);
       throw error;

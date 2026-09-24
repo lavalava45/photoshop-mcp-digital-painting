@@ -35,9 +35,9 @@ export function createActionTools(
       tool: {
         name: 'photoshop_execute_script',
         description:
-          'Execute custom ExtendScript (JSX) code inside Photoshop (advanced escape hatch).\n\n' +
-          'Use when: no existing tool covers the operation and you can write safe JSX.\n' +
-          'Do NOT use when: a recipe or atomic tool exists — prefer photoshop_recipe_* or photoshop_* tools.\n\n' +
+          'Retired raw ExtendScript (JSX) escape hatch retained only for non-canonical legacy/debug compatibility.\n\n' +
+          'Do NOT use from the required Guard / compact-v2 production lane: Guard execution policy rejects this tool before Photoshop dispatch.\n' +
+          'Use maintained semantic photoshop_* tools instead.\n\n' +
           'Returns: script return value serialized as text/JSON.\n' +
           'IMPORTANT: Your code runs inside a wrapping IIFE. Use an explicit `return` to pass data back — ' +
           'a bare trailing expression returns undefined. Example: `return { ok: true };` ' +

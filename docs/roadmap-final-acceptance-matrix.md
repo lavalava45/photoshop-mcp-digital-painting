@@ -13,18 +13,50 @@ Status vocabulary:
 - **exploratory-non-gate** — intentionally optional experiment; its absence does not block the canonical painting lane.
 - **still-code-gap** — a concrete machine-actionable implementation, migration, test or live-measurement gap remains.
 
+## Active forward-roadmap accounting
+
+This matrix also accounts for the active forward-looking blocks introduced after the original
+Tasks 6–23 audit. These rows are scope/status accounting rather than a claim that unfinished work
+has been completed.
+
+| Roadmap item | Current status | Acceptance boundary |
+| --- | --- | --- |
+| P0-1 — repository verification integrity | **repo-pass** | `npm run verify:canonical` is green with source-only discovery; package, matrix-drift, compact-v2, lint, catalog-count, live-evidence-ledger and executable-topology gates are all wired and passing. |
+| P0-2 — final UXP migration live acceptance | **live-pending** | One current rebuilt real-Photoshop P1/P2/P3 trace with direct UXP route evidence, no focus/legacy replay, deliberate document mismatch and zero Guard debt. |
+| Task 1 — reproduce/classify ImageGen → CoS failure | **live-pending** | Requires deterministic real-host trace; repository-only evidence cannot classify the host incident. |
+| Task 3 — CoS attribution/rebind survival | **live-pending** | Requires real-host continuation/rebind evidence across a non-CoS host-tool turn. |
+| Task 2 — sticky Photoshop route acceptance | **live-pending** | Requires the established-workflow Russian/English host corpus against the rebuilt serving child. |
+| Task 4 — three-state host recovery model | **still-code-gap** | Apply any guidance/recovery changes justified by Tasks 1–3 and regression-test the three distinct states. |
+| P0-B.1 — nested broad-review coverage | **still-code-gap** | Preserve broad coverage separately from tighter inspection scale. |
+| P0-B.2 — authoritative bounded artistic recovery | **still-code-gap** | Production SessionStore/runtime must use the bounded policy with fail-closed evidence and structural strategy identity. |
+| P0-B.3 — artistic frame vs read-only observation | **still-code-gap** | Read-only captures must not advance artistic-frame identity. |
+| P0-B.4 — verified `reversed` state | **still-code-gap** | Reversal must prove exact restored image state rather than accept a declarative label. |
+| P0-B.5 — persisted crop evidence verification | **still-code-gap** | Reused crop bytes must exist and match recorded identity or be recaptured read-only. |
+| P0-B.6 — external document reincarnation | **still-code-gap** | Manual/external close-reopen with recycled numeric id must not inherit stale document state. |
+| P0-B.7 — exact-boundary whole-image glance | **still-code-gap** | Glance evidence must bind to the due trigger and exact artistic frame. |
+| P0-B.8 — mechanical-patterning/copy-geometry guard | **still-code-gap** | Instance-scale review and structural-variation evidence are required before repeated small-object passes can close. |
+| Task 21a — one-action accepted-anchor restore | **still-code-gap** | Canonical Guard recovery request plus disposable live restore acceptance remain to be implemented/proved. |
+| Task 8b — STOP / FINALIZE calibration | **human-required** | Held-out human-labelled stop/continue corpus and predeclared thresholds are required. |
+| Task 22 — final target fidelity | **human-required** | Final perceptual/prompt-to-frame fidelity is a human artistic acceptance claim. |
+| Task 5 — thin Photoshop-only host | **exploratory-non-gate** | Inactive contingency; activate only if Tasks 1–4 demonstrate unacceptable host routing after softer fixes or a hard allowlist is explicitly required. |
+| Task 10 — compact artistic relationship memory | **exploratory-non-gate** | Conditional on Task 8/8a evidence showing measurable decision-quality gain. |
+| Task 15c — reference / 3D construction support | **exploratory-non-gate** | Optional exploration; not a canonical-lane completion gate. |
+
 ## Verification baseline
 
-Current-tree verification performed for this audit, including Task 23:
+Current-tree verification performed for this audit, including Task 23 and P0-1:
 
-- `npm run test:unit`: **577/577 PASS** across 65 files.
-- `npm run test:acceptance`: **176/176 PASS** on the isolated multiscale task commit across the maintained Guard/recovery/UXP acceptance files. The local working tree also contains preserved unrelated recovery work adding two tests, where the same suite is **178/178 PASS**.
-- Task-23 targeted refinement/stage/value/Planner suites: **140/140 PASS** in the initial focused run;
-  the final dedicated `tests/refinement-check.test.ts` contains **10/10 PASS**.
-- `npm run verify:painting-policy`: **PASS** (`kernel=12999`, `prompt=17995`).
-- `npm run verify:photoshop-prompts`: **PASS**.
-- `npx tsc --noEmit`: **PASS**.
-- `npm run build:server`: **PASS**.
+- `npm run verify:canonical`: **PASS**.
+- canonical `npm run test:acceptance`: **575/575 PASS** across exactly **62 source test files**;
+  `dist/**` is excluded even after a populated production build.
+- `npm run verify:acceptance-matrix`: **PASS**, with 13 cited test names resolving inside the same
+  62-file source inventory.
+- `npm run verify:pack`: **PASS**, with 177 packed `dist` JavaScript files and zero compiled test
+  artifacts.
+- `npm run lint`: **PASS** with 0 errors (8 existing `no-explicit-any` warnings remain non-failing).
+- `npm run verify:painting-policy`: **PASS** (`kernel=12807`, `prompt=17812`).
+- `npm run verify:photoshop-prompts`, `verify:tool-counts`, `verify:compact-v2-contract` and
+  `verify:live-evidence-ledger`: **PASS**.
 
 Current backend architecture after the 2026-09-23 catalog migration:
 
@@ -36,6 +68,8 @@ Current backend architecture after the 2026-09-23 catalog migration:
 
 Current live evidence verified on disk:
 
+- committed audit hashes for the small gitignored artifacts used by live-pass claims are recorded in
+  `docs/live-evidence-ledger.json`; the large PSD/JPEG payloads remain intentionally uncommitted;
 - verified pre-v2 archive at `processes/runtime-v2-cutover-process/2026-09-22/archive-before-v2/archive-manifest.json`, with per-file byte counts, line counts and SHA-256 values;
 - active runtime is `photoshop.guard.runtime-state.v2`;
 - run-01 contains the exact-placement live acceptance evidence supplied for this run;

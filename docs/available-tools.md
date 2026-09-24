@@ -941,28 +941,17 @@ photoshop_play_action({
 ```
 
 #### `photoshop_execute_script`
-Execute custom ExtendScript code (advanced).
+**Retired from the canonical production lane.** This raw ExtendScript escape hatch remains
+registered only for non-canonical legacy/debug compatibility. The required Guard / compact-v2
+execution policy rejects it before Photoshop dispatch; registration does not grant Guard execution
+permission. Use maintained semantic `photoshop_*` tools instead.
 
 **Parameters:**
 - `code` (string, required): ExtendScript code
 
-Your code runs inside a wrapping IIFE on the server side. Use an explicit `return` to pass data back — a bare trailing expression or assignment (e.g. `layer.name = "X"`) evaluates to `undefined`, so the tool result shows `"undefined"` even when the mutation succeeded.
-
-```javascript
-// Example: Rename the active layer and return confirmation
-photoshop_execute_script({
-  code: `
-    var layer = app.activeDocument.activeLayer;
-    layer.name = "Renamed";
-    return { ok: true, name: layer.name };
-  `
-})
-
-// Example: Read-only query (always return a value you can inspect)
-photoshop_execute_script({
-  code: "return app.documents.length;"
-})
-```
+The retained handler still uses the historical wrapping IIFE when invoked outside the canonical
+required-mode lane, but it is not a supported production workflow and must not be used as a fallback
+for missing semantic coverage.
 
 ### Image Manipulation
 

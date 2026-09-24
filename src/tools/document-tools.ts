@@ -374,7 +374,7 @@ async function setActiveDocument(
       if (result.data.context !== undefined) details.context = result.data.context;
       return atomicSuccess(
         activated?.name
-          ? `Active document set to \"${activated.name}\"`
+          ? `Active document set to "${activated.name}"`
           : 'Active document switched',
         details,
         'photoshop_get_document_info'

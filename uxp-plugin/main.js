@@ -18,7 +18,7 @@ const { tryHandleP3LayerAdvancedOperation } = require('./p3-layer-advanced-ops')
 
 const BRIDGE_PORT = 38452;
 const BRIDGE_BASE = `http://127.0.0.1:${BRIDGE_PORT}`;
-const BRIDGE_REVISION = 'compact-v2-20260923-full';
+const BRIDGE_REVISION = 'compact-v2-20260924-targeting';
 const REGISTRATION_PROTOCOL = 'photoshop.uxp.registration.v1';
 const COMMAND_PROTOCOL = 'photoshop.uxp.command.v1';
 const RESULT_PROTOCOL = 'photoshop.uxp.command_result.v1';
@@ -3056,10 +3056,38 @@ function neuralDescriptors(filter, params) {
   }
 }
 
+async function assertPinnedActiveDocument(actionName, params = {}) {
+  if (actionName === 'set_active_document') return;
+
+  const requestedDocumentId =
+    Number.isInteger(params.document_id) && params.document_id > 0
+      ? params.document_id
+      : null;
+  if (requestedDocumentId == null) return;
+
+  const sessionDescriptors = await readSessionDescriptors({ synchronousExecution: true });
+  const activeDocumentId = numericValue(sessionDescriptors.documentDescriptor?.documentID);
+  if (activeDocumentId === requestedDocumentId) return;
+
+  const documents = await snapshotDocumentList();
+  const requestedDocumentIsOpen =
+    Array.isArray(documents?.documents) &&
+    documents.documents.some((document) => numericValue(document?.id) === requestedDocumentId);
+  if (!requestedDocumentIsOpen) {
+    throw new Error(
+      `document_not_found: no open document with id ${requestedDocumentId}`
+    );
+  }
+  throw new Error(
+    `document_not_active: pinned document ${requestedDocumentId} is open but not active; active document was not changed`
+  );
+}
+
 async function handleCommand(cmd) {
   const { id, action: cmdAction, params = {} } = cmd;
 
   try {
+    await assertPinnedActiveDocument(cmdAction, params);
     const p1Document = await tryHandleP1DocumentOperation(cmdAction, params);
     if (p1Document?.handled) {
       await postResult({ id, ok: true, data: p1Document.data ?? {} });

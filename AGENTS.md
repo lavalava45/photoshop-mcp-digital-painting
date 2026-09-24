@@ -148,7 +148,7 @@ Strokes/dabs must retrieve the created path through `doc.pathItems.getByName(pat
 calling `strokePath`; do not assume `pathItems.add()` returns a directly usable PathItem in
 this host.
 
-The current bridge source revision is `compact-v2-20260923-full`.
+The current bridge source revision is `compact-v2-20260924-targeting`.
 Document create/open use UXP exact-outcome receipts. Phase 9/10 plus the P1/P2/P3 catalog
 source migration are implemented under the same UXP-first/pre-dispatch-fallback contract.
 The rebuilt child/current companion load-and-revision preflight is live-accepted; the final
@@ -497,7 +497,7 @@ Agent routing rules:
 - The current compact-only native catalog is 145 tools / 11 public Guard tools. Do not interpret a stale legacy connector snapshot as a server limitation.
 - If the native Plugins route is genuinely absent/stale, inspect its discovery/readiness state and repair that route. Do not silently switch an art run onto the retiring Core path.
 - `Chat_On_Steroids_Desktop` is for read-only desktop/UI inspection when useful, not the Photoshop MCP transport.
-- The Adobe UXP bridge in `uxp-plugin/` is a separate Photoshop-side runtime; it is not the Chat On Steroids Plugins route. Production Photoshop dispatch is UXP-first. Ordinary migrated primitives may select retained ExtendScript/COM only before any UXP dispatch when the router establishes UXP unavailability; there is no cross-backend replay after dispatch/claim/uncertainty/failure. `photoshop_save_document` and `photoshop_neural_filter` remain UXP-only/fail-closed, while raw `photoshop_execute_script` is retired. The current readiness target is bridge revision `compact-v2-20260923-full`.
+- The Adobe UXP bridge in `uxp-plugin/` is a separate Photoshop-side runtime; it is not the Chat On Steroids Plugins route. Production Photoshop dispatch is UXP-first. Ordinary migrated primitives may select retained ExtendScript/COM only before any UXP dispatch when the router establishes UXP unavailability; there is no cross-backend replay after dispatch/claim/uncertainty/failure. `photoshop_save_document` and `photoshop_neural_filter` remain UXP-only/fail-closed, while raw `photoshop_execute_script` is retired. The current readiness target is bridge revision `compact-v2-20260924-targeting`.
 
 **Prerequisites:** Photoshop running on Windows or macOS, Node.js 18+. This is unofficial and not affiliated with Adobe.
 
@@ -545,7 +545,7 @@ PhotoshopMCPServer (Node.js)
 Adobe Photoshop
 
 Primary lane: UXP bridge plugin (`uxp-plugin/`) on 127.0.0.1:38452 using localhost
-long-poll. Current source/readiness revision is `compact-v2-20260923-full`. P0 plus
+long-poll. Current source/readiness revision is `compact-v2-20260924-targeting`. P0 plus
 Phase 9/10 and the P1/P2/P3 catalog source migration are implemented. Ordinary migrated
 tools may still select their retained ExtendScript/COM backend only before any UXP dispatch;
 `save_document` and `neural_filter` stay UXP-only. The rebuilt child/current companion
@@ -665,5 +665,5 @@ More: [docs/troubleshooting.md](docs/troubleshooting.md).
 ## Contributing (agents editing this repo)
 
 - Canonical language for code, comments, commits, and PRs: **English**.
-- Before PR: `npm run lint`, `npm run build:server`, `npm run verify:photoshop-prompts`.
+- Before PR: `npm run verify:canonical`.
 - Do not add AI-attribution footers to commits or PR descriptions.

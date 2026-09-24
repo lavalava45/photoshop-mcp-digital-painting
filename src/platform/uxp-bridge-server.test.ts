@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withToolExecutionContext } from '../core/execution-context.js';
 import { UXP_BRIDGE_REVISION } from '../core/guard/protocol-version.js';
+import { runWithDocumentId } from '../core/document-target.js';
 
 const TEST_BRIDGE_REVISION = UXP_BRIDGE_REVISION;
 const TEST_REGISTRATION_PROTOCOL = 'photoshop.uxp.registration.v1';
@@ -425,6 +426,38 @@ describe('UXP bridge long-poll transport', () => {
     });
     expect(post.status).toBe(200);
     await expect(savePromise).resolves.toEqual({ ok: true, data: resultPayload.data });
+  });
+
+  it('injects the request-scoped pinned document into UXP dispatch centrally', async () => {
+    const pollPromise = pluginPoll(base);
+    await waitForPendingPoll(base);
+
+    const { invokeUxpFillLayer } = await import('./uxp-bridge-client.js');
+    const fillPromise = runWithDocumentId(42, () =>
+      invokeUxpFillLayer({ red: 10, green: 20, blue: 30 })
+    );
+
+    const pollResponse = await pollPromise;
+    expect(pollResponse.status).toBe(200);
+    const command = (await pollResponse.json()) as {
+      id: string;
+      action: string;
+      params: Record<string, unknown>;
+    };
+    expect(command.action).toBe('fill_layer');
+    expect(command.params).toMatchObject({
+      document_id: 42,
+      red: 10,
+      green: 20,
+      blue: 30,
+    });
+
+    await fetch(`${base}/result`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: command.id, ok: true, data: { filled: true } }),
+    });
+    await expect(fillPromise).resolves.toMatchObject({ ok: true, data: { filled: true } });
   });
 
   it('dispatches semantic get_state reads through the UXP bridge', async () => {

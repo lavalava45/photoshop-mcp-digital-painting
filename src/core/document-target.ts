@@ -56,6 +56,39 @@ export function getTargetDocumentId(): number | undefined {
   return targetDocumentId.getStore();
 }
 
+/**
+ * Bind the current request's pinned document target to one internal Photoshop
+ * dispatch. Internal callers may repeat the same id explicitly, but they may
+ * never retarget a dispatch behind the public tool/Guard contract.
+ */
+export function bindPinnedDocumentId(
+  params: Record<string, unknown>
+): Record<string, unknown> {
+  const pinnedDocumentId = getTargetDocumentId();
+  if (pinnedDocumentId === undefined) return params;
+
+  if (Object.prototype.hasOwnProperty.call(params, 'document_id')) {
+    const dispatchDocumentId = params.document_id;
+    if (
+      typeof dispatchDocumentId !== 'number' ||
+      !Number.isSafeInteger(dispatchDocumentId) ||
+      dispatchDocumentId <= 0
+    ) {
+      throw new Error(
+        `document_target_mismatch: internal dispatch document_id must be the pinned positive integer ${pinnedDocumentId}`
+      );
+    }
+    if (dispatchDocumentId !== pinnedDocumentId) {
+      throw new Error(
+        `document_target_mismatch: internal dispatch document_id ${dispatchDocumentId} does not match pinned document_id ${pinnedDocumentId}`
+      );
+    }
+    return params;
+  }
+
+  return { ...params, document_id: pinnedDocumentId };
+}
+
 export function parseDocumentIdArg(args: Record<string, unknown> | undefined): number | undefined {
   if (!args || !Object.prototype.hasOwnProperty.call(args, 'document_id')) return undefined;
   const raw = args.document_id;
@@ -146,7 +179,18 @@ export function wrapDocumentIdHandler(
   return async (args) => {
     let documentId: number | undefined;
     try {
-      documentId = parseDocumentIdArg(args);
+      const explicitDocumentId = parseDocumentIdArg(args);
+      const inheritedDocumentId = getTargetDocumentId();
+      if (
+        explicitDocumentId !== undefined
+        && inheritedDocumentId !== undefined
+        && explicitDocumentId !== inheritedDocumentId
+      ) {
+        throw new Error(
+          `invalid_arguments: document_id ${explicitDocumentId} does not match inherited pinned document_id ${inheritedDocumentId}`
+        );
+      }
+      documentId = explicitDocumentId ?? inheritedDocumentId;
     } catch (error) {
       return invalidDocumentIdResult(error instanceof Error ? error.message.replace(/^invalid_arguments:\s*/, '') : String(error));
     }
@@ -235,4 +279,16 @@ export function documentGuardScript(documentId: number): string {
       }
     })();
   `;
+}
+
+/**
+ * Apply the request-scoped document guard at the final legacy script boundary.
+ * This is intentionally central: individual tool handlers may add an identical
+ * guard for clarity, but correctness must not depend on every handler doing so.
+ */
+export function guardPinnedLegacyScript(script: string): string {
+  const documentId = getTargetDocumentId();
+  return documentId === undefined
+    ? script
+    : `${documentGuardScript(documentId)}\n${script}`;
 }

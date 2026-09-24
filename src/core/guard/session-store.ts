@@ -4483,7 +4483,16 @@ export class SessionStore {
         warning: 'Durable original-operation evidence proves that no visual mutation executed. No fresh preview/state evidence, visual verdict, report, acknowledgement, or rollback is required.',
       };
     }
-    if (record.phase === 'completed') throw new Error('Expected an interrupted or uncertain operation');
+    const completedPreviewRecoveryUpgrade =
+      record.phase === 'completed'
+      && record.visual === true
+      && !record.preview
+      && !!record.resolved
+      && (record.execution === 'completed' || record.execution === 'partial')
+      && input.outcome === record.execution;
+    if (record.phase === 'completed' && !completedPreviewRecoveryUpgrade) {
+      throw new Error('Expected an interrupted or uncertain operation');
+    }
     if (typeof input.reason !== 'string' || input.reason.trim().length < 10) throw new Error('Explicit recovery outcome and evidence-based reason required');
 
     const closedDocumentRecovery = input.documents_id !== undefined || input.document_closed_confirmed !== undefined || input.outcome === 'abandoned';
@@ -4540,6 +4549,27 @@ export class SessionStore {
       throw new Error(
         'outcome=not-executed requires durable pre-dispatch evidence from the original operation; fresh state/preview alone cannot prove that no mutation executed'
       );
+    }
+    if (
+      (input.outcome === 'completed' || input.outcome === 'partial')
+      && record.visual
+      && evidence[1]?.preview
+      && !record.preview
+    ) {
+      const preview = this.archiveProjectPreview(record, evidence[1].preview);
+      record.preview = preview;
+      record.preview_attached_at = new Date().toISOString();
+      const documentId = record.args?.document_id;
+      if (Number.isSafeInteger(documentId) && documentId > 0) {
+        const barrier = this.visualBarrier(documentId);
+        if (this.barrierOwnedByRecord(barrier, record)) {
+          this.setVisualBarrier(documentId, {
+            ...barrier,
+            sha256: preview.sha256,
+            requiresExternalPreview: false,
+          });
+        }
+      }
     }
     record.resolved = { ...input, at: new Date().toISOString() };
     if (input.outcome === 'not-executed') {
