@@ -3372,7 +3372,7 @@ export class SessionStore {
         });
       }
     }
-    if (updated.preview) {
+    if (updated.preview && record.visual) {
       const context = visualContext(record);
       this.updatePaintingState(documentId, current => ({
         ...current,
@@ -3611,7 +3611,7 @@ export class SessionStore {
         });
       }
       const context = visualContext(record);
-      this.updatePaintingState(documentId, current => ({
+      if (record.visual) this.updatePaintingState(documentId, current => ({
         ...current,
         current_frame: {
           operation_id: record.id,
@@ -3703,6 +3703,7 @@ export class SessionStore {
       initialRegion
       && levelRank[initialProfileLevel] >= levelRank[requirement.level]
       && regionContains(initialRegion, requested)
+      && materializedEvidenceMatches(record.preview?.focus)
     ) return true;
     return (record.review_evidence ?? []).some(evidence =>
       evidence.document_id === documentId
@@ -3710,8 +3711,7 @@ export class SessionStore {
       && levelRank[evidence.review_level] >= levelRank[requirement.level]
       && evidence.effective_region
       && regionContains(evidence.effective_region, requested)
-      && typeof evidence.sha256 === 'string'
-      && typeof evidence.materialized_path === 'string'
+      && materializedEvidenceMatches(evidence)
     );
   }
   planReviewEscalation(id, findings = [], options = {}) {
@@ -3750,14 +3750,21 @@ export class SessionStore {
       const current = merged[duplicateIndex];
       const levelRank = { object: 1, micro: 2 };
       const severityRank = { 'must-fix': 0, 'should-fix': 1, optional: 2 };
+      const currentRequested = current.requested_region;
+      current.requested_region = {
+        left: Math.min(currentRequested.left, requested.left),
+        top: Math.min(currentRequested.top, requested.top),
+        right: Math.max(currentRequested.right, requested.right),
+        bottom: Math.max(currentRequested.bottom, requested.bottom),
+      };
       if (levelRank[requirement.level] > levelRank[current.level]) {
         current.level = requirement.level;
         current.kind = requirement.kind;
-        current.requested_region = requested;
       }
       if (severityRank[requirement.severity] < severityRank[current.severity]) {
         current.severity = requirement.severity;
       }
+      current.source_index = Math.min(current.source_index, requirement.source_index);
     }
     const unresolved = merged.filter(requirement => !this.reviewEvidenceSatisfies(record, requirement));
     const captures = unresolved.slice(0, 2).map((requirement) => {
@@ -3819,6 +3826,9 @@ export class SessionStore {
     const focus = preview?.focus;
     if (!focus?.sha256 || !focus?.materialized_path || !focus?.region) {
       throw new Error('Review escalation did not return a materialized focus crop');
+    }
+    if (!materializedEvidenceMatches(focus)) {
+      throw new Error('Review evidence crop file is missing or its SHA does not match the materialized bytes');
     }
     const normalizedEffective = normalizeRegion(capture.effective_region);
     const actual = normalizeRegion(focus.region);
@@ -5091,6 +5101,18 @@ export class SessionStore {
   }
 }
 function fingerprintFile(file) { return createHash('sha256').update(fs.readFileSync(file)).digest('hex'); }
+function materializedEvidenceMatches(evidence) {
+  const sha256 = textOrUndefined(evidence?.sha256)?.toLowerCase();
+  const materializedPath = textOrUndefined(evidence?.materialized_path ?? evidence?.path);
+  if (!sha256 || !/^[0-9a-f]{64}$/.test(sha256) || !materializedPath) return false;
+  try {
+    return fs.existsSync(materializedPath)
+      && fs.statSync(materializedPath).isFile()
+      && fingerprintFile(materializedPath) === sha256;
+  } catch {
+    return false;
+  }
+}
 function visualEvidenceSignature(record, preview) {
   const files = [
     record?.before_preview?.materialized_path,
