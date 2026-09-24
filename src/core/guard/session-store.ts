@@ -1847,17 +1847,50 @@ export class SessionStore {
   }
   applyIncompleteHypothesisReview(current, rawHypothesis, rawResolution, review) {
     const previous = current.art_director?.incomplete_hypothesis ?? null;
+    const durableAnchors = [
+      current.primary_artistic_anchor,
+      ...(Array.isArray(current.alternative_artistic_anchors) ? current.alternative_artistic_anchors : []),
+    ].filter(Boolean);
     const resolution = textOrUndefined(rawResolution)?.toLowerCase();
     if (resolution) {
       if (!['resolved', 'accepted', 'reversed'].includes(resolution)) {
         throw new Error('incomplete_hypothesis_resolution must be resolved|accepted|reversed');
       }
       if (!previous) throw new Error('incomplete_hypothesis_resolution requires an active incomplete_hypothesis');
+      let restoreProof = {};
+      if (resolution === 'reversed') {
+        const targetOperationId = textOrUndefined(previous.rollback_operation_id);
+        const targetPath = textOrUndefined(previous.rollback_path);
+        const targetSha = textOrUndefined(previous.rollback_sha256)?.toLowerCase();
+        const targetAnchor = durableAnchors.find(anchor =>
+          anchor?.operation_id === targetOperationId
+          && anchor?.path === targetPath
+          && textOrUndefined(anchor?.sha256)?.toLowerCase() === targetSha
+        );
+        if (!targetAnchor || !targetSha || !materializedEvidenceMatches(targetAnchor)) {
+          throw new Error('incomplete_hypothesis_reversal_unproven: rollback target must still resolve to the exact durable artistic anchor bytes');
+        }
+        const currentFrame = current.current_frame;
+        if (
+          !currentFrame
+          || textOrUndefined(currentFrame.sha256)?.toLowerCase() !== targetSha
+          || !materializedEvidenceMatches(currentFrame)
+        ) {
+          throw new Error('incomplete_hypothesis_reversal_unproven: current artistic frame does not exactly match the rollback anchor');
+        }
+        restoreProof = {
+          restored_anchor_operation_id: targetOperationId,
+          restored_anchor_sha256: targetSha,
+          restored_frame_operation_id: currentFrame.operation_id,
+          restored_frame_sha256: targetSha,
+        };
+      }
       return {
         incomplete_hypothesis: null,
         last_incomplete_hypothesis_resolution: {
           ...previous,
           resolution,
+          ...restoreProof,
           resolved_at: review.reviewed_at,
           resolved_directive_id: review.directive_id,
         },
@@ -1874,12 +1907,17 @@ export class SessionStore {
         ?? current.primary_artistic_anchor?.operation_id;
       const rollbackPath = textOrUndefined(rawHypothesis.rollback_path)
         ?? current.primary_artistic_anchor?.path;
+      const rollbackAnchor = durableAnchors.find(anchor =>
+        anchor?.operation_id === rollbackOperationId
+        && anchor?.path === rollbackPath
+        && textOrUndefined(anchor?.sha256)
+      );
       const horizon = Number(rawHypothesis.max_review_horizon);
       if (!lostQuality || !intendedRelationship || !completionCondition) {
         throw new Error('incomplete_hypothesis requires lost_quality, intended_relationship and observable_completion_condition');
       }
-      if (!rollbackOperationId || !rollbackPath) {
-        throw new Error('incomplete_hypothesis requires a rollback anchor operation_id/path');
+      if (!rollbackOperationId || !rollbackPath || !rollbackAnchor || !materializedEvidenceMatches(rollbackAnchor)) {
+        throw new Error('incomplete_hypothesis requires a real durable rollback anchor operation_id/path with matching materialized bytes');
       }
       if (!Number.isSafeInteger(horizon) || horizon < 1 || horizon > INCOMPLETE_HYPOTHESIS_MAX_REVIEW_HORIZON) {
         throw new Error('incomplete_hypothesis.max_review_horizon must be an integer between 1 and ' + INCOMPLETE_HYPOTHESIS_MAX_REVIEW_HORIZON);
@@ -1891,6 +1929,7 @@ export class SessionStore {
           observable_completion_condition: completionCondition,
           rollback_operation_id: rollbackOperationId,
           rollback_path: rollbackPath,
+          rollback_sha256: textOrUndefined(rollbackAnchor.sha256)?.toLowerCase(),
           max_review_horizon: horizon,
           remaining_reviews: horizon,
           opened_at: review.reviewed_at,
@@ -1924,11 +1963,40 @@ export class SessionStore {
     if (!observation || observation.length < 8) {
       throw new Error('whole_image_glance.observation must be concrete');
     }
-    const operationId = textOrUndefined(raw.operation_id) ?? current.current_frame?.operation_id ?? null;
+    const pending = current.art_director?.whole_image_glance ?? null;
+    const currentFrame = current.current_frame ?? null;
+    const suppliedOperationId = textOrUndefined(raw.operation_id);
+    const suppliedFrameSha = textOrUndefined(raw.frame_sha256)?.toLowerCase();
+    if (pending?.due) {
+      const requiredOperationId = textOrUndefined(pending.required_operation_id);
+      const requiredFrameSha = textOrUndefined(pending.required_frame_sha256)?.toLowerCase();
+      if (trigger !== pending.reason) {
+        throw new Error(`whole_image_glance.trigger must match pending reason ${pending.reason}`);
+      }
+      if (!requiredOperationId || !requiredFrameSha || !currentFrame) {
+        throw new Error('whole_image_glance pending boundary is missing an exact artistic-frame binding');
+      }
+      if (!suppliedOperationId || suppliedOperationId !== requiredOperationId) {
+        throw new Error('whole_image_glance.operation_id must match the exact pending artistic frame');
+      }
+      if (!suppliedFrameSha || suppliedFrameSha !== requiredFrameSha) {
+        throw new Error('whole_image_glance.frame_sha256 must match the exact pending artistic frame');
+      }
+      if (
+        currentFrame.operation_id !== requiredOperationId
+        || textOrUndefined(currentFrame.sha256)?.toLowerCase() !== requiredFrameSha
+        || !materializedEvidenceMatches(currentFrame)
+      ) {
+        throw new Error('whole_image_glance evidence is stale: current artistic frame no longer matches the pending boundary');
+      }
+    }
+    const operationId = suppliedOperationId ?? currentFrame?.operation_id ?? null;
+    const frameSha = suppliedFrameSha ?? textOrUndefined(currentFrame?.sha256)?.toLowerCase() ?? null;
     return {
       trigger,
       observation,
       operation_id: operationId,
+      frame_sha256: frameSha,
       directive_id: review.directive_id,
       at: review.reviewed_at,
     };
@@ -2187,14 +2255,21 @@ export class SessionStore {
       last_record: null,
       history: [],
     };
+    const bindWholeImageGlanceDue = (reason) => ({
+      ...wholeImageGlance,
+      due: true,
+      reason,
+      required_operation_id: current.current_frame?.operation_id ?? record.id,
+      required_frame_sha256: textOrUndefined(current.current_frame?.sha256 ?? record.preview?.sha256)?.toLowerCase() ?? null,
+    });
     if (stageBoundary) {
-      wholeImageGlance = { ...wholeImageGlance, due: true, reason: 'stage_boundary' };
+      wholeImageGlance = bindWholeImageGlanceDue('stage_boundary');
     }
     if (globalChange) {
-      wholeImageGlance = { ...wholeImageGlance, due: true, reason: 'global_change' };
+      wholeImageGlance = bindWholeImageGlanceDue('global_change');
     }
     if (allCompleted) {
-      wholeImageGlance = { ...wholeImageGlance, due: true, reason: 'final_review' };
+      wholeImageGlance = bindWholeImageGlanceDue('final_review');
     }
     if (interruptReason) {
       status = 'interrupted';
