@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import manifest from './fixtures/task8a-heldout-manifest.json';
 import {
@@ -9,9 +12,27 @@ import {
   validateManifest,
 } from '../scripts/task8a-calibration.mjs';
 
+function createSourceFixtureRoot() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'task8a-calibration-sources-'));
+  const sources = new Set(
+    manifest.cases.flatMap(item => [item.source_before, item.source_after]),
+  );
+  for (const relative of sources) {
+    const file = path.join(root, relative);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `fixture bytes for ${relative}\n`);
+  }
+  return root;
+}
+
 describe('Task 8/8a held-out calibration infrastructure', () => {
   it('has neutral ids/filenames, existing sources, balanced equal evidence budget, and no producer narrative in critic packets', () => {
-    expect(validateManifest(manifest)).toEqual([]);
+    const sourceRoot = createSourceFixtureRoot();
+    try {
+      expect(validateManifest(manifest, sourceRoot)).toEqual([]);
+    } finally {
+      fs.rmSync(sourceRoot, { recursive: true, force: true });
+    }
     expect(manifest.evidence_budget.baseline).toEqual(manifest.evidence_budget.critic);
     expect(manifest.evidence_budget.producer_reports_withheld).toBe(true);
     expect(manifest.evidence_budget.producer_verdicts_withheld).toBe(true);
