@@ -261,9 +261,12 @@ gaps found while producing it and must remain visible:
   stale declaration, not evidence that local recordings are missing or unreadable.
 - The active slot-A recording store was read directly and does contain the historical Photoshop
   conversations, including repeated explicit “не пользуй imagegen … только COS / MCP Photoshop”
-  instructions. No exact local record has yet been found that proves the accidental native ImageGen
-  invocation itself, so Task 1 remains open rather than inferring that transition from adjacent
-  messages.
+  instructions. The exact prior-chat incident has also now been recovered at transcript level:
+  on **2026-09-21 11:54** the user wrote “ты случайно запустил imagegen”, and the immediately
+  following assistant response explicitly stated “Я ошибочно запустил image_gen” before restoring
+  the COS → Plugins → Photoshop MCP route. This proves that the accidental-route incident itself was
+  real; it still does **not** supply the request/tool-level host trace required by this task's
+  acceptance criteria, so Task 1 remains open.
 - The current live attribution failure is now localized one layer further. The active ChatGPT tab
   still carried the **pre-v2 boolean** `window.__cosUsageObserver`; current CoS source/slot-A bytes
   contain observer v2. Re-injecting v2 into such an already-open document previously returned early
