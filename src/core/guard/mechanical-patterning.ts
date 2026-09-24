@@ -130,7 +130,7 @@ function extractPrimitives(request: Record<string, any>): Primitive[] {
       for (let index = 0; index < args.strokes.length; index++) {
         const stroke = args.strokes[index];
         if (!stroke || typeof stroke !== 'object' || Array.isArray(stroke) || !Array.isArray(stroke.points)) continue;
-        const points = stroke.points.map(finitePoint).filter((point): point is Point => point !== null);
+        const points = (stroke.points as unknown[]).map(finitePoint).filter((point: Point | null): point is Point => point !== null);
         if (points.length < 2) continue;
         const lines = [points];
         const bounds = boundsForLines(lines);
