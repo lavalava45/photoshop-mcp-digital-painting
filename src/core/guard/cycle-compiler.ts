@@ -544,14 +544,10 @@ function compileCompactPass(
               `declared method ${plan.method.id} allows ${plan.allowedExecutionTools.join('|')} but compact pass executes ${onlyTool}`
             ));
           }
-          directOperation.artistic_operation = {
-            visual_intent: plan.visualIntent,
-            impact_class: plan.impactClass,
-            method_id: plan.method.id,
-            allowed_execution_tools: plan.allowedExecutionTools,
-            runtime_revision: plan.runtimeRevision,
-            ...(plan.fallbackFromMethodId ? { fallback_from_method_id: plan.fallbackFromMethodId } : {}),
-          };
+          // Validate the compact artistic-method contract here, but keep it
+          // compiler-local. `artistic_operation` is not a public Guard request
+          // field, so forwarding it would make a valid single-operation compact
+          // pass reject itself during operation-contract validation.
         } catch (error) {
           violations.push(violation(
             'next_operation',

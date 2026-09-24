@@ -1998,6 +1998,62 @@ describe('embedded Photoshop Guard', () => {
     expect(runtime.store.read('method-drift-pass')).toBeUndefined();
   });
 
+  it('executes a direct compact artistic method without leaking artistic_operation into the public Guard request', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-direct-artistic-'));
+    dirs.push(dir);
+    const { registry } = fakeRegistry(dir);
+    let blurDispatches = 0;
+    registry.register('photoshop_apply_gaussian_blur', {
+      tool: {
+        name: 'photoshop_apply_gaussian_blur',
+        description: 'test direct visual mutation',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            document_id: { type: 'number' },
+            radius: { type: 'number' },
+          },
+          required: ['radius'],
+        },
+      },
+      handler: async () => {
+        blurDispatches += 1;
+        return { content: [{ type: 'text', text: JSON.stringify({ ok: true, summary: 'blur applied' }) }] };
+      },
+    });
+    const runtime = runtimeFor(registry, dir);
+    runtime.artRun({
+      document_id: 42,
+      process_dir: 'processes/direct-artistic-process/run-01',
+      commentary_mode: 'technical',
+      painting_profile: 'simple_graphic',
+    });
+
+    const result = await runtime.cycleAuto({
+      next_pass: {
+        request_key: 'direct-artistic-gaussian',
+        problem_id: 'direct-artistic-gaussian-problem',
+        document_id: 42,
+        goal: 'Soften the raster target with one Gaussian blur pass.',
+        stage: 'DETAIL',
+        scale: 'global',
+        visual_intent: 'smooth',
+        impact_class: 'transition',
+        preferred_method_id: 'gaussian-blur',
+        actions: [{
+          id: 'blur',
+          tool: 'photoshop_apply_gaussian_blur',
+          args: { radius: 12, document_id: 42 },
+        }],
+      },
+    }) as any;
+
+    expect(result.preflight_rejection).toBeUndefined();
+    expect(result.execution).toMatchObject({ phase: 'completed', failed: false });
+    expect(blurDispatches).toBe(1);
+    expect(runtime.store.read('direct-artistic-gaussian')?.artistic_operation).toBeUndefined();
+  });
+
   it('continues rainy-street block-in after a locally resolved background pass without completing the planner task', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-rainy-street-'));
     dirs.push(dir);
