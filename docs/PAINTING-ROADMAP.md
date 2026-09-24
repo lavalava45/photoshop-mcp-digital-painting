@@ -240,6 +240,31 @@ gaps found while producing it and must remain visible:
 
 **Priority:** first.
 
+**Current handoff state — 2026-09-24**
+
+- P0-0, P0-1 and P0-2 are closed; the active roadmap frontier is now P0-A / Task 1.
+- Historical project evidence already proves one **real attribution failure with connector visibility
+  preserved**: a CoS session was recorded as `Unattributed activity` with no conversation id while
+  Photoshop reads, Guard status and Guard cycle remained callable. This is evidence for
+  `attribution_failure`, not for `connector_visibility_failure`.
+- The current continuation independently reproduces the same diagnostic boundary: Core and Photoshop
+  MCP calls continue to execute while their returned identity notice says the exact ChatGPT
+  conversation is not known and the call is filed as `Unattributed`. Therefore current
+  `Unattributed` state must not be described as “CoS/Photoshop disappeared”.
+- This does **not** yet prove that the historical accidental ImageGen route and the attribution
+  failure are the same incident. Task 1 remains open until one deterministic same-conversation
+  real-host trace captures the route transition itself.
+- A first attempt to recover the historical local chat transcript through the advertised CoS Core
+  `session` surface failed concretely with `McpServerError: Tool session not found`. Other Core
+  and Photoshop tools continued working, so this is a narrow session-record lookup/backend issue,
+  not evidence that Core or the Photoshop connector is unavailable.
+- **Next step in the new chat:** audit the Chat On Steroids fork/session-recording and attribution
+  path to determine (a) where `Unattributed` activity is persisted, (b) why the `session` tool is
+  present in the callable registry but its backend lookup returns `Tool session not found`, and
+  (c) whether the historical “ты случайно запустил imagegen” conversation can be recovered as exact
+  local evidence without invoking ImageGen again. Then use that evidence to design the minimal
+  deterministic real-host reproduction required below.
+
 The historical failure must be classified from one deterministic real-host trace, not from model
 prose. Capture one same-conversation sequence:
 
