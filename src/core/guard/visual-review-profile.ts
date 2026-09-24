@@ -30,6 +30,7 @@ export const VISUAL_REVIEW_FINDING_LEVEL = {
   text_legibility: 'micro',
   signature_legibility: 'micro',
   repeated_dab_pattern: 'micro',
+  mechanical_patterning: 'object',
   texture_detail: 'micro',
   local_discontinuity: 'micro',
 } as const satisfies Record<string, VisualReviewLevel>;
