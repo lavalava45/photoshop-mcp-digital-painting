@@ -761,21 +761,78 @@ export class EmbeddedGuardRuntime {
   }
 
   private async collectDynamicOperationViolations(operation: Record<string, unknown>) {
-    if (operation.tool !== 'photoshop_create_document' && operation.tool !== 'photoshop_open_image') return [];
-    const readiness = await this.uxpReadinessProbe({ forceRefresh: true });
-    if (readiness.ready && readiness.revision_match && readiness.plugin_connected) return [];
-    const tool = String(operation.tool);
-    return [{
-      scope: 'next_operation' as const,
-      code: 'uxp_bootstrap_not_ready',
-      message:
-        `${tool} requires a ready matching UXP companion before dispatch ` +
-        `(connected=${readiness.plugin_connected}, ready=${readiness.ready}, revision_match=${readiness.revision_match}, ` +
-        `bridge_revision=${readiness.bridge_revision ?? 'unknown'}, expected=${readiness.expected_bridge_revision}, ` +
-        `reason=${readiness.reason ?? 'unknown'}). No document creation command was dispatched.`,
-    }];
-  }
+    const tool = String(operation.tool ?? '');
+    if (tool === 'photoshop_create_document' || tool === 'photoshop_open_image') {
+      const readiness = await this.uxpReadinessProbe({ forceRefresh: true });
+      if (readiness.ready && readiness.revision_match && readiness.plugin_connected) return [];
+      return [{
+        scope: 'next_operation' as const,
+        code: 'uxp_bootstrap_not_ready',
+        message:
+          `${tool} requires a ready matching UXP companion before dispatch ` +
+          `(connected=${readiness.plugin_connected}, ready=${readiness.ready}, revision_match=${readiness.revision_match}, ` +
+          `bridge_revision=${readiness.bridge_revision ?? 'unknown'}, expected=${readiness.expected_bridge_revision}, ` +
+          `reason=${readiness.reason ?? 'unknown'}). No document creation command was dispatched.`,
+      }];
+    }
 
+    if (isGuardReadTool(tool)) return [];
+    const args = operation.args && typeof operation.args === 'object' && !Array.isArray(operation.args)
+      ? operation.args as Record<string, unknown>
+      : {};
+    const documentId = Number(args.document_id);
+    if (!positiveDocumentId(documentId)) return [];
+
+    // The host-instance proof is available only on the matching UXP bridge.
+    // Preserve the existing bounded COM fallback when UXP is not the selected
+    // ready route, but never dispatch through a ready UXP route without proving
+    // that the pinned numeric id still denotes the same live document object.
+    const readiness = await this.uxpReadinessProbe({ forceRefresh: true });
+    if (!(readiness.ready && readiness.revision_match && readiness.plugin_connected)) return [];
+
+    const stateProbe = await this.uxpStateProbe();
+    if (stateProbe.ok !== true) {
+      return [{
+        scope: 'next_operation' as const,
+        code: 'document_instance_probe_failed',
+        message: `Cannot prove live document incarnation for document_id=${documentId} before ${tool}; UXP state read failed. No mutation was dispatched.`,
+      }];
+    }
+    const document = stateProbe.data?.document as Record<string, unknown> | undefined;
+    const activeDocumentId = Number(document?.id);
+    if (!positiveDocumentId(activeDocumentId) || activeDocumentId !== documentId) {
+      return [{
+        scope: 'next_operation' as const,
+        code: 'document_instance_target_mismatch',
+        message: `Pinned document_id=${documentId} is not the active UXP document (active=${String(document?.id ?? 'none')}). No mutation was dispatched.`,
+      }];
+    }
+    const observation = this.store.observeDocumentInstance(
+      documentId,
+      document?.instanceWitness,
+      { observed_at: new Date().toISOString(), tool }
+    ) as Record<string, unknown>;
+    if (observation.status === 'witness_missing') {
+      return [{
+        scope: 'next_operation' as const,
+        code: 'document_instance_witness_missing',
+        message:
+          `The ready UXP bridge did not provide the required live document-instance witness for document_id=${documentId}. ` +
+          'Reload the matching companion build before mutation; stale document state was not trusted.',
+      }];
+    }
+    if (observation.status === 'reincarnated') {
+      this.capabilitySnapshotCache.delete(documentId);
+      return [{
+        scope: 'next_operation' as const,
+        code: 'document_reincarnated',
+        message:
+          `Photoshop recycled document_id=${documentId} for a different live document instance. Guard reset stale document-scoped state and blocked ${tool} before dispatch. ` +
+          'Bind a new art run/current evidence for this document instance before continuing.',
+      }];
+    }
+    return [];
+  }
   async cycle(
     input: Record<string, unknown>,
     owningJobId?: string,
