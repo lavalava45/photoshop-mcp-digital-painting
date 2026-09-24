@@ -40,14 +40,26 @@ describe('resolveArtisticRecovery', () => {
     });
   });
 
-  it('ignores a false critic alarm only when anchored by concrete evidence', () => {
+  it('ignores a false critic alarm only when anchor and current observation evidence were verified upstream', () => {
     expect(resolveArtisticRecovery({
       kind: 'critic_alarm',
       critic_alarm_evidence: {
         anchor_operation_id: 'anchor-42',
+        anchor_sha256: 'a'.repeat(64),
+        observation_operation_id: 'observation-43',
+        observation_sha256: 'b'.repeat(64),
         observed_counterevidence: 'The protected silhouette and large-value grouping match the retained anchor.',
+        evidence_verified: true,
       },
     }).decision).toBe('ignore_false_alarm');
+
+    expect(resolveArtisticRecovery({
+      kind: 'critic_alarm',
+      critic_alarm_evidence: {
+        anchor_operation_id: 'anchor-42',
+        observed_counterevidence: 'Bare anchor id plus prose is not durable visual evidence.',
+      },
+    }).decision).not.toBe('ignore_false_alarm');
 
     expect(resolveArtisticRecovery({
       kind: 'critic_alarm',
