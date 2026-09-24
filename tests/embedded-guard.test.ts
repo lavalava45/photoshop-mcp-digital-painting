@@ -588,7 +588,7 @@ describe('embedded Photoshop Guard', () => {
     const runtime = new EmbeddedGuardRuntime(registry, runtimeOptions);
     runtime.store.setArtRunState({
       document_id: 42,
-      process_dir: 'processes/original-live-instance/run-01',
+      process_dir: 'processes/original-live-instance-process/run-01',
       painting_profile: 'simple_graphic',
     });
     runtime.store.write({
@@ -612,13 +612,13 @@ describe('embedded Photoshop Guard', () => {
     };
     expect(await (runtime as any).collectDynamicOperationViolations(operation)).toEqual([]);
     expect(runtime.store.artRunState(42)).toMatchObject({
-      process_dir: 'processes/original-live-instance/run-01',
+      process_dir: 'processes/original-live-instance-process/run-01',
       document_instance: { host_witness: witnessA },
     });
 
     const restarted = new EmbeddedGuardRuntime(registry, runtimeOptions);
     expect(await (restarted as any).collectDynamicOperationViolations(operation)).toEqual([]);
-    expect(restarted.store.artRunState(42)?.process_dir).toBe('processes/original-live-instance/run-01');
+    expect(restarted.store.artRunState(42)?.process_dir).toBe('processes/original-live-instance-process/run-01');
 
     restarted.store.setVisualBarrier(42, {
       planId: 'old-instance-op',
