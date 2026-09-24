@@ -83,6 +83,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 2026-09-24: close P0-2 final UXP migration live acceptance on real Photoshop. The accepted
+  `run-10` binds repository `78125f2`, live child PID `30684`, and exact UXP revision
+  `compact-v2-20260924-targeting`; representative P1 `layer.create`, P2
+  `filter.gaussian_blur`, P3 `history.read`, the deliberate pinned-document mismatch and its
+  bounded state readback all have pre-dispatch `selected_backend=uxp` evidence with no fallback.
+  The 69.24 s monitor recorded zero Photoshop foreground transitions and zero legacy helper
+  processes, the mismatch failed closed without changing the active document, and final Guard debt
+  is empty. Backend-route telemetry is now durable and bounded, and direct compact artistic-method
+  validation remains compiler-local instead of leaking unsupported `artistic_operation` metadata
+  into the public Guard request. The canonical suite is green at **578/578 tests across 62 source
+  files**; hashed `run-10` evidence is recorded in `docs/live-evidence-ledger.json`.
 - 2026-09-24: close P0-1 repository verification integrity. Vitest now discovers only source tests
   under `src/**` and `tests/**` and excludes `dist/**`; production TypeScript output no longer
   compiles co-located tests, and package verification rejects any compiled test artifact. The

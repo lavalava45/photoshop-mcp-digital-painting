@@ -62,6 +62,72 @@
       "bytes": 504724,
       "sha256": "4fbe96be148e89f274518d474b266d8c19077f5acf8b93bf6dcdc3c050757978",
       "claims": ["runtime-v2-cutover-archive"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-10/evidence/operator-preflight.json",
+      "bytes": 1673,
+      "sha256": "f010687804ba6aa64a6eb0283a598bdb6973f4228b38e9fcdaf477adebf4ff04",
+      "claims": ["P0-2", "13a.6.1", "13a.7.4", "13c.7"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-10/evidence/runtime-window.json",
+      "bytes": 15534,
+      "sha256": "d9f8a69544e6c950dfc53371f520e8b140e47ee4d6c38b6f9222674a80fee14b",
+      "claims": ["P0-2", "13a.6.1", "13c.7"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-10/evidence/backend-route-window.ndjson",
+      "bytes": 3102,
+      "sha256": "15b557bd960034fc253ffe71fa4ca5919d37d88da217c8c45611989b567030fc",
+      "claims": ["P0-2", "13a.6.1", "13c.7"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-10/evidence/post-trace-state.json",
+      "bytes": 1592,
+      "sha256": "b11cde54dd69ec417005daf74272e94cbd0674db4ef587a544ad37c137b039a1",
+      "claims": ["P0-2", "13c.7", "document-target-fail-closed"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-10/call-ledger.ndjson",
+      "bytes": 1576,
+      "sha256": "bee694a7211e889386b7b63049971bb9026e46c20668bfbee04792a370b86d34",
+      "claims": ["P0-2", "13c.7"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-10/live-acceptance-ledger.json",
+      "bytes": 3486,
+      "sha256": "b3812452264f2a7e5bb70edbf3fa7a807b5b84161b798a79851e2c473b33154c",
+      "claims": ["P0-2", "13a.6.1", "13c.7"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-10/evidence/operations/p0-2-run10-20260924-p1-create-layer-03.json",
+      "bytes": 4579,
+      "sha256": "0dca9bf34cc43c8f113be234d65e24e7cd0bccecd07dc4299f454f6f62378b61",
+      "claims": ["P0-2", "P1-live-route"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-10/evidence/operations/p0-2-run10-20260924-paint-target-04.json",
+      "bytes": 15690,
+      "sha256": "885866d759573af067b781e2bc4907b2d0417d9ca33a524e7aa29ec5375533a6",
+      "claims": ["P0-2", "P1-P2-live-setup"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-10/evidence/operations/p0-2-run10-20260924-p2-gaussian-05.json",
+      "bytes": 9743,
+      "sha256": "46191d10540fc9202728446aea102a2f922689693fc391c39ab5a3f94fb7ef73",
+      "claims": ["P0-2", "P2-live-route"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-10/evidence/operations/p0-2-run10-20260924-p3-history-06.json",
+      "bytes": 5535,
+      "sha256": "bc4b6fd991c1929319b1e1e1061398d3e0fa3613ef00f2b6d04b978c2b89fbec",
+      "claims": ["P0-2", "P3-live-route"]
+    },
+    {
+      "path": "processes/compact-v2-live-acceptance-process/run-10/evidence/operations/p0-2-run10-20260924-target-mismatch-07.json",
+      "bytes": 4095,
+      "sha256": "2eef8852174f96285f88de72da62b389dfefb9cc28b87193f887e479d2e23c08",
+      "claims": ["P0-2", "13c.7", "document-target-fail-closed"]
     }
   ]
 }

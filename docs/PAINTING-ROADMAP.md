@@ -155,44 +155,40 @@ semantic primitive instead of admitting that recipe into Painter.
 
 ## P0-2 — Final UXP migration live acceptance
 
-The P1/P2/P3 migration already has substantial source and live evidence, but the final migration
-claim still needs one final **real Photoshop behavioral acceptance** on a disposable document against
-the exact rebuilt runtime under test. P0-0 and P0-1 are now closed.
+**Status: closed 2026-09-24.**
 
-Current 2026-09-24 handoff state:
+The final accepted real-Photoshop trace is
+`processes/compact-v2-live-acceptance-process/run-10` against repository
+`78125f2e9b314ad236cc9058921760bc485ac75f`, live Photoshop MCP child PID `30684`, and exact
+actual/expected UXP revision `compact-v2-20260924-targeting`.
 
-- P0-1 is closed and committed/pushed as `6ede13a`
-  (`fix: close canonical execution verification gaps`);
-- `npm run verify:canonical` is green at **62/62 source test files, 575/575 tests**, with package,
-  lint, acceptance-matrix, compact-v2, policy, prompt, catalog-count and live-evidence-ledger
-  verifiers passing;
-- the first P0-2 live preflight initially failed because the Chat On Steroids Photoshop MCP child was
-  in `PLUGIN_UNAVAILABLE` / `Needs attention`; restarting **only** that plugin from the CoS Plugins
-  UI restored dispatch;
-- after the child restart, a real `photoshop_ping` reached the bridge and exposed the current
-  environment blocker: the server expects UXP bridge revision
-  `compact-v2-20260924-targeting`, while Photoshop is still running
-  `compact-v2-20260923-full`; `revisionMatch=false` with reason
-  `uxp_bridge_revision_mismatch`;
-- this mismatch is a runtime/readiness blocker, not evidence of a new code defect. The P0-2 behavioral
-  trace has **not** started yet and must not be credited as partial acceptance;
-- next action: Adobe UXP Developer Tool → **Photoshop MCP UXP Bridge → Reload**, then repeat
-  `photoshop_ping` → `photoshop_guard_capabilities` → `photoshop_guard_status`. Start the
-  disposable-document P1/P2/P3 trace only after the actual/expected bridge revisions match and the
-  UXP companion reports ready.
+The accepted monitored window proves:
 
-Do not reuse historical readiness as evidence for the current process.
+- representative P1 `layer.create`, P2 `filter.gaussian_blur`, and P3 `history.read` all selected
+  `uxp` at the pre-dispatch backend boundary with `fallback_used=false`;
+- the helper `painting.regions` pass, required preview reads, deliberate mismatch `history.read`,
+  and bounded recovery `state.read` also remained on UXP with no cross-backend replay;
+- the 69.24 s foreground/process window started with Chat On Steroids foregrounded and recorded
+  **zero Photoshop foreground transitions** and **zero legacy COM/ExtendScript helper processes**;
+- the deliberate pinned read for inactive document `3743` while acceptance document `3746`
+  remained active failed closed with `document_not_active`; the bounded `photoshop_get_state`
+  recovery confirmed document `3746` was still active with the expected two-layer blurred target,
+  and the failed operation was reconciled without replay;
+- the normal trace used zero deterministic schema retries, zero repository source/schema reads, zero
+  general Guard-status / Art Director / value-analysis detours, and no document activation inside the
+  accepted window;
+- the post-trace Guard projection had no pending reports, operation acknowledgements, uncertain
+  operations, visual-verdict debt, or active jobs.
 
-The 2026-09-24 prerequisite smoke did find and close one concrete runtime defect before this final
-acceptance: after a Photoshop restart, a fresh document reused historical numeric `document_id=59`
-and initially inherited the old Guard art-run binding. Guard now treats every successful guarded
-`create_document` / `open_image` bootstrap as a new document incarnation, resets stale
-document-scoped state/barriers, and sequence-bounds history to the current incarnation. The live
-retest superseded the old `run-01` binding, rebound the recycled id to fresh `run-05`, completed
-a real UXP visual pass with preview/verdict closure, left no Guard debt, and observed zero Photoshop
-foreground transitions / legacy helper processes in the bounded trace. This fixes the smoke blocker
-but **does not by itself close P0-2**: the representative P1/P2/P3 no-replay behavioral trace below
-is still the acceptance gate after P0-0/P0-1 are closed.
+Dispatch-level evidence is in `run-10/evidence/backend-route-window.ndjson`; the independent
+foreground/process trace is `run-10/evidence/runtime-window.json`; operation copies, preflight,
+post-trace state, call ledger, and the consolidated acceptance ledger are stored beside them. Their
+hashes are committed in `docs/live-evidence-ledger.json`.
+
+`run-07`, `run-08`, and `run-09` are retained as diagnostic evidence and are **not** credited
+as the final pass. They respectively exposed invalid trace hygiene, a direct compact artistic-method
+compiler leak fixed in `78125f2`, and a Photoshop foreground transition during explicit
+`photoshop_set_active_document`.
 
 **Acceptance**
 
@@ -218,6 +214,23 @@ Use `docs/compact-v2-live-acceptance-plan.md` as the detailed execution/evidence
 `photoshop_save_document` and `photoshop_neural_filter` as intentional UXP-only/fail-closed
 exceptions; ordinary migrated tools may use ExtendScript/COM only when that backend is selected
 **before** any UXP dispatch.
+
+### P0-2 follow-ups discovered during final acceptance
+
+These do **not** invalidate the bounded `run-10` P0-2 acceptance, but they are concrete code/contract
+gaps found while producing it and must remain visible:
+
+1. **Explicit document activation can foreground Photoshop.** Diagnostic `run-09` recorded one
+   Photoshop foreground transition exactly at UXP `document.activate`. Either make
+   `photoshop_set_active_document` background-safe or explicitly classify it as UI-activating and
+   prevent it from being used inside no-focus canonical traces.
+2. **Selection-mask capability/compiler mismatch.** The capability snapshot advertises
+   `selection-mask` as available, but the compact multi-action compiler currently cannot represent
+   that mask method as a valid VisualMicroPlan and rejects it before dispatch. Align advertised
+   availability with executable compact semantics.
+3. **Negative regression sentinel normalization.** A compact visual observation carrying
+   `regression: "none observed"` is currently treated as truthy regression evidence. Normalize
+   explicit negative sentinel text so a resolved visual pass cannot be mislabeled `regression`.
 
 ---
 
