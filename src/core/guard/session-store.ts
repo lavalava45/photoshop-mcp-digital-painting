@@ -23,6 +23,7 @@ import {
   visualMicroPlanRequiresBrushPreflight,
 } from '../visual-microplan.js';
 import { RUNTIME_STATE_VERSION } from './protocol-version.js';
+import { resolveArtisticRecovery as resolveArtisticRecoveryPolicy } from '../artistic-recovery-policy.js';
 import {
   comparisonSpecificationForOperation,
   deriveArtisticOutcome,
@@ -495,32 +496,30 @@ function canonical(x) {
   return x;
 }
 export function fingerprint(request) { return createHash('sha256').update(JSON.stringify(canonical(request))).digest('hex'); }
-function visualStrategyFingerprint(request) {
+export function visualStrategyFingerprint(request) {
   const context = visualContext(request ?? {});
   const micro = request?.tool === 'photoshop_execute_visual_microplan' && request.args && typeof request.args === 'object'
     ? request.args : {};
   const steps = Array.isArray(micro.steps) ? micro.steps : [];
-  const mutations = steps
-    .filter(step => step && typeof step === 'object' && !Array.isArray(step) && step.tool !== 'photoshop_get_preview')
-    .map(step => {
-      const args = step.args && typeof step.args === 'object' && !Array.isArray(step.args) ? step.args : {};
-      const strokes = Array.isArray(args.strokes) ? args.strokes : [];
-      const dabs = Array.isArray(args.dabs) ? args.dabs : [];
-      const regions = Array.isArray(args.regions) ? args.regions : [];
-      return {
-        tool: step.tool,
-        method_id: step.method_id ?? null,
-        region: step.region ?? null,
-        layer_id: args.layer_id ?? null,
-        stroke_tools: [...new Set(strokes.map(stroke => String(stroke?.tool ?? 'BRUSH').toUpperCase()))].sort(),
-        stroke_count: strokes.length,
-        dab_count: dabs.length,
-        region_count: regions.length,
-        color: args.color ?? args.foreground_color ?? null,
-        opacity: args.opacity ?? null,
-        blend_mode: args.blend_mode ?? null,
-      };
-    });
+  const structuralMutations = [];
+  for (const step of steps) {
+    if (!step || typeof step !== 'object' || Array.isArray(step) || step.tool === 'photoshop_get_preview') continue;
+    const args = step.args && typeof step.args === 'object' && !Array.isArray(step.args) ? step.args : {};
+    const strokes = Array.isArray(args.strokes) ? args.strokes : [];
+    const dabs = Array.isArray(args.dabs) ? args.dabs : [];
+    const regions = Array.isArray(args.regions) ? args.regions : [];
+    const descriptor = {
+      tool: step.tool,
+      method_id: step.method_id ?? null,
+      region: step.region ?? null,
+      stroke_tools: [...new Set(strokes.map(stroke => String(stroke?.tool ?? 'BRUSH').toUpperCase()))].sort(),
+      uses_strokes: strokes.length > 0,
+      uses_dabs: dabs.length > 0,
+      uses_regions: regions.length > 0,
+    };
+    const key = JSON.stringify(canonical(descriptor));
+    if (!structuralMutations.some(row => row.key === key)) structuralMutations.push({ key, descriptor });
+  }
   return fingerprint({
     tool: request?.tool ?? null,
     problem_id: context.problem_id ?? null,
@@ -531,8 +530,7 @@ function visualStrategyFingerprint(request) {
     method_class: micro.method_class ?? null,
     action_class: micro.action_class ?? null,
     brush_role: micro.paint_strategy?.brush_role ?? null,
-    preset_name: micro.paint_strategy?.preset_name ?? null,
-    mutations,
+    mutations: structuralMutations.map(row => row.descriptor),
   });
 }
 function strategyChanged(request, prior) {
@@ -2778,6 +2776,86 @@ export class SessionStore {
       stall_reasons: stallReasons,
     };
   }
+  artisticRecoveryResolution(documentId, facts, projectionContext) {
+    const records = this.currentDocumentRecords(
+      documentId,
+      projectionContext?.records ?? this.records(),
+      projectionContext
+    );
+    const state = projectionContext?.paintingState?.documents?.[String(documentId)]
+      ?? this.paintingState().documents?.[String(documentId)]
+      ?? {};
+    let normalizedFacts = { ...(facts ?? {}) };
+    if (normalizedFacts.kind === 'critic_alarm') {
+      const evidence = normalizedFacts.critic_alarm_evidence ?? {};
+      const anchorId = textOrUndefined(evidence.anchor_operation_id);
+      const observationId = textOrUndefined(evidence.observation_operation_id);
+      const observationSha = textOrUndefined(evidence.observation_sha256)?.toLowerCase();
+      const durableAnchors = [
+        state.primary_artistic_anchor,
+        ...(Array.isArray(state.alternative_artistic_anchors) ? state.alternative_artistic_anchors : []),
+      ].filter(Boolean);
+      const anchor = durableAnchors.find(candidate =>
+        candidate?.operation_id === anchorId
+        && materializedEvidenceMatches(candidate)
+      );
+      const observation = records.find(record =>
+        record.id === observationId
+        && record.args?.document_id === documentId
+        && record.preview
+      );
+      const currentFrameSha = textOrUndefined(state.current_frame?.sha256)?.toLowerCase();
+      const verified = !!(
+        anchor
+        && observation
+        && observationSha
+        && observation.preview?.sha256 === observationSha
+        && currentFrameSha === observationSha
+        && materializedEvidenceMatches(observation.preview)
+      );
+      normalizedFacts = {
+        ...normalizedFacts,
+        critic_alarm_evidence: {
+          ...evidence,
+          ...(anchor?.sha256 ? { anchor_sha256: textOrUndefined(anchor.sha256)?.toLowerCase() } : {}),
+          evidence_verified: verified,
+        },
+      };
+    }
+    return resolveArtisticRecoveryPolicy(normalizedFacts);
+  }
+
+  artisticRecoveryForProblem(documentId, problemId, request, suppliedRecords, projectionContext) {
+    if (!problemId) return null;
+    const records = this.currentDocumentRecords(
+      documentId,
+      suppliedRecords ?? projectionContext?.records ?? this.records(),
+      projectionContext
+    );
+    const attempts = records
+      .filter(record => record.visual && record.verdict && problemIdentity(record) === problemId)
+      .filter(record =>
+        record.verdict?.target_resolved === 'no'
+        || record.verdict?.verdict === 'regression'
+        || record.verdict?.significance?.execution_effect === 'insufficient'
+      )
+      .map(record => ({
+        strategy_id: visualStrategyFingerprint(record),
+        materially_corrected: significanceHasDetectedChange(record.verdict?.significance),
+        useful_partial_work: record.verdict?.verdict === 'improvement'
+          || record.verdict?.disposition === 'accept',
+        failed: true,
+      }));
+    if (!attempts.length) return null;
+    const context = visualContext(request ?? {});
+    return this.artisticRecoveryResolution(documentId, {
+      kind: 'artistic_unresolved',
+      attempts,
+      dependent_work_remaining: true,
+      independent_tasks_available: context.independent_region === true && context.preservation_facts.length > 0,
+    }, projectionContext);
+  }
+
   recognitionMetrics(documentId, suppliedRecords, projectionContext) {
     const empty = {
       tracking_started: false,
@@ -3118,19 +3196,23 @@ export class SessionStore {
     if (art?.status === 'completed') {
       return `Art Director directive ${art.directive_id} completed; issue the next directive or end the painting stage`;
     }
-    if (metrics.workflow_stall) return 'make a structural strategy change, then dispatch the next meaningful visual pass';
     const activeProblemId = textOrUndefined(state.active_problem?.problem_id);
     if (activeProblemId) {
-      const attempts = records.filter(r => r.visual && problemIdentity(r) === activeProblemId);
-      const latestAttempt = attempts.at(-1);
-      if (latestAttempt?.verdict?.significance?.execution_effect === 'insufficient'
-        && !(latestAttempt.verdict?.verdict === 'improvement' && latestAttempt.verdict?.disposition === 'accept'
-          && significanceHasDetectedChange(latestAttempt.verdict?.significance))) {
-        return `make a structural strategy change for ${activeProblemId}, then dispatch the next meaningful visual pass`;
+      const recovery = this.artisticRecoveryForProblem(
+        documentId,
+        activeProblemId,
+        undefined,
+        records,
+        projectionContext
+      );
+      if (recovery?.decision === 'retry_same_strategy_once') {
+        return `retry bounded recovery for ${activeProblemId}; one same-strategy retry remains before a structural change is required`;
       }
-      const lastThree = attempts.slice(-3);
-      if (lastThree.length === 3 && lastThree.every(r => r.verdict?.verdict !== 'improvement')) {
-        return `make a structural strategy change for ${activeProblemId} after three non-improving attempts, then dispatch the next meaningful visual pass`;
+      if (recovery?.decision === 'require_distinct_strategy') {
+        return `make a causally distinct structural strategy change for ${activeProblemId}; parameter-only variants do not qualify`;
+      }
+      if (recovery?.decision === 'block_dependent_problem') {
+        return `dependent artistic problem ${activeProblemId} is blocked after bounded distinct-strategy recovery; continue only independent work or return to Art Director`;
       }
     }
     const largestMustFix = this.largestOpenMustFix(state.visual_problems);
@@ -3348,27 +3430,28 @@ export class SessionStore {
       }
     });
     const workflow = this.workflowMetrics(documentId, records, projectionContext);
-    const latestVisual = [...currentDocumentRecords].reverse().find(r => r.visual);
-    if (isVisual(request?.tool) && !rollbackMutation && workflow.workflow_stall && !strategyChanged(request, latestVisual)) {
-      add(`workflow_stall: ${workflow.stall_reasons.join('; ')}. Change executable strategy (method, scale, region, brush role, or mutation structure) before another visual mutation`);
-    }
-    const latestSameProblem = problemId
-      ? currentDocumentRecords.filter(r => r.visual && problemIdentity(r) === problemId && r.verdict?.significance).at(-1)
-      : undefined;
-    if (isVisual(request?.tool) && !rollbackMutation
-      && latestSameProblem?.verdict?.significance?.execution_effect === 'insufficient'
-      && !(latestSameProblem.verdict?.verdict === 'improvement' && latestSameProblem.verdict?.disposition === 'accept'
-        && significanceHasDetectedChange(latestSameProblem.verdict?.significance))
-      && !strategyChanged(request, latestSameProblem)) {
-      add(`visual_significance_gate: previous pass on "${problemId}" was insufficient; change executable strategy before another mutation`);
-    }
-    const sameProblemAttempts = problemId
-      ? currentDocumentRecords.filter(r => r.visual && problemIdentity(r) === problemId).slice(-3)
-      : [];
-    if (isVisual(request?.tool) && !rollbackMutation && sameProblemAttempts.length === 3
-      && sameProblemAttempts.every(r => r.verdict?.verdict !== 'improvement')
-      && !strategyChanged(request, sameProblemAttempts.at(-1))) {
-      add(`Three visual attempts on problem "${problemId}" without confirmed improvement: change executable strategy before another mutation`);
+    if (isVisual(request?.tool) && !rollbackMutation && problemId) {
+      const recovery = this.artisticRecoveryForProblem(
+        documentId,
+        problemId,
+        request,
+        currentDocumentRecords,
+        projectionContext
+      );
+      const latestSameProblem = currentDocumentRecords
+        .filter(record => record.visual && problemIdentity(record) === problemId)
+        .at(-1);
+      if (recovery?.decision === 'require_distinct_strategy'
+        && !strategyChanged(request, latestSameProblem)) {
+        add(`artistic_recovery: problem "${problemId}" requires a causally distinct structural strategy; color/opacity/count/preset variants do not qualify`);
+      } else if (recovery?.decision === 'block_dependent_problem') {
+        add(`artistic_recovery: ${recovery.blocker ?? `dependent problem "${problemId}" is blocked`}`);
+      } else if (recovery?.decision === 'continue_independent_work') {
+        const context = visualContext(request);
+        if (!(context.independent_region && context.preservation_facts.length > 0)) {
+          add(`artistic_recovery: dependent problem "${problemId}" is exhausted; only explicitly independent work with preservation_facts may continue`);
+        }
+      }
     }
     const checkpoint = this.checkpointState(documentId, records, projectionContext);
     if (isVisual(request?.tool) && !rollbackMutation && checkpoint.due) {
