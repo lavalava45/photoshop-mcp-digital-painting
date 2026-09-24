@@ -49,6 +49,7 @@ import {
   padRegion,
   regionContains,
 } from './visual-review-region.js';
+import { analyzeMechanicalPatterning } from './mechanical-patterning.js';
 
 export const ROUTE = 'MCP host -> embedded Photoshop Guard -> this fork/dist/index.js -> Photoshop';
 const READS = new Set([
@@ -3973,14 +3974,26 @@ export class SessionStore {
     }
     const canvasWidth = Number(record.preview.canvas_width);
     const canvasHeight = Number(record.preview.canvas_height);
-    const incoming = this.normalizeReviewFindings(findings);
+    const mechanicalPatterning = analyzeMechanicalPatterning(record);
+    const synthetic = mechanicalPatterning.triggered
+      ? this.normalizeReviewFindings(mechanicalPatterning.findings).map((item, index) => ({
+          ...item,
+          source_index: -100 + index,
+          source: 'guard_mechanical_patterning',
+        }))
+      : [];
+    const incoming = this.normalizeReviewFindings(findings).map((item, index) => ({
+      ...item,
+      source_index: 100 + index,
+      source: 'visual_verdict',
+    }));
     const durable = Array.isArray(record.pending_review?.requirements)
       ? record.pending_review.requirements.map((item, index) => ({
           ...item,
-          source_index: Number.isSafeInteger(item.source_index) ? item.source_index : 100 + index,
+          source_index: Number.isSafeInteger(item.source_index) ? item.source_index : 200 + index,
         }))
       : [];
-    const all = [...durable, ...incoming];
+    const all = [...durable, ...synthetic, ...incoming];
     const merged = [];
     for (const requirement of all) {
       if (requirement.level === 'composition') continue;
@@ -4047,6 +4060,9 @@ export class SessionStore {
       remaining_after_round: Math.max(0, unresolved.length - captures.length),
     };
     if (options.persist === true && (requirements.length || record.pending_review)) {
+      if (mechanicalPatterning.triggered) {
+        record.mechanical_patterning = mechanicalPatterning;
+      }
       record.pending_review = {
         operation_id: id,
         document_id: documentId,
