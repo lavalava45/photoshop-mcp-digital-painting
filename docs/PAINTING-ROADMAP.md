@@ -14,52 +14,197 @@ dispatch/claim/uncertainty/failure.
 
 As of 2026-09-24, deterministic COMPOSITION / OBJECT / MICRO review selection and same-operation
 read-only crop escalation are baseline compact-v2 Guard behavior rather than a remaining roadmap
-item. Future roadmap work must preserve whole-frame context, source-document crop coordinates,
-existing local BEFORE/AFTER significance evidence, stale-evidence rejection and no-mutation-replay
-semantics. The implementation/live evidence belongs in `CHANGELOG.md` and the acceptance matrix.
+item. A later global architecture/logic audit found residual correctness gaps around nested review
+coverage, durable evidence reuse and frame/recovery semantics; those gaps are tracked below without
+reopening the completed multiscale implementation itself. Future roadmap work must preserve
+whole-frame context, source-document crop coordinates, existing local BEFORE/AFTER significance
+evidence, stale-evidence rejection and no-mutation-replay semantics. The implementation/live
+evidence belongs in `CHANGELOG.md` and the acceptance matrix.
 
 ## Priority order
 
 The remaining work should be executed in this order:
 
-1. **P0-0 — final UXP migration live acceptance:** close the remaining live-only
-   **13a.6.1 / 13c.7** gate before treating the UXP migration as fully accepted.
-2. **P0-A — host routing / CoS attribution:** Tasks **1 → 3 → 2 → 4**.
-3. **P0-B — accepted-state recovery:** Task **21a**.
-4. **P0-C — human critic calibration / stop-decision calibration:** Tasks **8 / 8a → 8b**, then
+1. **P0-0 — canonical execution integrity:** close the global-audit blockers in document targeting,
+   Guard executable policy/raw-script retirement and recipe execution architecture.
+2. **P0-1 — repository verification integrity:** make the machine gates source-stable and ensure the
+   acceptance suite actually covers the invariants used to claim compact-v2/UXP completion.
+3. **P0-2 — final UXP migration live acceptance:** rerun the remaining real-Photoshop
+   **13a.6.1 / 13c.7** gate only after P0-0/P0-1 are closed.
+4. **P0-A — host routing / CoS attribution:** Tasks **1 → 3 → 2 → 4**.
+5. **P0-B — Guard state/evidence correctness:** close the residual multiscale/recovery/frame/evidence
+   defects found by the global audit before expanding recovery or critic authority.
+6. **P0-C — accepted-state recovery:** Task **21a**.
+7. **P0-D — human critic calibration / stop-decision calibration:** Tasks **8 / 8a → 8b**, then
    close the residual human claims from Tasks **6, 11 and 13a.1A/13a.1C** from the same labelled
    evidence where possible.
-5. **P1 — progressive refinement + human artistic acceptance:** Task **23 → 22 → 15d.3**,
+8. **P1 — human artistic acceptance:** Task **23 human pack → 22 → 15d.3**,
    then the real-artwork artistic-preference part of Task **21**.
-6. **Conditional work only after evidence:** Task **5** if ordinary ChatGPT/CoS routing remains
-   unreliable; Task **10** only if Task 8/8a demonstrates measurable decision-quality gain.
-7. **P2 — optional exploration:** Task **15c**.
+9. **Conditional / P2 only after evidence:** Task **5** if ordinary ChatGPT/CoS routing remains
+   unreliable; Task **10** only if Task 8/8a demonstrates measurable decision-quality gain; Task
+   **15c** remains optional exploration.
 
 Rationale:
 
-- Final UXP live acceptance comes first because the implementation is source-complete but the
-  post-P1/P2/P3 behavior/no-focus-steal/no-replay gate is still live-pending.
+- The global audit supersedes the previous assumption that the UXP migration is source-complete:
+  central document pinning is not enforced end-to-end, the compact Guard can still compile an
+  internally registered raw-script operation, and recipe tools still execute monolithic legacy
+  scripts rather than the documented primitive/router path. These are code-integrity blockers, not
+  live-only gaps.
+- Repository verification must become deterministic before the final migration claim: the default
+  unit run currently depends on compiled `dist` test residue, production packaging includes compiled
+  tests, and the canonical acceptance command does not cover several test files cited by the
+  acceptance matrix.
+- Final UXP live acceptance therefore moves after those code/test blockers. A live trace performed
+  before they are closed cannot prove the canonical path that the roadmap claims.
 - Host routing comes next because losing the established Photoshop/CoS route can bypass the entire
   painting architecture regardless of its internal quality.
+- Guard state/evidence correctness comes before higher-level recovery/calibration because a review
+  system must not lose broad must-fix coverage, treat read-only observations as artistic frames,
+  accept declarative rollback, or reuse unverifiable crop evidence.
 - Accepted-state recovery comes next because a detected regression is only operationally useful if
   the ordinary Painter/Guard path can return to a known-good state without manual Photoshop-history
   arithmetic, mutation replay or an out-of-band file-open workaround.
 - Critic calibration comes after recovery because it gates any claim of perceptual reliability and any
   broader critic authority; it also decides whether Task 10 should exist at all.
-- Progressive refinement comes before final-target fidelity: Task 23 now has a machine-enforced
-  de-block-in gate, but its real-Photoshop progression run and blinded human perceptual pack remain
-  acceptance gates. Final target fidelity and the remaining compositing/final-selection questions
-  follow after that.
+- Progressive refinement comes before final-target fidelity: Task 23 already has a machine-enforced
+  de-block-in gate and a completed disposable real-Photoshop progression run; only its blinded human
+  perceptual pack remains as the forward acceptance gate. Final target fidelity and the remaining
+  compositing/final-selection questions follow after that.
 - Optional 3D/reference support should not compete with routing or calibration work.
 
 ---
 
-## P0-0 — Final UXP migration live acceptance
+## P0-0 — Canonical execution integrity blockers
 
-The P1/P2/P3 source migration is complete and the current rebuilt child/UXP companion revision has
-already passed the load-and-revision preflight. What remains is one final **real Photoshop behavioral
-acceptance** on a disposable document. This is not another implementation phase unless the live run
-finds a defect.
+The 2026-09-24 global architecture/logic audit found three production-reachability gaps that
+invalidate the previous “source-complete, live-only remaining” interpretation of the UXP migration.
+Document targeting and executable permission need central enforcement rather than handler-by-handler
+patches; recipes need canonical orchestration through primitives/router, with temporary fail-closed
+denial allowed only as an intermediate safety measure.
+
+### P0-0.1 — Systemic fail-closed document targeting
+
+`document_id` is currently admitted and carried in Guard context, but not every document-bound
+mutation proves the same target at the actual Photoshop dispatch boundary. Some UXP handlers omit
+the id, while legacy/ExtendScript execution can run without a systemic document guard.
+
+Implement one end-to-end target invariant across:
+
+```text
+Guard admission
+→ semantic tool
+→ backend selection
+→ document-target enforcement
+→ UXP or bounded pre-dispatch legacy execution
+```
+
+Do not rely on each individual tool author remembering to inject a guard. UXP document-bound
+commands must receive the pinned id automatically or through an equivalently exhaustive central
+mechanism; legacy execution must fail closed against the same target before mutation.
+
+**Acceptance**
+
+- switching the active Photoshop tab/document between Guard admission and dispatch cannot mutate the
+  wrong document;
+- every document-bound UXP mutation carries/verifies the pinned target;
+- every allowed legacy mutation is protected by the same fail-closed target invariant;
+- create/open/bootstrap operations that legitimately have no prior document target remain explicitly
+  classified rather than accidentally guarded;
+- regression tests prove zero mutation on target mismatch for representative UXP and legacy paths.
+
+### P0-0.2 — Guard executable policy and raw-script retirement
+
+The public required-mode surface blocks direct raw mutation, but the compact compiler can currently
+accept a registered `photoshop_execute_script` action and the Guard runtime can invoke the registry
+internally. Registration must not imply canonical-execution permission.
+
+Introduce one authoritative execution classification/allowlist for Guard-compiled actions, with
+explicit categories such as allowed semantic mutation, read-only, preparation-only, retired and
+forbidden. `photoshop_execute_script` must be unreachable from production compact-v2 execution.
+
+**Acceptance**
+
+- compact compilation rejects `photoshop_execute_script` before Photoshop dispatch;
+- newly registered internal/debug tools are not automatically executable through Guard;
+- executable policy, migration inventory and public/tool documentation all agree that raw-script
+  execution is retired and unreachable from the canonical production lane;
+- tests prove the denial at compiler/runtime boundaries without relying only on outer MCP mode.
+
+### P0-0.3 — Recipes must match the documented canonical architecture
+
+All maintained `photoshop_recipe_*` tools currently route through monolithic ExtendScript helpers,
+while the migration inventory describes recipes as Node orchestration over registered primitives.
+This bypasses BackendRouter/UXP selection and the systemic invariants expected from primitives.
+
+The end state is real orchestration through canonical semantic primitives/router paths. A temporary
+fail-closed denial of legacy recipes inside the canonical Guard path is acceptable as an intermediate
+safety step, but does not close this item.
+
+**Acceptance**
+
+- no maintained canonical recipe dispatches a monolithic legacy script body directly;
+- recipe execution remains one Guard-owned durable operation; every Photoshop sub-dispatch uses the
+  canonical primitive/router path with pinned targeting and backend policy, and any dispatched or
+  uncertain UXP sub-dispatch is never replayed through a legacy backend;
+- the migration inventory and actual runtime route agree;
+- representative recipe tests prove the canonical route rather than merely tool success.
+
+---
+
+## P0-1 — Repository verification integrity
+
+The global audit also found that the current machine baseline can report misleading totals or omit
+claimed invariants: default Vitest discovers compiled tests in `dist`, production build/package
+contains compiled test artifacts, and `test:acceptance` does not include several test files cited by
+the acceptance matrix. There is currently no repository CI workflow enforcing the full gate.
+
+Close this before using repository-green status as evidence for P0-2.
+
+**Acceptance**
+
+1. source test discovery is deterministic and excludes `dist/**`;
+2. production TypeScript/package output does not ship co-located test artifacts unless explicitly
+   required and justified;
+3. the canonical acceptance command includes every machine-verifiable test family used by the
+   acceptance matrix for compact-v2/Guard/UXP completion, including artistic recovery, pass-check,
+   planner/refinement and multiscale review invariants where those rows cite them, and a drift check
+   prevents newly cited repo-pass tests from silently falling outside the canonical gate;
+4. `verify-compact-v2-contract-audit.mjs` is wired into a canonical verification command rather than
+   being a manual-only script;
+5. the current four maintained production-source lint errors are fixed; exclusions are allowed only
+   for explicitly non-maintained/generated paths and may not hide errors in active `src/tools` code;
+6. required local checks are aligned in `CONTRIBUTING.md` and PR guidance, and an automated workflow
+   runs the canonical machine gate for maintained PR/push paths;
+7. the same source checkout produces the same test inventory/result before and after removing stale
+   build artifacts such as `dist`; verification must not depend on compiled residue;
+8. `docs/roadmap-final-acceptance-matrix.md` explicitly accounts for every active forward-roadmap
+   item that has a machine/live/human acceptance claim, including new P0-0.1/.2/.3, P0-1, P0-2,
+   P0-B.1–P0-B.7, Task 8b, Tasks 1–5, 21a and 22, or states an explicit scope boundary instead of
+   silently omitting them;
+9. live-pass claims that depend on gitignored `.photoshop-runtime/` / `processes/` evidence have a
+   small committed manifest/hash ledger sufficient to audit the claimed run without committing large
+   PSD/JPEG payloads;
+10. tool-count/contract verifiers cover the maintained documents that publish canonical counts or
+    contract claims, and formatting is either brought under an intentional gate or explicitly kept
+    non-gating rather than remaining an ambiguous repository-wide failure;
+11. executable-topology regressions explicitly prove all three P0-0 holes stay closed: raw script is
+    denied through Guard's internal registry path, pinned `document_id` reaches real UXP/legacy
+    dispatch and mismatch yields zero mutation, and maintained canonical recipes cannot execute
+    monolithic `PhotoshopAPIFactory`/ExtendScript bodies.
+
+---
+
+## P0-2 — Final UXP migration live acceptance
+
+The P1/P2/P3 migration already has substantial source and live evidence, but the final migration
+claim is now blocked by P0-0/P0-1. After those are closed, run one final **real Photoshop behavioral
+acceptance** on a disposable document against the exact rebuilt runtime under test.
+
+The 2026-09-24 read-only audit preflight also observed the UXP companion currently disconnected
+(`uxp_plugin_not_connected`). Treat that as environment readiness, not proof of a code defect: the
+final run must begin from a fresh successful ping/capability/revision readiness check and must not
+reuse historical readiness as evidence for the current process.
 
 The 2026-09-24 prerequisite smoke did find and close one concrete runtime defect before this final
 acceptance: after a Photoshop restart, a fresh document reused historical numeric `document_id=59`
@@ -69,21 +214,26 @@ document-scoped state/barriers, and sequence-bounds history to the current incar
 retest superseded the old `run-01` binding, rebound the recycled id to fresh `run-05`, completed
 a real UXP visual pass with preview/verdict closure, left no Guard debt, and observed zero Photoshop
 foreground transitions / legacy helper processes in the bounded trace. This fixes the smoke blocker
-but **does not by itself close P0-0**: the representative P1/P2/P3 no-replay behavioral trace below
-is still the acceptance gate.
+but **does not by itself close P0-2**: the representative P1/P2/P3 no-replay behavioral trace below
+is still the acceptance gate after P0-0/P0-1 are closed.
 
 **Acceptance**
 
 The final disposable run must prove all of the following on the current post-migration build:
 
-1. representative **P1/P2/P3** operations execute successfully with UXP selected;
+1. representative **P1/P2/P3** operations execute successfully with UXP selected, with direct
+   dispatch-level evidence (bridge action/receipt/backend instrumentation) for every step claimed as
+   UXP-path evidence;
 2. Photoshop does **not** steal foreground/focus during the accepted UXP-path trace;
 3. no unexpected COM/ExtendScript helper process appears during steps claimed as UXP-path evidence;
+   process/focus observations are ancillary and do not substitute for dispatch-level route evidence;
 4. after any UXP dispatch/claim/uncertainty/failure there is **zero cross-backend replay** through
    ExtendScript/COM;
-5. Guard finishes the run without pending reports/acks, uncertain operations, unresolved visual
+5. one deliberate pinned-document mismatch / active-document-switch probe fails closed with zero
+   mutation to the wrong document, proving the repaired P0-0.1 invariant on real Photoshop;
+6. Guard finishes the run without pending reports/acks, uncertain operations, unresolved visual
    verdict debt or active-job debt;
-6. durable evidence is recorded and the remaining **13a.6.1** and **13c.7** rows in
+7. durable evidence is recorded and the remaining **13a.6.1** and **13c.7** rows in
    `docs/roadmap-final-acceptance-matrix.md` are changed from `live-pending` to `live-pass` only
    if the run actually proves those conditions.
 
@@ -229,11 +379,133 @@ Never repair binding by repainting or replaying a successful mutation.
 
 ---
 
-## P0-B — Accepted-state recovery
+## P0-B — Guard state/evidence correctness
+
+The global audit found several runtime-semantic gaps that do not invalidate the existence of the
+multiscale/recovery machinery, but do weaken the correctness guarantees built on top of it. Close
+these before Task 21a or critic authority is expanded.
+
+### P0-B.1 — Preserve broad review coverage during nested deduplication
+
+Current overlap-based deduplication can merge a broad must-fix OBJECT region with a smaller nested
+MICRO finding and retain the tighter region while carrying forward the stricter severity. That can
+allow a tiny crop to satisfy what was originally a broad coverage requirement.
+
+Separate **coverage region** from **inspection level**. A higher review level may tighten/augment the
+inspection evidence, but must not silently erase the larger semantic area that still requires proof.
+
+**Acceptance**
+
+- an extreme nested containment fixture preserves the broad must-fix coverage requirement;
+- OBJECT + nested MICRO findings may share evidence where valid, but closure cannot occur from a
+  micro crop that does not cover the unresolved broad region;
+- bounded crop fan-out and deterministic priority ordering remain intact.
+
+### P0-B.2 — Make bounded artistic recovery the production decision core
+
+`resolveArtisticRecovery()` is currently unit-tested but not authoritative in the production
+SessionStore path. Wire one explicit recovery policy into runtime state transitions rather than
+maintaining parallel heuristic behavior.
+
+At the same time, split structural strategy identity from incidental execution parameters. Changes
+to color, opacity or dab/stroke count must not by themselves masquerade as a new recovery strategy.
+Do not make the policy authoritative until its evidence inputs are also fail-closed: an anchor id
+must resolve to a real durable anchor for the same document/incarnation, counterevidence must bind to
+fresh current-frame observation evidence, and structural strategy identity must be Guard-derived or
+validated from admitted mutation structure rather than trusted as a free model label.
+
+**Acceptance**
+
+- repeated same-cause/same-strategy failure reaches deterministic finite termination;
+- a real structural strategy change is distinguished from a parameter variant;
+- independent continuation remains possible where policy allows it;
+- restart/resume preserves the same recovery decision state;
+- false-alarm recovery cannot be accepted from a bare anchor id + free-text counterevidence;
+- strategy identity used for retry/reset decisions is Guard-derived or validated against the admitted
+  operation structure;
+- the acceptance matrix no longer cites an unwired helper as proof of runtime enforcement.
+
+### P0-B.3 — Separate artistic frame identity from read-only observations
+
+Read-only preview/capture operations must not replace the identity of the current artistic frame.
+Persist an explicit distinction between the last visual mutation frame and the latest observation
+evidence, or enforce an equivalent invariant in the existing schema.
+
+**Acceptance**
+
+- `photoshop_get_preview` and review-only crop capture cannot advance the artistic frame identity;
+- anchor promotion/final comparison continue to reference the latest classified visual mutation;
+- restart/resume preserves both artistic-frame and observation evidence correctly.
+
+### P0-B.4 — `reversed` must prove an actual restored image state
+
+`incomplete_hypothesis_resolution='reversed'` must not clear a hypothesis merely because the label was
+submitted. The current frame must be proven to match the rollback target through exact registered
+state/evidence, or through an equivalently strict verified restore contract.
+
+**Acceptance**
+
+- declaring `reversed` without a qualifying restore does not clear the hypothesis;
+- a successful reverse binds to the intended prior frame/anchor identity and exact current evidence;
+- tests cover both false declarative reversal and real verified reversal.
+
+### P0-B.5 — Verify persisted crop evidence before reuse
+
+A stored path/SHA string is not durable proof that the same crop bytes still exist after restart.
+Before persisted review evidence satisfies a pending requirement, verify the materialized artifact
+still exists and matches the recorded identity, or recapture it read-only.
+
+**Acceptance**
+
+- deleted, replaced or hash-mismatched crop files cannot satisfy pending review closure;
+- valid unchanged evidence can still be reused without replaying the artistic mutation;
+- restart tests cover valid reuse, deletion and replacement/corruption cases.
+
+### P0-B.6 — Detect external document reincarnation, not only Guard bootstrap reuse
+
+The existing incarnation reset handles successful guarded create/open bootstrap. The remaining gap is
+external/manual close-reopen behavior where Photoshop may reuse the same numeric document id without
+passing through Guard bootstrap.
+
+Add a bounded document-incarnation proof at state/operation admission so stale document-scoped state
+cannot survive a materially different document that happens to reuse an id.
+
+**Acceptance**
+
+- externally recycled numeric document ids cannot inherit stale art-run/barrier/recovery state;
+- unchanged live documents do not spuriously reset;
+- the proof is restart-safe and does not depend only on Guard-owned create/open operations.
+
+### P0-B.7 — Bind whole-image-glance evidence to the exact due boundary/frame
+
+Task 11 scheduling can mark a whole-image glance due at stage/global/final boundaries, but the stored
+glance record is still too declarative: a supplied observation can clear `due` without proving that it
+was made for the exact pending trigger and exact current visual frame that caused the glance request.
+
+Bind each due glance to the reason/boundary identity and exact current artistic frame/evidence. A
+stale or mismatched glance must not clear the pending requirement.
+
+**Acceptance**
+
+- submitted `trigger` must match the actual pending glance reason;
+- the glance record binds to the exact current artistic frame/whole-frame evidence and rejects stale
+  frame identity;
+- restart/resume preserves the same pending reason/frame requirement;
+- a mismatched/stale glance cannot clear `due`;
+- Task 11 scheduling/state mechanics are not treated as fully machine-complete until this invariant
+  is covered, while perceptual usefulness remains a separate human calibration claim.
+
+**Internal ordering inside P0-B:** close frame/evidence/incarnation/restore-proof invariants
+(P0-B.3/.4/.5/.6/.7) before making P0-B.2 recovery policy authoritative. P0-B.1 may proceed in
+parallel because it is an independent review-coverage defect.
+
+---
+
+## P0-C — Accepted-state recovery
 
 ### Task 21a — One-action restore of an accepted anchor/checkpoint after regression
 
-**Priority:** immediately after route integrity and before human critic authority is expanded.
+**Priority:** after P0-B state/evidence correctness and before human critic authority is expanded.
 
 Low-level anchor/checkpoint persistence and exact restoration mechanisms already exist, but a real
 painting run exposed a remaining operational gap: after a regression, the ordinary Painter/Guard
@@ -262,7 +534,9 @@ introduced:
 2. record the relevant layered document state needed for parity checking;
 3. perform at least two later visual mutations, including at least one multi-history-step/auto-chunked
    mutation;
-4. human/critic review marks the later state as a regression relative to the registered anchor;
+4. a predeclared human-labelled fixture marks the later state as a regression relative to the
+   registered anchor; a critic may substitute only if that critic already has calibrated authority
+   for this decision class;
 5. from that degraded state, issue exactly one **logical Guard recovery request** referencing the
    accepted anchor/checkpoint identity rather than a computed undo count.
 
@@ -287,11 +561,12 @@ weaken acceptance to a vague “looks similar” claim merely to close the task.
 
 ---
 
-## P0-C — Human critic calibration and decision-quality validation
+## P0-D — Human critic calibration and decision-quality validation
 
 ### Tasks 8 / 8a — Human adjudication of the isolated critic
 
-**Priority:** highest remaining painting-quality task after route integrity and accepted-state recovery.
+**Priority:** highest remaining painting-quality task after route integrity, Guard correctness and
+accepted-state recovery.
 
 The machine infrastructure is already present. The remaining work is real human reference
 judgment, not more critic plumbing.
@@ -315,6 +590,10 @@ The held-out set must include:
 
 Human reference judgments must be recorded before critic answers are used to adjudicate disputed
 cases. Keep producer reports, prior verdicts and expected answers out of critic input.
+
+The existing `world-consistency-critic` fixture remains useful as plumbing/suppression coverage, but
+its injected expected `flaggedIds` are not independent evidence of critic detection accuracy and must
+not be promoted into a reliability claim.
 
 Compare, under the same evidence/time budget:
 
@@ -445,23 +724,9 @@ Do not reopen compact-v2 transport/state-machine work to address these human cla
 
 **Priority:** first P1 gate, before final-target fidelity.
 
-The machine implementation is complete and belongs to CHANGELOG.md: the existing durable
-Art Director state now carries a subject-agnostic refinement_check, and the existing Guard
-DETAIL / MICRO_DETAIL transition fails closed while lower-frequency form/block-in debt remains.
-Texture-only change cannot close that debt, exact current-frame evidence is required, restart/resume
-preserves the state, and intentional flat/graphic style may bypass realism only through an exact
-declared style_contract criterion.
-
-The disposable live Photoshop progression is now complete through the canonical
-Chat_On_Steroids_Plugins → dist/cos-plugin.js → embedded Guard → UXP route. On disposable document
-1526, the exact flat BLOCK-IN frame (`task23-live-blockin-20260922-b`, SHA `043661a7…`) produced
-Value PASS + Refinement FAIL and a DETAIL request was rejected before Photoshop dispatch with
-`refinement_debt_unresolved`. After actual FORM_AND_LIGHT modelling, the exact frame
-`task23-live-form-finalize-20260923-b` (SHA `ee0ff107…`) received exact-current-frame Value PASS and
-Refinement PASS. DETAIL then executed as `task23-live-detail-admitted-20260923-f` (SHA `ed2c41e0…`)
-with a matched before/after focus envelope and meaningful subtle-local delta. Both Planner tasks and
-the Art Director directive completed, all Guard closure debt was cleared, and the final layered PSD
-is `processes/task23-progressive-refinement-process/run-01/task23-progressive-refinement-final.psd`.
+Machine implementation and disposable live progression are already complete and belong in
+`CHANGELOG.md` / the acceptance matrix rather than this forward-looking TODO. The remaining Task 23
+work is only the blinded human perceptual pack below.
 
 Only the following acceptance work remains forward-looking:
 
@@ -482,10 +747,8 @@ counts, producer verdicts and the expected answer stay hidden.
   added marks or texture;
 - texture-only, residual-block-in and destructive-overdetail controls are rejected;
 - the stylized-flat control is not incorrectly pushed toward realism;
-- the live disposable run demonstrates the same stage gate through the rebuilt canonical runtime,
-  with exact current-frame evidence and Guard closure;
-- live disposable stage-gate acceptance is complete; until the blinded human labels exist, status is
-  **machine-complete / live-pass / human-gate-pending**.
+- machine/live stage-gate acceptance is already satisfied; until the blinded human labels exist,
+  status remains **machine-complete / live-pass / human-gate-pending**.
 
 ### Task 22 — Final target fidelity / prompt-to-frame acceptance
 
@@ -663,8 +926,8 @@ Do not optimize these merely because they are measurable:
 - caching arbitrary Photoshop state without invalidation proof;
 - weakening preview/verdict/recovery evidence to save calls;
 - optimizing raw tool count instead of semantic-cycle wall time;
-- deleting historical backend source solely for cleanliness when production reachability is already
-  fail-closed.
+- deleting historical backend source solely for cleanliness **after** P0-0 has proven production
+  reachability fail-closed; reachability proof comes before source cleanup.
 
 Current measurements show that real semantic-cycle latency is often dominated by the
 host/model/visual-evaluation interval rather than Photoshop dispatch alone. New speed work must
@@ -702,10 +965,13 @@ Every implemented item should include, as applicable:
 1. a minimal reproduced failure/need or a predeclared human-evaluation question;
 2. fail-closed or explicitly bounded semantics;
 3. targeted regression tests for machine behavior;
-4. no resurrection of retired public contracts or ExtendScript/COM production dispatch;
+4. no resurrection of retired public contracts or raw-script bypass; any allowed
+   ExtendScript/COM fallback must be selected before UXP dispatch, remain document-targeted and never
+   be used for cross-backend replay;
 5. preservation of the multiscale visual-review barrier: whole-frame context at every review level,
    exact source-coordinate escalation crops, and zero artistic mutation replay during evidence enrichment;
-6. build/typecheck/lint/policy verification appropriate to the touched area;
+6. the canonical non-Photoshop repository gate runs for every code change, plus any area-specific
+   build/typecheck/lint/policy verification required by the touched subsystem;
 7. real Photoshop/CoS host acceptance when the claim depends on real host or Photoshop behavior;
 8. human-labelled evidence when the claim is perceptual/artistic/calibration-related;
 9. updates to this roadmap, `CHANGELOG.md` and canonical acceptance docs rather than accumulating
