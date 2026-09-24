@@ -806,6 +806,21 @@ function significanceHasDetectedChange(significance) {
   }
   return false;
 }
+function normalizeDocumentInstanceWitness(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const protocol = textOrUndefined(raw.protocol);
+  const sessionId = textOrUndefined(raw.session_id);
+  const token = textOrUndefined(raw.token);
+  if (protocol !== 'photoshop.uxp.document_instance_witness.v1' || !sessionId || !token) return null;
+  return { protocol, session_id: sessionId, token };
+}
+function sameDocumentInstanceWitness(a, b) {
+  return !!a && !!b
+    && a.protocol === b.protocol
+    && a.session_id === b.session_id
+    && a.token === b.token;
+}
+
 function elapsedMs(start, end) {
   const a = Date.parse(start ?? '');
   const b = Date.parse(end ?? '');
@@ -1168,12 +1183,85 @@ export class SessionStore {
     const records = suppliedRecords ?? projectionContext?.records ?? this.records();
     const state = projectionContext?.paintingState ?? this.paintingState();
     const documentState = state.documents?.[String(documentId)];
-    const bootstrapSequence = Number(documentState?.document_instance?.bootstrap_sequence ?? 0);
+    const supersededThroughSequence = Number(
+      documentState?.document_instance?.superseded_through_sequence
+      ?? documentState?.document_instance?.bootstrap_sequence
+      ?? 0
+    );
     return records.filter(record => {
       if (record.args?.document_id !== documentId) return false;
-      if (!Number.isSafeInteger(bootstrapSequence) || bootstrapSequence <= 0) return true;
-      return Number(record.sequence ?? 0) > bootstrapSequence;
+      if (!Number.isSafeInteger(supersededThroughSequence) || supersededThroughSequence <= 0) return true;
+      return Number(record.sequence ?? 0) > supersededThroughSequence;
     });
+  }
+  observeDocumentInstance(documentId, rawWitness, observation = {}) {
+    if (!Number.isSafeInteger(documentId) || documentId <= 0) {
+      return { status: 'invalid_document_id', reset_performed: false };
+    }
+    const witness = normalizeDocumentInstanceWitness(rawWitness);
+    if (!witness) return { status: 'witness_missing', reset_performed: false };
+    const state = this.paintingState();
+    const key = String(documentId);
+    state.documents ??= {};
+    const existing = state.documents[key];
+    const existingWitness = normalizeDocumentInstanceWitness(existing?.document_instance?.host_witness);
+    const observedAt = textOrUndefined(observation.observed_at) ?? new Date().toISOString();
+
+    if (!existingWitness) {
+      state.documents[key] = {
+        ...(existing ?? { document_id: documentId }),
+        document_id: documentId,
+        document_instance: {
+          ...(existing?.document_instance ?? { protocol: 'photoshop.guard.document_instance.v1' }),
+          host_witness: witness,
+          host_witness_observed_at: observedAt,
+        },
+      };
+      state.revision = Number(state.revision ?? 0) + 1;
+      state.updated_at = observedAt;
+      atomicJson(this.paintingStateFile(), state);
+      this.persistProjectState(documentId, state.documents[key]);
+      return {
+        status: 'bound',
+        reset_performed: false,
+        host_witness: witness,
+      };
+    }
+
+    if (sameDocumentInstanceWitness(existingWitness, witness)) {
+      return {
+        status: 'match',
+        reset_performed: false,
+        host_witness: witness,
+      };
+    }
+
+    const records = this.records();
+    const supersededThroughSequence = Math.max(0, ...records.map(record => Number(record.sequence ?? 0)));
+    const previousProcessDir = existing?.process_dir ?? null;
+    state.documents[key] = {
+      document_id: documentId,
+      document_instance: {
+        protocol: 'photoshop.guard.document_instance.v1',
+        host_witness: witness,
+        host_witness_observed_at: observedAt,
+        superseded_through_sequence: supersededThroughSequence,
+        reincarnation_reason: 'host_instance_witness_changed',
+        previous_host_witness: existingWitness,
+      },
+    };
+    state.revision = Number(state.revision ?? 0) + 1;
+    state.updated_at = observedAt;
+    atomicJson(this.paintingStateFile(), state);
+    this.clearVisualBarrier(documentId);
+    return {
+      status: 'reincarnated',
+      reset_performed: true,
+      host_witness: witness,
+      previous_host_witness: existingWitness,
+      superseded_process_dir: previousProcessDir,
+      superseded_through_sequence: supersededThroughSequence,
+    };
   }
   bindBootstrapDocumentInstance(record, documentId) {
     if (!isDocumentBootstrap(record) || !Number.isSafeInteger(documentId) || documentId <= 0) return undefined;
@@ -1194,6 +1282,7 @@ export class SessionStore {
       bootstrap_operation_id: record.id,
       bootstrap_tool: record.tool,
       bootstrap_sequence: Number.isSafeInteger(bootstrapSequence) && bootstrapSequence > 0 ? bootstrapSequence : null,
+      superseded_through_sequence: Number.isSafeInteger(bootstrapSequence) && bootstrapSequence > 0 ? bootstrapSequence : null,
       established_at: record.completed_at ?? new Date().toISOString(),
     };
     state.documents ??= {};
