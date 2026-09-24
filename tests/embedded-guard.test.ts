@@ -538,6 +538,115 @@ describe('embedded Photoshop Guard', () => {
     expect(configured.process_dir).toBe('processes/recycled-new-process/run-01');
   });
 
+  it('blocks a mutation and resets stale state when UXP reuses the same numeric id for a different live document object', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-host-reincarnation-'));
+    dirs.push(dir);
+    const { registry } = fakeRegistry(dir);
+    const witnessA = {
+      protocol: 'photoshop.uxp.document_instance_witness.v1',
+      session_id: 'uxp-session-a',
+      token: 'uxp-session-a:1',
+    };
+    const witnessB = {
+      protocol: 'photoshop.uxp.document_instance_witness.v1',
+      session_id: 'uxp-session-a',
+      token: 'uxp-session-a:2',
+    };
+    let activeWitness = witnessA;
+    const runtimeOptions = {
+      runtimeDirectory: path.join(dir, 'controller'),
+      previewBarrierDirectory: path.join(dir, 'barriers'),
+      executionLeaseFile: path.join(dir, 'execution.lock'),
+      workspaceRoot: dir,
+      uxpReadinessProbe: async () => ({
+        ready: true,
+        transport: 'uxp',
+        bridge_transport: 'long-poll',
+        bridge_revision: UXP_BRIDGE_REVISION,
+        expected_bridge_revision: UXP_BRIDGE_REVISION,
+        revision_match: true,
+        photoshop_version: '27.0.1',
+        document_count: 1,
+        active_document: { id: 42, name: 'Recycled.psd' },
+        plugin_connected: true,
+        reason: null,
+        checked_at: new Date().toISOString(),
+        cache: { hit: false, age_ms: 0, ttl_ms: 2000 },
+      }),
+      uxpStateProbe: async () => ({
+        ok: true,
+        data: {
+          hasDocument: true,
+          document: {
+            id: 42,
+            name: 'Recycled.psd',
+            instanceWitness: structuredClone(activeWitness),
+          },
+        },
+      }),
+    };
+    const runtime = new EmbeddedGuardRuntime(registry, runtimeOptions);
+    runtime.store.setArtRunState({
+      document_id: 42,
+      process_dir: 'processes/original-live-instance/run-01',
+      painting_profile: 'simple_graphic',
+    });
+    runtime.store.write({
+      id: 'old-instance-op',
+      tool: 'photoshop_get_state',
+      args: { document_id: 42 },
+      summary: 'Old instance evidence',
+      purpose: 'Prove old records are retired after host document reincarnation.',
+      hash: 'old-instance-op',
+      sequence: 1,
+      created_at: '2026-09-25T00:00:00.000Z',
+      completed_at: '2026-09-25T00:00:01.000Z',
+      phase: 'completed',
+      visual: false,
+      failed: false,
+    });
+
+    const operation = {
+      tool: 'photoshop_set_layer_opacity',
+      args: { document_id: 42, opacity: 55 },
+    };
+    expect(await (runtime as any).collectDynamicOperationViolations(operation)).toEqual([]);
+    expect(runtime.store.artRunState(42)).toMatchObject({
+      process_dir: 'processes/original-live-instance/run-01',
+      document_instance: { host_witness: witnessA },
+    });
+
+    const restarted = new EmbeddedGuardRuntime(registry, runtimeOptions);
+    expect(await (restarted as any).collectDynamicOperationViolations(operation)).toEqual([]);
+    expect(restarted.store.artRunState(42)?.process_dir).toBe('processes/original-live-instance/run-01');
+
+    restarted.store.setVisualBarrier(42, {
+      planId: 'old-instance-op',
+      operationId: 'old-instance-op',
+      operationSequence: 1,
+      requiresExternalPreview: false,
+    });
+    activeWitness = witnessB;
+    const violations = await (restarted as any).collectDynamicOperationViolations(operation);
+    expect(violations).toEqual([
+      expect.objectContaining({
+        code: 'document_reincarnated',
+        scope: 'next_operation',
+      }),
+    ]);
+    expect(restarted.store.visualBarrier(42)).toBeUndefined();
+    expect(restarted.store.artRunState(42)).toMatchObject({
+      document_id: 42,
+      document_instance: {
+        host_witness: witnessB,
+        reincarnation_reason: 'host_instance_witness_changed',
+        previous_host_witness: witnessA,
+      },
+    });
+    expect(restarted.store.artRunState(42)?.process_dir).toBeUndefined();
+    expect(restarted.store.currentDocumentRecords(42)).toEqual([]);
+  });
+
   it('ignores accidental artistic method metadata on document bootstrap instead of misclassifying it as region block-in', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-create-artistic-metadata-'));
     dirs.push(dir);
