@@ -1297,6 +1297,34 @@ function visualMicroPlanToolSchema(): Tool {
           description:
             'Required pinned Photoshop document id. The executor propagates it to every document-bound internal step and rejects cross-document overrides.',
         },
+        pattern_intent: {
+          type: 'string',
+          enum: ['organic_instances', 'intentional_regular'],
+          description: 'Optional repeated-motif intent. intentional_regular is only for deliberate uniform systems; transformed/color-jittered organic instances still require structural variation review.',
+        },
+        motif_instances: {
+          type: 'array',
+          maxItems: 24,
+          description: 'Optional exact source-document motif grouping used only to recover instance-scale geometry/crop evidence.',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              category: { type: 'string' },
+              region_bounds: {
+                type: 'object',
+                properties: {
+                  left: { type: 'number' }, top: { type: 'number' },
+                  right: { type: 'number' }, bottom: { type: 'number' },
+                },
+                required: ['left', 'top', 'right', 'bottom'],
+                additionalProperties: false,
+              },
+            },
+            required: ['id', 'region_bounds'],
+            additionalProperties: false,
+          },
+        },
         protected_regions: {
           type: 'array',
           items: { type: 'string' },
