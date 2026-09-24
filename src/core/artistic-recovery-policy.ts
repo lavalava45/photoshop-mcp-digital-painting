@@ -15,7 +15,11 @@ export interface RecoveryFacts {
   independent_tasks_available?: boolean;
   critic_alarm_evidence?: {
     anchor_operation_id?: string;
+    anchor_sha256?: string;
+    observation_operation_id?: string;
+    observation_sha256?: string;
     observed_counterevidence?: string;
+    evidence_verified?: boolean;
   };
 }
 
@@ -70,7 +74,11 @@ export function resolveArtisticRecovery(facts: RecoveryFacts): ArtisticRecoveryR
   if (facts.kind === 'critic_alarm') {
     const evidence = facts.critic_alarm_evidence;
     const hasEvidence = Boolean(
-      evidence?.anchor_operation_id
+      evidence?.evidence_verified === true
+      && evidence.anchor_operation_id
+      && evidence.anchor_sha256
+      && evidence.observation_operation_id
+      && evidence.observation_sha256
       && evidence.observed_counterevidence
       && evidence.observed_counterevidence.trim().length >= 8
     );
