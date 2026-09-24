@@ -18,7 +18,7 @@ const { tryHandleP3LayerAdvancedOperation } = require('./p3-layer-advanced-ops')
 
 const BRIDGE_PORT = 38452;
 const BRIDGE_BASE = `http://127.0.0.1:${BRIDGE_PORT}`;
-const BRIDGE_REVISION = 'compact-v2-20260924-targeting';
+const BRIDGE_REVISION = 'compact-v2-20260925-instance-witness';
 const REGISTRATION_PROTOCOL = 'photoshop.uxp.registration.v1';
 const COMMAND_PROTOCOL = 'photoshop.uxp.command.v1';
 const RESULT_PROTOCOL = 'photoshop.uxp.command_result.v1';
@@ -27,6 +27,44 @@ let polling = false;
 const pendingResultDeliveries = new Map();
 const RESULT_DELIVERY_TTL_MS = 15 * 60 * 1000;
 const MAX_PENDING_RESULT_DELIVERIES = 128;
+
+// A Document DOM object represents one live open-document instance. Keep an
+// opaque per-object witness inside the long-lived UXP plugin process so a
+// recycled numeric documentID cannot inherit Guard state from a closed document.
+// The session id deliberately changes on plugin reload; Guard treats that loss
+// of continuity fail-closed rather than assuming two same-numbered documents
+// are identical.
+const DOCUMENT_WITNESS_SESSION_ID =
+  `uxp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+const documentInstanceWitnesses = new WeakMap();
+let documentInstanceWitnessSequence = 0;
+
+function documentInstanceWitness(documentId) {
+  if (!Number.isSafeInteger(documentId) || documentId <= 0) return null;
+  let target = null;
+  try {
+    for (const candidate of app.documents) {
+      if (Number(candidate?.id) === documentId) {
+        target = candidate;
+        break;
+      }
+    }
+  } catch {
+    return null;
+  }
+  if (!target || (typeof target !== 'object' && typeof target !== 'function')) return null;
+  let token = documentInstanceWitnesses.get(target);
+  if (!token) {
+    documentInstanceWitnessSequence += 1;
+    token = `${DOCUMENT_WITNESS_SESSION_ID}:${documentInstanceWitnessSequence}`;
+    documentInstanceWitnesses.set(target, token);
+  }
+  return {
+    protocol: 'photoshop.uxp.document_instance_witness.v1',
+    session_id: DOCUMENT_WITNESS_SESSION_ID,
+    token,
+  };
+}
 
 function fileUrlFromNativePath(nativePath, operation = 'save_document') {
   if (typeof nativePath !== 'string' || nativePath.trim().length === 0) {
@@ -317,7 +355,11 @@ function normalizeSessionState(descriptors) {
   const docDescriptor = descriptors.documentDescriptor ?? {};
   const document = {};
   const documentId = numericValue(docDescriptor.documentID);
-  if (documentId != null) document.id = documentId;
+  if (documentId != null) {
+    document.id = documentId;
+    const instanceWitness = documentInstanceWitness(documentId);
+    if (instanceWitness) document.instanceWitness = instanceWitness;
+  }
   if (typeof docDescriptor.title === 'string') document.name = docDescriptor.title;
   const width = documentPixelDimension(docDescriptor.width, docDescriptor.resolution);
   if (width != null) document.width = width;
