@@ -90,8 +90,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   intentionally does not track `pnpm-lock.yaml`. Task 8/8a repository tests now stage temporary
   source fixtures instead of depending on gitignored local `processes/**` JPEG/PNG evidence; the
   real calibration/review-pack commands still validate the actual local evidence paths. After these
-  fixes the clean GitHub runner reaches and passes `pnpm run verify:canonical`; local canonical
-  verification remains green at **578/578 tests across 62 source files**.
+  fixes the clean GitHub runner reaches and passes `pnpm run verify:canonical`. Session-store
+  projection regressions also compare active-job membership independently of random job-directory
+  ordering, removing a CI-only ordering flake while preserving the production job-id ordering
+  contract. Local canonical verification remains green at **578/578 tests across 62 source files**.
 - 2026-09-24: close P0-2 final UXP migration live acceptance on real Photoshop. The accepted
   `run-10` binds repository `78125f2`, live child PID `30684`, and exact UXP revision
   `compact-v2-20260924-targeting`; representative P1 `layer.create`, P2

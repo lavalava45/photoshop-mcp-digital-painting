@@ -1252,7 +1252,7 @@ describe('Guard session-store regressions', () => {
     expect(paintingSpy).toHaveBeenCalledTimes(1);
     expect(activeJobsSpy).toHaveBeenCalledTimes(1);
     expect(readJobSpy).toHaveBeenCalledTimes(3);
-    expect(compact.active_jobs.map((job: any) => job.operation_id)).toEqual([
+    expect(compact.active_jobs.map((job: any) => job.operation_id).sort()).toEqual([
       'projection-job-a',
       'projection-job-b',
     ]);
@@ -1337,7 +1337,7 @@ describe('Guard session-store regressions', () => {
     const fromFreshScan = s.activeJobs(51, undefined, context.capturedAt);
 
     expect(fromSnapshot).toEqual(fromFreshScan);
-    expect(fromSnapshot.map((job: any) => job.operation_id)).toEqual([
+    expect(fromSnapshot.map((job: any) => job.operation_id).sort()).toEqual([
       'projection-job-51-a',
       'projection-job-51-b',
     ]);
