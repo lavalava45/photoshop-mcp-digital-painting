@@ -279,9 +279,14 @@ gaps found while producing it and must remain visible:
   This is a repository-level Task-3 fix candidate; live acceptance still requires running that build
   and proving a subsequent same-chat CoS call becomes exactly attributed without replaying any
   Photoshop mutation.
-- **Next step:** package/activate the fixed CoS build through the A/B release lane, then run the
-  smallest read-only same-chat attribution smoke. If exact attribution is restored, continue Task 1
-  with the deterministic host-route trace; do not invoke ImageGen merely to manufacture evidence.
+- The fixed CoS commit \`5d87e8d\` is now packaged as the validated **inactive slot-b** candidate.
+  Its embedded identity is \`our-release / slot-b / 5d87e8d\`, its packaged extension contains the
+  legacy-observer upgrade, and \`app.asar\` contains the required \`@modelcontextprotocol/core\`
+  runtime dependency. The active runtime remains slot-a until the live cutover.
+- **Next step:** activate validated slot-b, then run the smallest read-only same-chat attribution
+  smoke on the first request issued after the cutover. If exact attribution is restored, continue
+  Task 1 with the deterministic host-route trace; do not invoke ImageGen merely to manufacture
+  evidence.
 
 The historical failure must be classified from one deterministic real-host trace, not from model
 prose. Capture one same-conversation sequence:
