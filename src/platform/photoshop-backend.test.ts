@@ -8,6 +8,7 @@ import {
   type PhotoshopPrimitive,
   type PhotoshopStateSnapshot,
 } from './photoshop-backend.js';
+import type { BackendRouteTraceInput } from './backend-route-trace.js';
 
 function backendFixture(
   kind: PhotoshopBackend['kind'],
@@ -148,6 +149,48 @@ function backendFixture(
 const unusedConnection = {} as PhotoshopConnection;
 
 describe('PhotoshopBackendRouter', () => {
+  it('records the selected backend at the pre-dispatch boundary', async () => {
+    const uxp = backendFixture('uxp', { available: true });
+    const legacy = backendFixture('extendscript', { available: true });
+    const events: BackendRouteTraceInput[] = [];
+    const router = new PhotoshopBackendRouter(
+      {} as PhotoshopConnection,
+      [uxp.backend, legacy.backend],
+      (event) => events.push(event)
+    );
+
+    await expect(router.backendFor('layer.create')).resolves.toBe(uxp.backend);
+    expect(events).toEqual([expect.objectContaining({
+      primitive: 'layer.create',
+      selected_backend: 'uxp',
+      uxp_supported: true,
+      uxp_available: true,
+      fallback_used: false,
+      reason: 'uxp_available',
+    })]);
+  });
+
+  it('records a legacy route only as a pre-dispatch UXP-unavailable fallback', async () => {
+    const uxp = backendFixture('uxp', { available: false });
+    const legacy = backendFixture('extendscript', { available: true });
+    const events: BackendRouteTraceInput[] = [];
+    const router = new PhotoshopBackendRouter(
+      {} as PhotoshopConnection,
+      [uxp.backend, legacy.backend],
+      (event) => events.push(event)
+    );
+
+    await expect(router.backendFor('filter.gaussian_blur')).resolves.toBe(legacy.backend);
+    expect(events).toEqual([expect.objectContaining({
+      primitive: 'filter.gaussian_blur',
+      selected_backend: 'extendscript',
+      uxp_supported: true,
+      uxp_available: false,
+      legacy_available: true,
+      fallback_used: true,
+      reason: 'uxp_unavailable_pre_dispatch_fallback',
+    })]);
+  });
   const canonicalPaintingMutations: PhotoshopPrimitive[] = [
     'brush.presets.select',
     'brush.settings.write',

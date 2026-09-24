@@ -187,7 +187,7 @@ if (!/UXP-first with a bounded, pre-dispatch ExtendScript\/COM fallback/i.test(b
 if (!/new UxpPhotoshopBackend\(\)[\s\S]{0,160}new ExtendScriptPhotoshopBackend\(connection\)/.test(backendRouter)) {
   failures.push('PhotoshopBackendRouter must order UXP before ExtendScript/COM');
 }
-if (!/if \(uxp && await uxp\.isAvailable\(\)\) return uxp;[\s\S]{0,450}if \(legacy && await legacy\.isAvailable\(\)\) return legacy;/.test(backendRouter)) {
+if (!/const uxpAvailable\s*=\s*uxp\s*\?\s*await uxp\.isAvailable\(\)\s*:\s*null;[\s\S]{0,1400}if \(uxp && uxpAvailable\)[\s\S]{0,1400}return uxp;[\s\S]{0,1400}const legacyAvailable\s*=\s*legacy\s*\?\s*await legacy\.isAvailable\(\)\s*:\s*null;[\s\S]{0,1400}if \(legacy && legacyAvailable\)[\s\S]{0,1400}return legacy;/.test(backendRouter)) {
   failures.push('PhotoshopBackendRouter must select legacy only after UXP is unavailable before dispatch');
 }
 if (!/chosen backend executes exactly once[\s\S]{0,220}must not catch[\s\S]{0,220}replay/i.test(backendRouter)) {

@@ -3,6 +3,10 @@ import { PhotoshopAPIFactory } from '../api/photoshop-api.js';
 import { parseExtendScriptPayload } from '../utils/extendscript-result.js';
 import { PhotoshopConnection } from './connection.js';
 import {
+  recordBackendRouteSelection,
+  type BackendRouteTraceInput,
+} from './backend-route-trace.js';
+import {
   invokeUxpCapturePreview,
   invokeUxpGetSelectionBounds,
   invokeUxpGetBrushSettings,
@@ -703,8 +707,13 @@ export class ExtendScriptPhotoshopBackend implements PhotoshopBackend {
 
 export class PhotoshopBackendRouter {
   private readonly backends: PhotoshopBackend[];
+  private readonly routeTrace: (event: BackendRouteTraceInput) => void;
 
-  constructor(connection: PhotoshopConnection, backends?: PhotoshopBackend[]) {
+  constructor(
+    connection: PhotoshopConnection,
+    backends?: PhotoshopBackend[],
+    routeTrace: (event: BackendRouteTraceInput) => void = recordBackendRouteSelection
+  ) {
     // UXP-first with a bounded, pre-dispatch ExtendScript/COM fallback.
     // The chosen backend executes exactly once; callers must not catch an
     // execution failure and replay the mutation through the other transport.
@@ -712,16 +721,54 @@ export class PhotoshopBackendRouter {
       new UxpPhotoshopBackend(),
       new ExtendScriptPhotoshopBackend(connection),
     ];
+    this.routeTrace = routeTrace;
   }
 
   async backendFor(primitive: PhotoshopPrimitive): Promise<PhotoshopBackend> {
     const uxp = this.backends.find((backend) => backend.kind === 'uxp' && backend.supports(primitive));
-    if (uxp && await uxp.isAvailable()) return uxp;
-
     const legacy = this.backends.find(
       (backend) => backend.kind === 'extendscript' && backend.supports(primitive)
     );
-    if (legacy && await legacy.isAvailable()) return legacy;
+    const uxpAvailable = uxp ? await uxp.isAvailable() : null;
+    if (uxp && uxpAvailable) {
+      this.routeTrace({
+        primitive,
+        selected_backend: 'uxp',
+        uxp_supported: true,
+        uxp_available: true,
+        legacy_supported: !!legacy,
+        legacy_available: null,
+        fallback_used: false,
+        reason: 'uxp_available',
+      });
+      return uxp;
+    }
+
+    const legacyAvailable = legacy ? await legacy.isAvailable() : null;
+    if (legacy && legacyAvailable) {
+      this.routeTrace({
+        primitive,
+        selected_backend: 'extendscript',
+        uxp_supported: !!uxp,
+        uxp_available: uxpAvailable,
+        legacy_supported: true,
+        legacy_available: true,
+        fallback_used: !!uxp,
+        reason: uxp ? 'uxp_unavailable_pre_dispatch_fallback' : 'uxp_unsupported',
+      });
+      return legacy;
+    }
+
+    this.routeTrace({
+      primitive,
+      selected_backend: null,
+      uxp_supported: !!uxp,
+      uxp_available: uxpAvailable,
+      legacy_supported: !!legacy,
+      legacy_available: legacyAvailable,
+      fallback_used: false,
+      reason: uxp ? 'no_available_backend' : 'primitive_unsupported',
+    });
 
     if (uxp) {
       throw new Error(
