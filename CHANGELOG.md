@@ -83,6 +83,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 2026-09-24: repair the canonical GitHub Actions path so clean runners execute the same verification
+  gate as local development. The workflow now takes the pnpm version only from
+  `package.json#packageManager` instead of declaring a second version in
+  `pnpm/action-setup`, and it no longer enables pnpm dependency caching when the repository
+  intentionally does not track `pnpm-lock.yaml`. Task 8/8a repository tests now stage temporary
+  source fixtures instead of depending on gitignored local `processes/**` JPEG/PNG evidence; the
+  real calibration/review-pack commands still validate the actual local evidence paths. After these
+  fixes the clean GitHub runner reaches and passes `pnpm run verify:canonical`; local canonical
+  verification remains green at **578/578 tests across 62 source files**.
 - 2026-09-24: close P0-2 final UXP migration live acceptance on real Photoshop. The accepted
   `run-10` binds repository `78125f2`, live child PID `30684`, and exact UXP revision
   `compact-v2-20260924-targeting`; representative P1 `layer.create`, P2
