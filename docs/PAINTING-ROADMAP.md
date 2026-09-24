@@ -1,6 +1,6 @@
 # Painting Quality Roadmap
 
-Last updated: 2026-09-23
+Last updated: 2026-09-24
 
 This file is the canonical **forward-looking TODO** for the digital-painting project.
 Completed work belongs in `CHANGELOG.md`; detailed acceptance evidence remains in
@@ -54,6 +54,17 @@ The P1/P2/P3 source migration is complete and the current rebuilt child/UXP comp
 already passed the load-and-revision preflight. What remains is one final **real Photoshop behavioral
 acceptance** on a disposable document. This is not another implementation phase unless the live run
 finds a defect.
+
+The 2026-09-24 prerequisite smoke did find and close one concrete runtime defect before this final
+acceptance: after a Photoshop restart, a fresh document reused historical numeric `document_id=59`
+and initially inherited the old Guard art-run binding. Guard now treats every successful guarded
+`create_document` / `open_image` bootstrap as a new document incarnation, resets stale
+document-scoped state/barriers, and sequence-bounds history to the current incarnation. The live
+retest superseded the old `run-01` binding, rebound the recycled id to fresh `run-05`, completed
+a real UXP visual pass with preview/verdict closure, left no Guard debt, and observed zero Photoshop
+foreground transitions / legacy helper processes in the bounded trace. This fixes the smoke blocker
+but **does not by itself close P0-0**: the representative P1/P2/P3 no-replay behavioral trace below
+is still the acceptance gate.
 
 **Acceptance**
 
