@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { SessionStore } from '../src/core/guard/session-store.js';
@@ -29,10 +30,14 @@ function seedClassifiedFrame(
   sequence: number,
   options: { current?: boolean; accepted?: boolean } = { current: true, accepted: true }
 ) {
+  const frameBytes = Buffer.from('planner-painter-frame:' + id);
+  const framePath = path.join(s.directory, 'frames', id + '.jpg');
+  mkdirSync(path.dirname(framePath), { recursive: true });
+  writeFileSync(framePath, frameBytes);
   const frame = {
     operation_id: id,
-    sha256: id.padEnd(64, 'a').slice(0, 64),
-    path: 'processes/test-process/run/frames/' + id + '.jpg',
+    sha256: createHash('sha256').update(frameBytes).digest('hex'),
+    path: framePath,
     accepted: options.accepted !== false,
     acceptance_scope: 'pixels_retained_not_goal_confirmation',
     goal_confirmation: 'unresolved',
@@ -603,6 +608,7 @@ describe('Art Director / Painter controller contract', () => {
 
   it('records whole-image glances only at stage/global/final boundaries and does not require them per local pass', () => {
     const s = store();
+    const glanceFrame = seedClassifiedFrame(s, 'glance-frame', 1);
     s.setArtDirectorState({ document_id: 42, action: 'review', directive: directive('glance-review', 8) });
     let state = s.paintingState().documents['42'];
     state = s.advanceArtDirectorAfterVerdict(
@@ -632,6 +638,8 @@ describe('Art Director / Painter controller contract', () => {
       whole_image_glance: {
         trigger: 'stage_boundary',
         observation: 'The whole image keeps a clear face focus and stable large-value grouping.',
+        operation_id: glanceFrame.operation_id,
+        frame_sha256: glanceFrame.sha256,
       },
     });
     expect(reviewed.art_director.whole_image_glance).toMatchObject({
