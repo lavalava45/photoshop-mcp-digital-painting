@@ -159,10 +159,29 @@ The P1/P2/P3 migration already has substantial source and live evidence, but the
 claim still needs one final **real Photoshop behavioral acceptance** on a disposable document against
 the exact rebuilt runtime under test. P0-0 and P0-1 are now closed.
 
-The 2026-09-24 read-only audit preflight also observed the UXP companion currently disconnected
-(`uxp_plugin_not_connected`). Treat that as environment readiness, not proof of a code defect: the
-final run must begin from a fresh successful ping/capability/revision readiness check and must not
-reuse historical readiness as evidence for the current process.
+Current 2026-09-24 handoff state:
+
+- P0-1 is closed and committed/pushed as `6ede13a`
+  (`fix: close canonical execution verification gaps`);
+- `npm run verify:canonical` is green at **62/62 source test files, 575/575 tests**, with package,
+  lint, acceptance-matrix, compact-v2, policy, prompt, catalog-count and live-evidence-ledger
+  verifiers passing;
+- the first P0-2 live preflight initially failed because the Chat On Steroids Photoshop MCP child was
+  in `PLUGIN_UNAVAILABLE` / `Needs attention`; restarting **only** that plugin from the CoS Plugins
+  UI restored dispatch;
+- after the child restart, a real `photoshop_ping` reached the bridge and exposed the current
+  environment blocker: the server expects UXP bridge revision
+  `compact-v2-20260924-targeting`, while Photoshop is still running
+  `compact-v2-20260923-full`; `revisionMatch=false` with reason
+  `uxp_bridge_revision_mismatch`;
+- this mismatch is a runtime/readiness blocker, not evidence of a new code defect. The P0-2 behavioral
+  trace has **not** started yet and must not be credited as partial acceptance;
+- next action: Adobe UXP Developer Tool → **Photoshop MCP UXP Bridge → Reload**, then repeat
+  `photoshop_ping` → `photoshop_guard_capabilities` → `photoshop_guard_status`. Start the
+  disposable-document P1/P2/P3 trace only after the actual/expected bridge revisions match and the
+  UXP companion reports ready.
+
+Do not reuse historical readiness as evidence for the current process.
 
 The 2026-09-24 prerequisite smoke did find and close one concrete runtime defect before this final
 acceptance: after a Photoshop restart, a fresh document reused historical numeric `document_id=59`
