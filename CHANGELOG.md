@@ -68,6 +68,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 2026-09-24: treat every successful guarded `photoshop_create_document` / `photoshop_open_image`
+  bootstrap as a new Photoshop document incarnation even when Photoshop recycles a historical
+  numeric `document_id`. Guard now clears stale document-scoped painting state and visual barriers,
+  records a bootstrap-sequence boundary, and excludes pre-incarnation visual/checkpoint/trend history
+  from the current document. This prevents a fresh document from inheriting an old immutable
+  `process_dir`. The live regression reproduced Photoshop reusing `document_id=59` after restart:
+  the old `run-01` binding was superseded, the new incarnation was recorded at sequence 241, and the
+  same id then bound successfully to `run-05`. The acceptance suite remains green at 174/174; the
+  bounded runtime trace observed zero Photoshop foreground transitions and no legacy helper process.
 - 2026-09-23: repair the public compact Guard contract so schema, compiler, VisualMicroPlan
   validation and runtime agree. `request_key` now remains the unique idempotency identity of one
   attempt while public `problem_id` persists artistic-problem identity across later attempts;

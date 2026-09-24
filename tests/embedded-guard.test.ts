@@ -402,6 +402,142 @@ describe('embedded Photoshop Guard', () => {
     expect(runtime.store.status().pending_visual_verdicts).not.toContain('create-ready-success');
   });
 
+  it('starts a fresh document incarnation when Photoshop reuses a prior document id', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-recycled-document-id-'));
+    dirs.push(dir);
+    const { registry } = fakeRegistry(dir);
+    registry.register('photoshop_create_document', {
+      tool: {
+        name: 'photoshop_create_document',
+        description: 'test recycled Photoshop document id',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            width: { type: 'number', minimum: 1 },
+            height: { type: 'number', minimum: 1 },
+            resolution: { type: 'number' },
+            colorMode: { type: 'string', enum: ['RGB', 'CMYK', 'Grayscale'] },
+          },
+          required: ['width', 'height'],
+        },
+      },
+      handler: async (args) => ({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            ok: true,
+            summary: 'Document created via UXP',
+            details: {
+              transport: 'uxp',
+              command_id: args._guard_operation_id,
+              document: { id: 732, name: 'Untitled-1', width: 800, height: 600, resolution: 72, colorMode: 'RGB' },
+            },
+          }),
+        }],
+      }),
+    });
+    {
+      const microplan = createVisualMicroPlanTools(registry)[0]!;
+      registry.register(microplan.tool.name, microplan);
+    }
+    const runtime = new EmbeddedGuardRuntime(registry, {
+      runtimeDirectory: path.join(dir, 'controller'),
+      previewBarrierDirectory: path.join(dir, 'barriers'),
+      executionLeaseFile: path.join(dir, 'execution.lock'),
+      workspaceRoot: dir,
+      uxpReadinessProbe: async () => ({
+        ready: true,
+        transport: 'uxp',
+        bridge_transport: 'long-poll',
+        bridge_revision: 'expected-revision',
+        expected_bridge_revision: 'expected-revision',
+        revision_match: true,
+        photoshop_version: '27.0.0',
+        document_count: 0,
+        active_document: null,
+        plugin_connected: true,
+        reason: null,
+        checked_at: new Date().toISOString(),
+        cache: { hit: false, age_ms: 0, ttl_ms: 2000 },
+      }),
+    });
+
+    runtime.store.setArtRunState({
+      document_id: 732,
+      process_dir: 'processes/recycled-old-process/run-01',
+      commentary_mode: 'technical',
+      painting_profile: 'simple_graphic',
+    });
+    runtime.store.write({
+      id: 'recycled-old-operation',
+      tool: 'photoshop_get_state',
+      args: { document_id: 732 },
+      summary: 'Old document operation',
+      purpose: 'Seed durable state from a prior Photoshop document instance.',
+      hash: 'old-document-operation',
+      sequence: 1,
+      created_at: '2026-09-20T12:00:00.000Z',
+      completed_at: '2026-09-20T12:00:01.000Z',
+      phase: 'completed',
+      visual: false,
+      failed: false,
+      report: {
+        did: 'Read the old document state.',
+        why: 'Seed a fully closed prior document instance.',
+        result: 'The old operation completed before Photoshop restarted.',
+      },
+    });
+    runtime.store.setVisualBarrier(732, {
+      planId: 'recycled-old-operation',
+      operationId: 'recycled-old-operation',
+      operationSequence: 1,
+      requiresExternalPreview: false,
+    });
+
+    const result = await runtime.cycleAuto({
+      next_pass: {
+        request_key: 'create-recycled-document-id',
+        goal: 'Create a fresh disposable document even if Photoshop reuses a historical numeric document id.',
+        actions: [{
+          id: 'create-document',
+          tool: 'photoshop_create_document',
+          args: { width: 800, height: 600, resolution: 72, colorMode: 'RGB' },
+        }],
+      },
+    }) as any;
+
+    expect(result.confirmed_targets.document_id).toBe(732);
+    expect(runtime.store.visualBarrier(732)).toBeUndefined();
+    expect(runtime.store.currentDocumentRecords(732)).toEqual([]);
+    expect(runtime.store.artRunState(732)).toMatchObject({
+      document_id: 732,
+      document_instance: {
+        protocol: 'photoshop.guard.document_instance.v1',
+        bootstrap_operation_id: 'create-recycled-document-id',
+        bootstrap_tool: 'photoshop_create_document',
+        bootstrap_sequence: 2,
+      },
+    });
+    expect(runtime.store.artRunState(732)?.process_dir).toBeUndefined();
+    expect(runtime.store.read('create-recycled-document-id')?.document_instance_reset).toMatchObject({
+      reset_performed: true,
+      replaced_existing_state: true,
+      superseded_process_dir: 'processes/recycled-old-process/run-01',
+    });
+    expect(runtime.store.closeOnlyLifecycleOwner('recycled-old-operation')).toMatchObject({
+      ok: false,
+      document_id: 732,
+    });
+
+    const configured = runtime.store.setArtRunState({
+      document_id: 732,
+      process_dir: 'processes/recycled-new-process/run-01',
+      commentary_mode: 'technical',
+      painting_profile: 'simple_graphic',
+    });
+    expect(configured.process_dir).toBe('processes/recycled-new-process/run-01');
+  });
+
   it('ignores accidental artistic method metadata on document bootstrap instead of misclassifying it as region block-in', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-create-artistic-metadata-'));
     dirs.push(dir);

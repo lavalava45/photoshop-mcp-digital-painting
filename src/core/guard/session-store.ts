@@ -940,13 +940,16 @@ export class SessionStore {
   }
   synchronizeVisualBarrier(documentId, suppliedRecords, projectionContext) {
     if (!Number.isSafeInteger(documentId) || documentId <= 0) return undefined;
-    const records = suppliedRecords ?? projectionContext?.records ?? this.records();
+    const records = this.currentDocumentRecords(
+      documentId,
+      suppliedRecords ?? projectionContext?.records ?? this.records(),
+      projectionContext
+    );
     let barrier = this.visualBarrier(documentId);
     if (barrier) {
       const owner = barrier.operationId
-        ? records.find(r => r.args?.document_id === documentId && r.id === barrier.operationId)
-        : [...records].reverse().find(r => r.args?.document_id === documentId &&
-          (r.id === barrier.planId || this.visualPlanId(r) === barrier.planId));
+        ? records.find(r => r.id === barrier.operationId)
+        : [...records].reverse().find(r => r.id === barrier.planId || this.visualPlanId(r) === barrier.planId);
       if (owner && this.hasDurableNotExecutedProof(owner)) {
         this.finalizeDurableNotExecuted(owner, 'legacy_barrier_auto_closed_not_executed');
         barrier = undefined;
@@ -960,7 +963,7 @@ export class SessionStore {
     }
     if (!barrier) {
       const pending = [...records].reverse().find(r =>
-        r.args?.document_id === documentId && r.visual && !r.verdict
+        r.visual && !r.verdict
         && r.resolved?.outcome !== 'abandoned' && !this.hasDurableNotExecutedProof(r)
       );
       if (pending) {
@@ -1150,6 +1153,55 @@ export class SessionStore {
     const state = projectionContext?.paintingState ?? this.paintingState();
     return state.documents?.[String(documentId)];
   }
+  currentDocumentRecords(documentId, suppliedRecords, projectionContext) {
+    if (!Number.isSafeInteger(documentId) || documentId <= 0) return [];
+    const records = suppliedRecords ?? projectionContext?.records ?? this.records();
+    const state = projectionContext?.paintingState ?? this.paintingState();
+    const documentState = state.documents?.[String(documentId)];
+    const bootstrapSequence = Number(documentState?.document_instance?.bootstrap_sequence ?? 0);
+    return records.filter(record => {
+      if (record.args?.document_id !== documentId) return false;
+      if (!Number.isSafeInteger(bootstrapSequence) || bootstrapSequence <= 0) return true;
+      return Number(record.sequence ?? 0) > bootstrapSequence;
+    });
+  }
+  bindBootstrapDocumentInstance(record, documentId) {
+    if (!isDocumentBootstrap(record) || !Number.isSafeInteger(documentId) || documentId <= 0) return undefined;
+    const state = this.paintingState();
+    const key = String(documentId);
+    const existing = state.documents?.[key];
+    const existingInstance = existing?.document_instance;
+    if (existingInstance?.bootstrap_operation_id === record.id) {
+      return {
+        ...existingInstance,
+        reset_performed: false,
+        replaced_existing_state: false,
+      };
+    }
+    const bootstrapSequence = Number(record.sequence ?? 0);
+    const documentInstance = {
+      protocol: 'photoshop.guard.document_instance.v1',
+      bootstrap_operation_id: record.id,
+      bootstrap_tool: record.tool,
+      bootstrap_sequence: Number.isSafeInteger(bootstrapSequence) && bootstrapSequence > 0 ? bootstrapSequence : null,
+      established_at: record.completed_at ?? new Date().toISOString(),
+    };
+    state.documents ??= {};
+    state.documents[key] = {
+      document_id: documentId,
+      document_instance: documentInstance,
+    };
+    state.revision = Number(state.revision ?? 0) + 1;
+    state.updated_at = new Date().toISOString();
+    atomicJson(this.paintingStateFile(), state);
+    this.clearVisualBarrier(documentId);
+    return {
+      ...documentInstance,
+      reset_performed: true,
+      replaced_existing_state: !!existing,
+      superseded_process_dir: existing?.process_dir ?? null,
+    };
+  }
   setWorkflowLifecycle(documentId, status, reason, operationId) {
     if (!Number.isSafeInteger(documentId) || documentId <= 0) return undefined;
     if (!['active', 'stopped'].includes(status)) throw new Error('workflow lifecycle status must be active|stopped');
@@ -1174,9 +1226,18 @@ export class SessionStore {
     if (!record) return { ok: false, reason: `Unknown previous_operation_id: ${id}` };
     const documentId = record.args?.document_id;
     if (!Number.isSafeInteger(documentId) || documentId <= 0) return { ok: true, document_id: null };
-    const laterSemantic = this.records().find(candidate =>
-      candidate.args?.document_id === documentId
-      && Number(candidate.sequence ?? 0) > Number(record.sequence ?? 0)
+    const documentState = this.paintingState().documents?.[String(documentId)];
+    const bootstrapSequence = Number(documentState?.document_instance?.bootstrap_sequence ?? 0);
+    if (Number.isSafeInteger(bootstrapSequence) && bootstrapSequence > 0
+      && Number(record.sequence ?? 0) <= bootstrapSequence) {
+      return {
+        ok: false,
+        document_id: documentId,
+        reason: `stale_document_instance: ${id} belongs to an earlier Photoshop document that reused document_id=${documentId}`,
+      };
+    }
+    const laterSemantic = this.currentDocumentRecords(documentId).find(candidate =>
+      Number(candidate.sequence ?? 0) > Number(record.sequence ?? 0)
       && !isRead(candidate.tool)
       && candidate.execution !== 'not-executed'
       && !isAbandonedRecovery(candidate)
@@ -2231,8 +2292,8 @@ export class SessionStore {
     throw new Error(`stage_priority_gate: ${requestScale} mutation blocked by unresolved ${blockerScale} must-fix "${blocker.problem_id}". Resolve or reclassify the larger problem before finer work.`);
   }
   cumulativeTrendState(documentId, suppliedRecords) {
-    const records = (suppliedRecords ?? this.records())
-      .filter(r => r.args?.document_id === documentId && r.visual && r.verdict)
+    const records = this.currentDocumentRecords(documentId, suppliedRecords ?? this.records())
+      .filter(r => r.visual && r.verdict)
       .slice(-TREND_SIGNAL_WINDOW);
     const counts = new Map();
     for (const record of records) {
@@ -2393,9 +2454,11 @@ export class SessionStore {
     });
   }
   latencySummary(documentId, suppliedRecords, projectionContext) {
-    const records = (suppliedRecords ?? projectionContext?.records ?? this.records()).filter(record =>
-      record?.latency && (!Number.isSafeInteger(documentId) || documentId <= 0 || record.args?.document_id === documentId)
-    );
+    const all = suppliedRecords ?? projectionContext?.records ?? this.records();
+    const scoped = Number.isSafeInteger(documentId) && documentId > 0
+      ? this.currentDocumentRecords(documentId, all, projectionContext)
+      : all;
+    const records = scoped.filter(record => record?.latency);
     const visualRecords = records.filter(record => record.visual);
     const fields = [
       'inter_call_unattributed_gap_ms',
@@ -2458,7 +2521,11 @@ export class SessionStore {
       stall_reasons: [],
     };
     if (!Number.isSafeInteger(documentId) || documentId <= 0) return empty;
-    const records = (suppliedRecords ?? projectionContext?.records ?? this.records()).filter(r => r.args?.document_id === documentId);
+    const records = this.currentDocumentRecords(
+      documentId,
+      suppliedRecords ?? projectionContext?.records ?? this.records(),
+      projectionContext
+    );
     const tracked = records.filter(r => r.visual && r.verdict?.significance?.execution_effect);
     if (!tracked.length) return empty;
 
@@ -2556,7 +2623,11 @@ export class SessionStore {
       reported_tool_execution_operations: 0,
     };
     if (!Number.isSafeInteger(documentId) || documentId <= 0) return empty;
-    const records = (suppliedRecords ?? projectionContext?.records ?? this.records()).filter(r => r.args?.document_id === documentId);
+    const records = this.currentDocumentRecords(
+      documentId,
+      suppliedRecords ?? projectionContext?.records ?? this.records(),
+      projectionContext
+    );
     if (!records.length) return empty;
     const startedAt = records[0].created_at;
     const classifiedVisual = records.filter(r => r.visual && r.verdict);
@@ -2622,7 +2693,11 @@ export class SessionStore {
     if (!Number.isSafeInteger(documentId) || documentId <= 0) {
       return { due: false, debt_points: 0, debt_limit: CHECKPOINT_DEBT_LIMIT, uncheckpointed_visual_operations: 0, age_seconds: null, reason: null };
     }
-    const records = (suppliedRecords ?? projectionContext?.records ?? this.records()).filter(r => r.args?.document_id === documentId);
+    const records = this.currentDocumentRecords(
+      documentId,
+      suppliedRecords ?? projectionContext?.records ?? this.records(),
+      projectionContext
+    );
     const lastCheckpointIndex = records.findLastIndex(r => r.checkpoint);
     const uncheckpointed = records.slice(lastCheckpointIndex + 1).filter(r => r.visual);
     if (!uncheckpointed.length) {
@@ -2642,7 +2717,7 @@ export class SessionStore {
   }
   visualCadenceState(documentId, suppliedRecords, projectionContext) {
     const all = suppliedRecords ?? projectionContext?.records ?? this.records();
-    const records = all.filter(r => r.args?.document_id === documentId);
+    const records = this.currentDocumentRecords(documentId, all, projectionContext);
     const metrics = this.workflowMetrics(documentId, all, projectionContext);
     const documentState = projectionContext
       ? projectionContext.paintingState.documents?.[String(documentId)]
@@ -2714,7 +2789,7 @@ export class SessionStore {
     };
     if (!Number.isSafeInteger(documentId) || documentId <= 0) return empty;
     const all = suppliedRecords ?? projectionContext?.records ?? this.records();
-    const records = all.filter(r => r.args?.document_id === documentId);
+    const records = this.currentDocumentRecords(documentId, all, projectionContext);
     if (!records.length) return empty;
 
     const documentState = projectionContext
@@ -2820,7 +2895,7 @@ export class SessionStore {
   }
   documentNextRequiredAction(documentId, suppliedRecords, projectionContext) {
     const all = suppliedRecords ?? projectionContext?.records ?? this.records();
-    const records = all.filter(r => r.args?.document_id === documentId);
+    const records = this.currentDocumentRecords(documentId, all, projectionContext);
     const state = (projectionContext
       ? projectionContext.paintingState.documents?.[String(documentId)]
       : this.paintingState().documents?.[String(documentId)])
@@ -3033,6 +3108,7 @@ export class SessionStore {
     }
 
     const records = projectionContext?.records ?? this.records();
+    const currentDocumentRecords = this.currentDocumentRecords(documentId, records, projectionContext);
     const plannedPreviousOperationId = textOrUndefined(options.plannedPreviousOperationId);
     const plannedPreviousVisualVerdict = options.plannedPreviousVisualVerdict === true;
     const recoveryRead = isRead(request?.tool);
@@ -3067,8 +3143,8 @@ export class SessionStore {
     capture(() => {
       let visualBarrier = this.visualBarrier(documentId);
       if (!visualBarrier) {
-        const pending = [...records].reverse().find(r =>
-          r.args?.document_id === documentId && r.visual && !r.verdict
+        const pending = [...currentDocumentRecords].reverse().find(r =>
+          r.visual && !r.verdict
           && r.resolved?.outcome !== 'abandoned' && !this.hasDurableNotExecutedProof(r)
         );
         if (pending) {
@@ -3082,8 +3158,8 @@ export class SessionStore {
         }
       }
       if (visualBarrier && plannedPreviousVisualVerdict && plannedPreviousOperationId) {
-        const plannedRecord = records.find(r => r.id === plannedPreviousOperationId);
-        if (plannedRecord && this.barrierOwnedByRecord(visualBarrier, plannedRecord, records)) {
+        const plannedRecord = currentDocumentRecords.find(r => r.id === plannedPreviousOperationId);
+        if (plannedRecord && this.barrierOwnedByRecord(visualBarrier, plannedRecord, currentDocumentRecords)) {
           visualBarrier = undefined;
         }
       }
@@ -3095,12 +3171,12 @@ export class SessionStore {
       }
     });
     const workflow = this.workflowMetrics(documentId, records, projectionContext);
-    const latestVisual = [...records].reverse().find(r => r.visual);
+    const latestVisual = [...currentDocumentRecords].reverse().find(r => r.visual);
     if (isVisual(request?.tool) && !rollbackMutation && workflow.workflow_stall && !strategyChanged(request, latestVisual)) {
       add(`workflow_stall: ${workflow.stall_reasons.join('; ')}. Change executable strategy (method, scale, region, brush role, or mutation structure) before another visual mutation`);
     }
     const latestSameProblem = problemId
-      ? records.filter(r => r.visual && problemIdentity(r) === problemId && r.verdict?.significance).at(-1)
+      ? currentDocumentRecords.filter(r => r.visual && problemIdentity(r) === problemId && r.verdict?.significance).at(-1)
       : undefined;
     if (isVisual(request?.tool) && !rollbackMutation
       && latestSameProblem?.verdict?.significance?.execution_effect === 'insufficient'
@@ -3110,7 +3186,7 @@ export class SessionStore {
       add(`visual_significance_gate: previous pass on "${problemId}" was insufficient; change executable strategy before another mutation`);
     }
     const sameProblemAttempts = problemId
-      ? records.filter(r => r.visual && problemIdentity(r) === problemId).slice(-3)
+      ? currentDocumentRecords.filter(r => r.visual && problemIdentity(r) === problemId).slice(-3)
       : [];
     if (isVisual(request?.tool) && !rollbackMutation && sameProblemAttempts.length === 3
       && sameProblemAttempts.every(r => r.verdict?.verdict !== 'improvement')
@@ -3229,6 +3305,13 @@ export class SessionStore {
       else { updated.phase = 'uncertain'; updated.failed = true; updated.checkpoint_error = 'PSD file was not verified on disk'; }
     }
     this.write(updated);
+    if (!failed && bootstrap && Number.isSafeInteger(bootstrapOutcome?.document_id) && bootstrapOutcome.document_id > 0) {
+      const documentInstanceReset = this.bindBootstrapDocumentInstance(updated, bootstrapOutcome.document_id);
+      if (documentInstanceReset) {
+        updated.document_instance_reset = documentInstanceReset;
+        this.write(updated);
+      }
+    }
     const documentId = record.args?.document_id;
     if (!failed && isRollbackMutation(record) && Number.isSafeInteger(documentId) && documentId > 0) {
       this.updatePaintingState(documentId, current => {
