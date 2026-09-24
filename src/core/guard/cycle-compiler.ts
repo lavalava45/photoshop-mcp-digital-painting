@@ -823,6 +823,8 @@ function compileCompactPass(
     expected_visual_result: goal,
     failure_signals: [],
     significance_mode: significanceMode,
+    ...(text(raw.pattern_intent) ? { pattern_intent: text(raw.pattern_intent) } : {}),
+    ...(Array.isArray(raw.motif_instances) ? { motif_instances: structuredClone(raw.motif_instances) } : {}),
     ...(Array.isArray(raw.protected_regions) ? { protected_regions: raw.protected_regions } : {}),
     ...(Array.isArray(raw.protected_layer_ids) ? { protected_layer_ids: raw.protected_layer_ids } : {}),
     ...(Array.isArray(raw.replace_protected_layer_ids) ? { replace_protected_layer_ids: raw.replace_protected_layer_ids } : {}),
