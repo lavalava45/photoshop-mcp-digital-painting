@@ -225,6 +225,34 @@ function compactPassSchema(): Record<string, unknown> {
       },
       addresses_primary_mismatch: { type: 'boolean' },
       addresses_problem_id: { type: 'string' },
+      pattern_intent: {
+        type: 'string',
+        enum: ['organic_instances', 'intentional_regular'],
+        description: 'Optional semantic classification for repeated visible motifs. Use intentional_regular only for deliberate grids/modules/formations; color/transform jitter is not structural variation.',
+      },
+      motif_instances: {
+        type: 'array',
+        maxItems: 24,
+        description: 'Optional exact source-document grouping for independently visible motif instances when admitted action structure alone cannot recover grouping reliably.',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            category: { type: 'string' },
+            region_bounds: {
+              type: 'object',
+              properties: {
+                left: { type: 'number' }, top: { type: 'number' },
+                right: { type: 'number' }, bottom: { type: 'number' },
+              },
+              required: ['left', 'top', 'right', 'bottom'],
+              additionalProperties: false,
+            },
+          },
+          required: ['id', 'region_bounds'],
+          additionalProperties: false,
+        },
+      },
       actions: {
         type: 'array',
         minItems: 1,
