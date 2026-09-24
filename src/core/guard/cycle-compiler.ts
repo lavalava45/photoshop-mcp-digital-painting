@@ -3,7 +3,7 @@ import type { ToolRegistry, ToolResult } from '../tool-registry.js';
 import { DOCUMENT_ID_SCHEMA_EXCLUDES } from '../document-target.js';
 import { compileVisualMicroPlan } from '../visual-microplan-compiler.js';
 import { preflightVisualMicroPlanForExecution } from '../../tools/visual-microplan-tools.js';
-import { parseTexts } from './session-store.js';
+import { isVisual, parseTexts } from './session-store.js';
 import { compileArtisticOperation } from '../artistic-operation-contract.js';
 import { UXP_BRIDGE_REVISION } from './protocol-version.js';
 import {
@@ -20,8 +20,10 @@ import {
   collectOperationContractViolations,
   type GuardOperationContractViolation,
 } from './operation-contract.js';
+import { resolveVisualReviewProfile } from './visual-review-profile.js';
 
 export interface GuardCycleCompilerStore {
+  read?(id: string): Record<string, unknown> | undefined;
   collectClosePreviousErrors(input: Record<string, unknown>): string[];
   compactClosureDefaults?(id: string): {
     previous_report?: Record<string, unknown>;
@@ -30,6 +32,8 @@ export interface GuardCycleCompilerStore {
   compactPassContext?(documentId: number): {
     stage?: string;
     scale?: string;
+    active_problem_id?: string;
+    active_problem_scale?: string;
     brush_roles?: Array<Record<string, unknown>>;
     art_director?: Record<string, unknown> | null;
   };
@@ -249,6 +253,7 @@ function compactObservationToVerdict(value: unknown): Record<string, unknown> | 
       global_readability: text(observation.global_readability) ?? 'unknown',
       primitive_footprint: text(observation.primitive_footprint) ?? 'unknown',
       trend_signals: Array.isArray(observation.trend_signals) ? observation.trend_signals : [],
+      ...(Array.isArray(observation.review_findings) ? { review_findings: observation.review_findings } : {}),
       ...(observation.recognition !== undefined ? { recognition: observation.recognition } : {}),
       ...(observation.planner_task_assessment !== undefined
         ? { planner_task_assessment: observation.planner_task_assessment }
@@ -400,6 +405,12 @@ function compileCompactPass(
     return { violations };
   }
   const problemId = text(raw.problem_id) ?? text(raw.addresses_problem_id) ?? requestKey;
+  const existingRequestRecord = store.read?.(requestKey);
+  const existingReviewProfile = existingRequestRecord?.visual_review_profile
+    && typeof existingRequestRecord.visual_review_profile === 'object'
+    && !Array.isArray(existingRequestRecord.visual_review_profile)
+    ? structuredClone(existingRequestRecord.visual_review_profile) as ReturnType<typeof resolveVisualReviewProfile>
+    : undefined;
 
   const onlyAction = actions.length === 1 ? actions[0] : undefined;
   const onlyTool = onlyAction ? text(onlyAction.tool) : undefined;
@@ -440,6 +451,12 @@ function compileCompactPass(
     const scale = text(raw.scale) ?? text(context.scale);
     const stage = text(raw.stage) ?? text(context.stage);
     const region = text(raw.region) ?? (bootstrap ? 'document-bootstrap' : 'whole-canvas');
+    const significanceMode = text(raw.significance_mode) ?? 'normal';
+    const regionBounds = raw.region_bounds && typeof raw.region_bounds === 'object' && !Array.isArray(raw.region_bounds)
+      ? structuredClone(raw.region_bounds) as Record<string, unknown>
+      : undefined;
+    const directActionClass = text(raw.action_class)?.toUpperCase();
+    const directImpactClass = text(raw.impact_class);
     const directOperation: Record<string, unknown> = {
       request_key: requestKey,
       goal,
@@ -451,7 +468,7 @@ function compileCompactPass(
       region,
       ...(stage ? { stage } : {}),
       ...(scale ? { scale } : {}),
-      ...(text(raw.significance_mode) ? { significance_mode: text(raw.significance_mode) } : {}),
+      ...(text(raw.significance_mode) ? { significance_mode: significanceMode } : {}),
       ...(!bootstrap ? { artistic_commentary: goal } : {}),
       ...(plannerDirectiveId && plannerTaskId ? {
         planner_directive_id: plannerDirectiveId,
@@ -469,6 +486,34 @@ function compileCompactPass(
 
     const visualIntent = text(raw.visual_intent);
     const impactClass = text(raw.impact_class);
+    if (!bootstrap && isVisual(onlyTool)) {
+      const visualReviewProfile = existingReviewProfile ?? resolveVisualReviewProfile({
+        scale,
+        significance_mode: significanceMode,
+        action_class: directActionClass,
+        impact_class: directImpactClass,
+        has_region_bounds: !!regionBounds,
+        open_problem_scale: text(context.active_problem_id) === problemId
+          ? text(context.active_problem_scale)
+          : undefined,
+      });
+      if (visualReviewProfile.require_region && !regionBounds) {
+        violations.push(violation(
+          'next_operation',
+          'compact_review_region_bounds_required',
+          `${visualReviewProfile.level} visual review requires next_pass.region_bounds in source-document pixels`
+        ));
+      }
+      directOperation.visual_review_profile = visualReviewProfile;
+      directOperation.preview_args = {
+        max_dimension_px: visualReviewProfile.whole_max_dimension_px,
+        quality: 8,
+        ...(visualReviewProfile.require_region && regionBounds ? {
+          focus_region: regionBounds,
+          focus_max_dimension_px: visualReviewProfile.focus_max_dimension_px,
+        } : {}),
+      };
+    }
     // Document bootstrap is infrastructure, not an artistic painting method.
     // Callers may accidentally carry stage/intent metadata from the painting
     // request into create/open. Never route bootstrap through method selection:
@@ -711,6 +756,16 @@ function compileCompactPass(
     scale ?? '',
     significanceMode as VisualMicroPlanSignificanceMode
   );
+  const visualReviewProfile = existingReviewProfile ?? resolveVisualReviewProfile({
+    scale,
+    significance_mode: significanceMode,
+    action_class: actionClass,
+    impact_class: impactClass,
+    has_region_bounds: !!regionBounds,
+    open_problem_scale: text(context.active_problem_id) === problemId
+      ? text(context.active_problem_scale)
+      : undefined,
+  });
   if (requiresLocalInspection && !regionBounds) {
     violations.push(violation(
       'next_operation',
@@ -718,18 +773,25 @@ function compileCompactPass(
       'local/small/subtle visual passes require next_pass.region_bounds so Guard can generate matching BEFORE/AFTER focus previews'
     ));
   }
-  if (regionBounds) {
+  if (visualReviewProfile.require_region && !regionBounds && !requiresLocalInspection) {
+    violations.push(violation(
+      'next_operation',
+      'compact_review_region_bounds_required',
+      `${visualReviewProfile.level} visual review requires next_pass.region_bounds in source-document pixels; Guard will not invent a crop center`
+    ));
+  }
+  if (regionBounds && visualReviewProfile.require_region) {
     const firstMutationIndex = actions.findIndex(step => VISUAL_MICROPLAN_MUTATION_TOOLS.has(text(step.tool) ?? ''));
     if (firstMutationIndex >= 0) {
-      if (requiresLocalInspection) {
+      if (visualReviewProfile.require_before_after) {
         actions.splice(firstMutationIndex, 0, {
           id: 'guard_before_preview',
           tool: 'photoshop_get_preview',
           args: {
-            max_dimension_px: 1000,
+            max_dimension_px: visualReviewProfile.whole_max_dimension_px,
             quality: 8,
             focus_region: regionBounds,
-            focus_max_dimension_px: 1200,
+            focus_max_dimension_px: visualReviewProfile.focus_max_dimension_px ?? 1200,
           },
         });
       }
@@ -737,10 +799,10 @@ function compileCompactPass(
         id: 'guard_after_preview',
         tool: 'photoshop_get_preview',
         args: {
-          max_dimension_px: 1000,
+          max_dimension_px: visualReviewProfile.whole_max_dimension_px,
           quality: 8,
           focus_region: regionBounds,
-          focus_max_dimension_px: 1200,
+          focus_max_dimension_px: visualReviewProfile.focus_max_dimension_px ?? 1200,
         },
       });
     }
@@ -755,7 +817,7 @@ function compileCompactPass(
     method_class: methodClass,
     risk,
     expected_visual_delta: goal,
-    verification_envelope: requiresLocalInspection
+    verification_envelope: visualReviewProfile.require_before_after
       ? { mode: 'before_after', min_focus_dimension_px: 800 }
       : { mode: 'after_only' },
     layer_separation_check: layerSeparationCheck,
@@ -792,6 +854,11 @@ function compileCompactPass(
       tool: 'photoshop_execute_visual_microplan',
       args,
       significance_mode: significanceMode,
+      visual_review_profile: visualReviewProfile,
+      preview_args: {
+        max_dimension_px: visualReviewProfile.whole_max_dimension_px,
+        quality: 8,
+      },
       artistic_commentary: goal,
       ...(plannerDirectiveId && plannerTaskId ? {
         planner_directive_id: plannerDirectiveId,

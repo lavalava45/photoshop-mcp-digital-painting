@@ -14,6 +14,7 @@ import {
   VISUAL_MICROPLAN_MAX_LAYER_CREATIONS,
   VISUAL_MICROPLAN_MAX_MUTATIONS,
 } from '../core/visual-microplan.js';
+import { VISUAL_REVIEW_FINDING_KINDS } from '../core/guard/visual-review-profile.js';
 import {
   REFINEMENT_CHECK_STATUSES,
   REFINEMENT_CRITERIA,
@@ -50,9 +51,11 @@ function json(value: unknown, isError = false): ToolResult {
       : role === 'after_crop' ? review.after?.crop
         : role === 'before_crop' ? review.before?.crop
           : role === 'before' ? review.before
-            : undefined;
+            : Array.isArray(review.review_evidence)
+              ? review.review_evidence.find((frame: any) => frame?.role === role)
+              : undefined;
     const candidates = requestedRoles.map((role: string) => ({ role, frame: roleFrame(role) }));
-    const delivered: Array<{ role: string; sha256: string; bytes: number; encoded_bytes: number; content_index: number }> = [];
+    const delivered: Array<{ role: string; sha256: string; bytes: number; encoded_bytes: number; content_index: number; image_delivered_for_review: boolean }> = [];
     const omitted: Array<{ role: string; reason: string; bytes?: number; encoded_bytes?: number; max_total_bytes?: number }> = [];
     let totalBytes = 0;
     let totalEncodedBytes = 0;
@@ -121,6 +124,7 @@ function json(value: unknown, isError = false): ToolResult {
         bytes: bytes.byteLength,
         encoded_bytes: encodedBytes,
         content_index: images.length,
+        image_delivered_for_review: true,
       });
       totalBytes += bytes.byteLength;
       totalEncodedBytes += encodedBytes;
@@ -281,6 +285,31 @@ function compactObservationSchema(): Record<string, unknown> {
       global_readability: { type: 'string', enum: ['improved', 'stable', 'degraded', 'unknown'] },
       primitive_footprint: { type: 'string', enum: ['none', 'acceptable', 'suspect', 'unknown'] },
       trend_signals: { type: 'array', items: { type: 'string' } },
+      review_findings: {
+        type: 'array',
+        maxItems: 6,
+        description: 'Optional structured local review findings. OBJECT/MICRO kinds require exact source-document region_bounds; Guard may return read-only crop evidence for the same pending operation before accepting visual closure.',
+        items: {
+          type: 'object',
+          properties: {
+            kind: { type: 'string', enum: [...VISUAL_REVIEW_FINDING_KINDS] },
+            region_bounds: {
+              type: 'object',
+              properties: {
+                left: { type: 'number' },
+                top: { type: 'number' },
+                right: { type: 'number' },
+                bottom: { type: 'number' },
+              },
+              required: ['left', 'top', 'right', 'bottom'],
+              additionalProperties: false,
+            },
+            severity: { type: 'string', enum: ['must-fix', 'should-fix', 'optional'] },
+          },
+          required: ['kind'],
+          additionalProperties: false,
+        },
+      },
       recognition: {
         type: 'object',
         properties: {
@@ -323,7 +352,7 @@ function compactObservationSchema(): Record<string, unknown> {
       preservation_facts: { type: 'array', items: { type: 'string' } },
       independent_region: { type: 'boolean' },
     },
-    description: 'Compact visual closure. Supply observed + target, with optional regression/action. target is operation-local; planner_task_assessment is separate and optional.',
+    description: 'Compact visual closure. Supply observed + target, with optional regression/action and structured review_findings. A finding may trigger read-only crop enrichment for the same operation before closure. target is operation-local; planner_task_assessment is separate and optional.',
     additionalProperties: false,
   };
 }

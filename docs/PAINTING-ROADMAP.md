@@ -12,6 +12,12 @@ ExtendScript/COM fallback that may be selected only before any UXP dispatch. Do 
 retired controller/daemon or raw-script bypass, and never add cross-backend replay after UXP
 dispatch/claim/uncertainty/failure.
 
+As of 2026-09-24, deterministic COMPOSITION / OBJECT / MICRO review selection and same-operation
+read-only crop escalation are baseline compact-v2 Guard behavior rather than a remaining roadmap
+item. Future roadmap work must preserve whole-frame context, source-document crop coordinates,
+existing local BEFORE/AFTER significance evidence, stale-evidence rejection and no-mutation-replay
+semantics. The implementation/live evidence belongs in `CHANGELOG.md` and the acceptance matrix.
+
 ## Priority order
 
 The remaining work should be executed in this order:
@@ -697,10 +703,12 @@ Every implemented item should include, as applicable:
 2. fail-closed or explicitly bounded semantics;
 3. targeted regression tests for machine behavior;
 4. no resurrection of retired public contracts or ExtendScript/COM production dispatch;
-5. build/typecheck/lint/policy verification appropriate to the touched area;
-6. real Photoshop/CoS host acceptance when the claim depends on real host or Photoshop behavior;
-7. human-labelled evidence when the claim is perceptual/artistic/calibration-related;
-8. updates to this roadmap, `CHANGELOG.md` and canonical acceptance docs rather than accumulating
+5. preservation of the multiscale visual-review barrier: whole-frame context at every review level,
+   exact source-coordinate escalation crops, and zero artistic mutation replay during evidence enrichment;
+6. build/typecheck/lint/policy verification appropriate to the touched area;
+7. real Photoshop/CoS host acceptance when the claim depends on real host or Photoshop behavior;
+8. human-labelled evidence when the claim is perceptual/artistic/calibration-related;
+9. updates to this roadmap, `CHANGELOG.md` and canonical acceptance docs rather than accumulating
    another temporary completion log.
 
 Tool success, comparison SHA, pixel delta, layer creation and mocked critic verdicts are never, by

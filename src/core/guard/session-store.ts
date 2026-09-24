@@ -38,6 +38,16 @@ import {
   assertCurrentRuntimeStateDirectory,
   runtimeStateSchemaError,
 } from './runtime-state.js';
+import {
+  reviewLevelForFinding,
+  VISUAL_REVIEW_FINDING_KINDS,
+} from './visual-review-profile.js';
+import {
+  normalizeRegion,
+  overlapRatioAgainstSmaller,
+  padRegion,
+  regionContains,
+} from './visual-review-region.js';
 
 export const ROUTE = 'MCP host -> embedded Photoshop Guard -> this fork/dist/index.js -> Photoshop';
 const READS = new Set([
@@ -2914,6 +2924,9 @@ export class SessionStore {
       if (pendingClosure.visual && !pendingClosure.preview) {
         return `obtain recovery/required preview for ${pendingClosure.id} before compact finalization`;
       }
+      if (pendingClosure.pending_review) {
+        return `inspect pending multiscale review evidence for ${pendingClosure.id}, then call photoshop_guard_cycle_auto with previous_operation_id=${pendingClosure.id} + previous_observation; do not replay the artistic mutation`;
+      }
       return 'call photoshop_guard_cycle_auto once with previous_operation_id=' + pendingClosure.id
         + ' + previous_observation'
         + '; include next_pass to continue or omit it to finalize the last pass';
@@ -3001,7 +3014,7 @@ export class SessionStore {
       'planner_directive_id', 'planner_task_id', 'painter_scope', 'change_domains',
       'affected_relations', 'affected_qualities', 'preservation_facts',
       'independent_region', 'addresses_primary_mismatch', 'addresses_problem_id',
-      'preview_args', 'artistic_commentary',
+      'preview_args', 'visual_review_profile', 'artistic_commentary',
     ]);
 
     if (!stateOnly) {
@@ -3634,6 +3647,226 @@ export class SessionStore {
       mode: significanceModeOf(record),
     });
   }
+  normalizeReviewFindings(findings) {
+    if (findings === undefined || findings === null) return [];
+    if (!Array.isArray(findings)) throw new Error('review_findings must be an array');
+    if (findings.length > 6) throw new Error('review_findings may contain at most 6 findings');
+    const allowed = new Set(VISUAL_REVIEW_FINDING_KINDS);
+    const severityRank = { 'must-fix': 0, 'should-fix': 1, optional: 2 };
+    const levelRank = { composition: 0, object: 1, micro: 2 };
+    const normalized = findings.map((finding, index) => {
+      if (!finding || typeof finding !== 'object' || Array.isArray(finding)) {
+        throw new Error(`review_findings[${index}] must be an object`);
+      }
+      const kind = textOrUndefined(finding.kind);
+      if (!kind || !allowed.has(kind)) throw new Error(`review_findings[${index}].kind is unsupported`);
+      const level = reviewLevelForFinding(kind);
+      const severity = textOrUndefined(finding.severity) ?? 'should-fix';
+      if (!(severity in severityRank)) {
+        throw new Error(`review_findings[${index}].severity must be must-fix|should-fix|optional`);
+      }
+      let requestedRegion;
+      if (finding.region_bounds !== undefined) {
+        requestedRegion = normalizeRegion(finding.region_bounds);
+      }
+      if (level !== 'composition' && !requestedRegion) {
+        throw new Error(`review_findings[${index}] kind=${kind} requires exact source-document region_bounds`);
+      }
+      return {
+        kind,
+        level,
+        severity,
+        ...(requestedRegion ? { requested_region: requestedRegion } : {}),
+        source_index: index,
+      };
+    });
+    return normalized.sort((a, b) => {
+      const severityDelta = severityRank[a.severity] - severityRank[b.severity];
+      if (severityDelta !== 0) return severityDelta;
+      const optionalA = a.severity === 'optional' ? 1 : 0;
+      const optionalB = b.severity === 'optional' ? 1 : 0;
+      if (optionalA !== optionalB) return optionalA - optionalB;
+      const levelDelta = levelRank[b.level] - levelRank[a.level];
+      return levelDelta !== 0 ? levelDelta : a.source_index - b.source_index;
+    });
+  }
+  reviewEvidenceSatisfies(record, requirement) {
+    if (requirement.level === 'composition') return true;
+    const documentId = record.args?.document_id;
+    const wholeSha = record.preview?.sha256;
+    const requested = requirement.requested_region;
+    if (!requested || !wholeSha) return false;
+    const levelRank = { composition: 0, object: 1, micro: 2 };
+    const initialProfileLevel = record.visual_review_profile?.level ?? 'composition';
+    const initialRegion = record.preview?.focus?.region;
+    if (
+      initialRegion
+      && levelRank[initialProfileLevel] >= levelRank[requirement.level]
+      && regionContains(initialRegion, requested)
+    ) return true;
+    return (record.review_evidence ?? []).some(evidence =>
+      evidence.document_id === documentId
+      && evidence.bound_whole_sha256 === wholeSha
+      && levelRank[evidence.review_level] >= levelRank[requirement.level]
+      && evidence.effective_region
+      && regionContains(evidence.effective_region, requested)
+      && typeof evidence.sha256 === 'string'
+      && typeof evidence.materialized_path === 'string'
+    );
+  }
+  planReviewEscalation(id, findings = [], options = {}) {
+    const record = this.read(id);
+    if (!record) throw new Error(`Unknown previous_operation_id: ${id}`);
+    if (!record.visual || !record.preview) {
+      return { required: false, operation_id: id, captures: [], requirements: [] };
+    }
+    const documentId = record.args?.document_id;
+    if (!Number.isSafeInteger(documentId) || documentId <= 0) {
+      throw new Error('Review escalation requires a positive pinned document_id');
+    }
+    const canvasWidth = Number(record.preview.canvas_width);
+    const canvasHeight = Number(record.preview.canvas_height);
+    const incoming = this.normalizeReviewFindings(findings);
+    const durable = Array.isArray(record.pending_review?.requirements)
+      ? record.pending_review.requirements.map((item, index) => ({
+          ...item,
+          source_index: Number.isSafeInteger(item.source_index) ? item.source_index : 100 + index,
+        }))
+      : [];
+    const all = [...durable, ...incoming];
+    const merged = [];
+    for (const requirement of all) {
+      if (requirement.level === 'composition') continue;
+      const requested = requirement.requested_region;
+      const duplicateIndex = merged.findIndex(existing =>
+        existing.requested_region
+        && requested
+        && overlapRatioAgainstSmaller(existing.requested_region, requested) >= 0.6
+      );
+      if (duplicateIndex < 0) {
+        merged.push({ ...requirement });
+        continue;
+      }
+      const current = merged[duplicateIndex];
+      const levelRank = { object: 1, micro: 2 };
+      const severityRank = { 'must-fix': 0, 'should-fix': 1, optional: 2 };
+      if (levelRank[requirement.level] > levelRank[current.level]) {
+        current.level = requirement.level;
+        current.kind = requirement.kind;
+        current.requested_region = requested;
+      }
+      if (severityRank[requirement.severity] < severityRank[current.severity]) {
+        current.severity = requirement.severity;
+      }
+    }
+    const unresolved = merged.filter(requirement => !this.reviewEvidenceSatisfies(record, requirement));
+    const captures = unresolved.slice(0, 2).map((requirement) => {
+      if (!Number.isFinite(canvasWidth) || canvasWidth <= 0 || !Number.isFinite(canvasHeight) || canvasHeight <= 0) {
+        throw new Error('Review escalation requires current preview canvas dimensions');
+      }
+      const regions = padRegion(
+        requirement.requested_region,
+        { width: canvasWidth, height: canvasHeight },
+        requirement.level
+      );
+      return {
+        ...requirement,
+        ...regions,
+        role: `${requirement.level}_after_${Number(requirement.source_index) + 1}`,
+        focus_max_dimension_px: requirement.level === 'micro' ? 1600 : 1200,
+      };
+    });
+    const requirements = merged.map(requirement => ({
+      ...requirement,
+      status: this.reviewEvidenceSatisfies(record, requirement) ? 'captured' : 'pending',
+    }));
+    const required = captures.length > 0;
+    const plan = {
+      required,
+      operation_id: id,
+      document_id: documentId,
+      bound_whole_sha256: record.preview.sha256,
+      required_review_level: requirements.some(item => item.level === 'micro') ? 'micro'
+        : requirements.some(item => item.level === 'object') ? 'object' : 'composition',
+      captures,
+      requirements,
+      remaining_after_round: Math.max(0, unresolved.length - captures.length),
+    };
+    if (options.persist === true && (requirements.length || record.pending_review)) {
+      record.pending_review = {
+        operation_id: id,
+        document_id: documentId,
+        bound_whole_sha256: record.preview.sha256,
+        required_review_level: plan.required_review_level,
+        requirements,
+        state: required ? 'capturing' : 'awaiting_observation',
+        updated_at: new Date().toISOString(),
+      };
+      this.write(record);
+    }
+    return plan;
+  }
+  attachReviewEvidence(id, capture, preview) {
+    const record = this.read(id);
+    if (!record?.visual || !record.preview) throw new Error(`Visual operation ${id} is unavailable for review evidence`);
+    const documentId = record.args?.document_id;
+    if (preview?.document_id !== undefined && preview.document_id !== documentId) {
+      throw new Error(`Review evidence document_id ${preview.document_id} does not match pinned document ${documentId}`);
+    }
+    if (preview?.sha256 !== record.preview.sha256) {
+      throw new Error('Review evidence is stale: current whole-frame SHA changed during read-only escalation');
+    }
+    const focus = preview?.focus;
+    if (!focus?.sha256 || !focus?.materialized_path || !focus?.region) {
+      throw new Error('Review escalation did not return a materialized focus crop');
+    }
+    const normalizedEffective = normalizeRegion(capture.effective_region);
+    const actual = normalizeRegion(focus.region);
+    if (JSON.stringify(actual) !== JSON.stringify(normalizedEffective)) {
+      throw new Error('Review evidence crop region does not match the requested effective source-document region');
+    }
+    const evidence = {
+      role: capture.role,
+      finding_kind: capture.kind,
+      severity: capture.severity,
+      review_level: capture.level,
+      requested_region: normalizeRegion(capture.requested_region),
+      effective_region: actual,
+      document_id: documentId,
+      bound_whole_sha256: record.preview.sha256,
+      sha256: focus.sha256,
+      materialized_path: focus.materialized_path,
+      mime_type: focus.mime_type ?? 'image/jpeg',
+      width: focus.width ?? null,
+      height: focus.height ?? null,
+      scale: {
+        x: focus.scale_x ?? null,
+        y: focus.scale_y ?? null,
+      },
+      materialized_for_review: true,
+      captured_at: new Date().toISOString(),
+    };
+    record.review_evidence ??= [];
+    record.review_evidence = record.review_evidence.filter(existing =>
+      !(existing.bound_whole_sha256 === evidence.bound_whole_sha256
+        && existing.review_level === evidence.review_level
+        && JSON.stringify(existing.requested_region) === JSON.stringify(evidence.requested_region))
+    );
+    record.review_evidence.push(evidence);
+    if (record.pending_review) {
+      record.pending_review.requirements = (record.pending_review.requirements ?? []).map(requirement => ({
+        ...requirement,
+        status: this.reviewEvidenceSatisfies({ ...record, review_evidence: record.review_evidence }, requirement)
+          ? 'captured' : 'pending',
+      }));
+      record.pending_review.state = record.pending_review.requirements.every(item => item.status === 'captured')
+        ? 'awaiting_observation'
+        : 'pending_more_evidence';
+      record.pending_review.updated_at = new Date().toISOString();
+    }
+    this.write(record);
+    return evidence;
+  }
   compactClosureDefaults(id) {
     const record = this.read(id);
     if (!record) return {};
@@ -3668,6 +3901,8 @@ export class SessionStore {
     return {
       stage: textOrUndefined(state.current_stage),
       scale: textOrUndefined(state.active_scale),
+      active_problem_id: textOrUndefined(state.active_problem?.problem_id),
+      active_problem_scale: textOrUndefined(state.active_problem?.scale),
       brush_roles: Array.isArray(brush?.roles)
         ? brush.roles.map(role => ({
             role_id: role.role_id,
@@ -3764,14 +3999,17 @@ export class SessionStore {
         errors.push(`previous_visual_verdict is required to close visual operation ${id}`);
       } else if (record.preview) {
         try {
-          const verdictInput = {
-            id,
-            preview_id: id,
-            sha256: record.preview.sha256,
-            ...verdict,
-          };
-          const validated = this.validateVerdictInput(verdictInput);
-          this.cacheValidatedVerdict(verdictInput, validated);
+          const escalation = this.planReviewEscalation(id, verdict.review_findings ?? [], { persist: false });
+          if (!escalation.required) {
+            const verdictInput = {
+              id,
+              preview_id: id,
+              sha256: record.preview.sha256,
+              ...verdict,
+            };
+            const validated = this.validateVerdictInput(verdictInput);
+            this.cacheValidatedVerdict(verdictInput, validated);
+          }
         } catch (error) {
           errors.push(`previous_visual_verdict invalid for ${id}: ${String(error?.message ?? error)}`);
         }
@@ -3838,6 +4076,10 @@ export class SessionStore {
         throw new Error(`previous_visual_verdict is required to close visual operation ${id}`);
       }
       if (!refreshed.preview) throw new Error(`Visual operation ${id} has no attached preview to classify`);
+      const escalation = this.planReviewEscalation(id, input.previous_visual_verdict.review_findings ?? [], { persist: false });
+      if (escalation.required) {
+        throw new Error(`Visual operation ${id} requires read-only review evidence before verdict closure`);
+      }
       this.verdict({
         id,
         preview_id: id,
@@ -4107,6 +4349,7 @@ export class SessionStore {
       },
       at: new Date().toISOString(),
     };
+    delete record.pending_review;
     this.write(record);
     const documentId = record.args?.document_id;
     if (Number.isSafeInteger(documentId) && documentId > 0) {
@@ -4433,6 +4676,12 @@ export class SessionStore {
           scale_x: r.preview.focus.scale_x ?? null,
           scale_y: r.preview.focus.scale_y ?? null,
         } : null,
+        ...(r.visual_review_profile ? { review_profile: r.visual_review_profile } : {}),
+        ...(r.pending_review ? { review_state: r.pending_review } : {}),
+        ...(Array.isArray(r.review_evidence)
+          && r.review_evidence.some(item => item.bound_whole_sha256 === r.preview.sha256)
+          ? { review_evidence: r.review_evidence.filter(item => item.bound_whole_sha256 === r.preview.sha256) }
+          : {}),
       }));
     const activeJobs = projectionContext.activeJobs;
     const documents = Object.fromEntries(documentIds.map(id => {
@@ -4785,6 +5034,12 @@ export class SessionStore {
           scale_x: pendingVisualVerdict.preview.focus.scale_x ?? null,
           scale_y: pendingVisualVerdict.preview.focus.scale_y ?? null,
         } : null,
+        ...(pendingVisualVerdict.visual_review_profile ? { review_profile: pendingVisualVerdict.visual_review_profile } : {}),
+        ...(pendingVisualVerdict.pending_review ? { review_state: pendingVisualVerdict.pending_review } : {}),
+        ...(Array.isArray(pendingVisualVerdict.review_evidence)
+          && pendingVisualVerdict.review_evidence.some(item => item.bound_whole_sha256 === pendingVisualVerdict.preview.sha256)
+          ? { review_evidence: pendingVisualVerdict.review_evidence.filter(item => item.bound_whole_sha256 === pendingVisualVerdict.preview.sha256) }
+          : {}),
       } : null,
       active_job: activeJob,
       continuation_watch: document?.continuation_watch ?? null,

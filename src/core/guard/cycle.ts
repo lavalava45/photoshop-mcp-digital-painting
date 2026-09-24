@@ -170,6 +170,20 @@ export function visualReviewPackage(record, significance) {
     : (record.baseline_preview_source_operation_id ?? null);
   const after = previewReviewFrame(record.preview, 'after', record.id);
   const before = previewReviewFrame(beforePreview, 'before', beforeSource);
+  const initialRequestedRegion = record.args?.region_bounds ?? record.preview_args?.focus_region;
+  if (after?.crop && initialRequestedRegion) {
+    after.crop.requested_region = initialRequestedRegion;
+    after.crop.effective_region = after.crop.region;
+  }
+  if (before?.crop && initialRequestedRegion) {
+    before.crop.requested_region = initialRequestedRegion;
+    before.crop.effective_region = before.crop.region;
+  }
+  const reviewEvidence = Array.isArray(record.review_evidence)
+    ? record.review_evidence
+        .filter(frame => frame?.bound_whole_sha256 === record.preview.sha256)
+        .map(frame => ({ ...frame }))
+    : [];
   const beforeDocumentMatched = !!before && documentId !== null && before.document_id === documentId;
   const afterDocumentMatched = !!after && documentId !== null && after.document_id === documentId;
   const wholeComparable = beforeDocumentMatched && afterDocumentMatched && !!significance?.global;
@@ -181,6 +195,9 @@ export function visualReviewPackage(record, significance) {
     execution_observed: record.phase === 'completed' && !record.failed,
     visual_observation: record.verdict ? 'recorded' : 'required',
     goal_confirmation: record.verdict?.goal_assessment?.status ?? (record.verdict ? 'legacy_or_unknown' : 'pending_verdict'),
+    review_profile: record.visual_review_profile ?? null,
+    review_state: record.pending_review ?? null,
+    review_evidence: reviewEvidence,
     after,
     before,
     comparison: {
@@ -200,6 +217,7 @@ export function visualReviewPackage(record, significance) {
     delivery_policy: {
       preferred_content_order: [
         'after',
+        ...reviewEvidence.map(frame => frame.role),
         ...(after?.crop ? ['after_crop'] : []),
         ...(record.before_preview && before?.crop && focusComparable ? ['before_crop'] : []),
         ...(record.before_preview && before && wholeComparable ? ['before'] : []),
@@ -222,6 +240,7 @@ export function cycleEnvelope(store, record, { replay = false, closed_previous }
   const terminalBootstrapFailure = state === 'terminal_bootstrap_failed';
   const bootstrap = record.tool === 'photoshop_create_document' || record.tool === 'photoshop_open_image';
   const resultBody = parseTexts(record.result).find(body => body?.execution === 'not-executed');
+  const pendingReview = record.pending_review;
   const nextRequiredAction = terminalNotExecuted
     ? (typeof resultBody?.next_required_action === 'string'
         ? resultBody.next_required_action
@@ -235,7 +254,9 @@ export function cycleEnvelope(store, record, { replay = false, closed_previous }
     : state === 'awaiting_preview_recovery'
       ? `Obtain and attach a recovery preview for operation ${record.id}, then inspect/classify it before any new visual mutation.`
     : state === 'awaiting_visual_review'
-        ? 'Inspect the visual_review image content carried by this response (use materialized_path only as a recovery fallback), then call photoshop_guard_cycle_auto once with previous_operation_id + previous_observation. Include next_pass to continue, or omit it to finalize the last pass. Guard derives the technical report and exact durable receipt acknowledgement internally.'
+        ? pendingReview
+          ? `Inspect the escalated visual_review crop evidence for operation ${record.id}, then call photoshop_guard_cycle_auto again with previous_operation_id=${record.id} + previous_observation. This is the same artistic operation; do not replay its mutation. Include next_pass only when resubmitting the reviewed observation.`
+          : 'Inspect the visual_review image content carried by this response (use materialized_path only as a recovery fallback), then call photoshop_guard_cycle_auto once with previous_operation_id + previous_observation. Include next_pass to continue, or omit it to finalize the last pass. Guard derives the technical report and exact durable receipt acknowledgement internally.'
         : 'Continue through photoshop_guard_cycle_auto. For a completed non-visual prior operation, Guard-owned technical closure stays behind the compact facade; do not switch to standalone report/ack/verdict tools or a next_operation payload.';
   const significance = store.visualSignificance(record.id);
   const visualReview = visualReviewPackage(record, significance);
@@ -377,7 +398,8 @@ export async function executeLogicalOperation({
       && documentId > 0
       && existingComparisonPreview.document_id === documentId;
     const needsInitialBaseline = visualOperation && !comparisonPreviewPinnedToDocument;
-    const needsFreshSubtleBaseline = standaloneVisual && input.significance_mode === 'subtle_local';
+    const needsFreshSubtleBaseline = standaloneVisual
+      && (input.significance_mode === 'subtle_local' || input.visual_review_profile?.require_before_after === true);
     const controllerShouldCaptureBefore =
       !microplanHasExplicitBeforePreview(input) && (needsInitialBaseline || needsFreshSubtleBaseline);
 

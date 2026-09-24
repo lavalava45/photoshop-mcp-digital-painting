@@ -176,6 +176,9 @@ The Guard owns:
 - whether a mutation is allowed to start;
 - whether an uncertain mutation may be retried;
 - whether a required preview exists;
+- which minimum spatial review level (COMPOSITION / OBJECT / MICRO) is required for the pass;
+- whether exact local crop evidence requested by a structured finding has been delivered for the
+  same operation/document/whole-frame identity;
 - whether the exact preview frame was classified;
 - whether a visual problem is accepted/corrected/rolled back;
 - whether postconditions have been checked;
@@ -240,6 +243,31 @@ The controller reports capabilities rather than requiring a particular host
 version. Current capability reporting distinguishes required Guard guarantees from
 optional host guarantees.
 
+### `photoshop.guard.review_escalation.v1`
+
+Multiscale review is an additive compact-v2 Guard capability, not a second workflow. The review
+profile is derived from durable/compiled facts such as scale, significance mode, action/impact class,
+bounded region and same-problem state. Whole-frame evidence remains mandatory at every level.
+
+`previous_observation.review_findings[]` is optional and subject-agnostic. OBJECT/MICRO finding kinds
+must carry exact source-document `region_bounds`. If adequate current evidence is missing, the Guard:
+
+1. keeps the original visual operation open;
+2. records durable pending review requirements bound to the operation id, pinned document id and
+   current whole-frame SHA;
+3. performs only read-only `photoshop_get_preview` focus captures, at most two new crops per round;
+4. returns the crops through the normal `visual_review` image-delivery path;
+5. blocks verdict closure and the next visual mutation until a subsequent observation can classify
+   the enriched evidence.
+
+The mutation is never replayed and escalation never receives a new artistic operation id. Status and
+resume project the same pending review level, requested/effective regions and crop SHA/path after a
+process restart. Crop materialization/path identity is evidence provenance only; the delivery metadata
+uses `image_delivered_for_review` and does not claim that the model interpreted the image correctly.
+
+Because `review_findings` is optional and all prior compact requests remain valid, this is explicitly
+an additive `photoshop.guard.compact.v2` schema change; no compact protocol revision is required.
+
 ## 6. Postcondition verification
 
 The Guard must not equate an executor response of `success` with proof that the
@@ -253,6 +281,8 @@ Current verified checks include:
 - uncertain dispatched work cannot be blindly replayed;
 - state/preview evidence used for reconciliation must be fresh and belong to the
   same pinned document.
+- escalated crop evidence is stale when its bound whole-frame SHA/document changes, and a changed
+  requested region requires fresh evidence.
 
 Future Guard work should add tool-specific state readback where the result is
 machine-verifiable, for example layer opacity/name/state or other exact Photoshop

@@ -67,7 +67,16 @@ export function guardCapabilities(env = process.env) {
         optional_previous_observation: [
           'regression', 'action', 'planner_task_assessment',
           'affected_relations', 'affected_qualities', 'preservation_facts', 'independent_region',
+          'review_findings',
         ],
+        multiscale_visual_review: {
+          levels: ['composition', 'object', 'micro'],
+          whole_frame_always_required: true,
+          structured_review_findings: true,
+          read_only_crop_escalation_same_operation: true,
+          review_findings_additive_to_compact_v2: true,
+          max_new_escalation_crops_per_round: 2,
+        },
         outcome_scopes: ['execution_outcome', 'artistic_outcome', 'global_brief_outcome'],
         global_claim_evidence: ['active_contract_revision', 'exact_frame_sha256', 'authorized_critic_result'],
         machine_comparison_degrades_independently: true,

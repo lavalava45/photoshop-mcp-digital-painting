@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- 2026-09-24: add deterministic multiscale Guard visual review with COMPOSITION / OBJECT / MICRO
+  profiles on the canonical compact-v2 path. Whole-frame context remains mandatory; bounded passes
+  prefetch exact source-document crops at the minimum justified scale; existing local/detail
+  BEFORE/AFTER significance evidence is preserved. Optional structured `review_findings` can now
+  trigger bounded read-only crop escalation for the **same** pending operation without replaying the
+  artistic mutation or dispatching the next pass. Requested/effective regions, pinned document id,
+  bound whole-frame SHA and crop SHA/path are durable across status/resume; wrong-document, stale-SHA
+  and changed-region evidence fail closed. Capability reporting marks `review_findings` as additive
+  to `photoshop.guard.compact.v2`. Focused resolver/coordinate/state tests plus the embedded Guard
+  integration prove same-operation escalation, max-two crop fan-out, deterministic dedupe/priority,
+  zero extra mutation dispatch during escalation and closure only after the enriched evidence is
+  observed. Real Photoshop/CoS acceptance on 2026-09-24 also verified COMPOSITION whole-frame-only
+  review, bounded OBJECT crop delivery, same-operation MICRO escalation with pinned whole/crop SHA
+  provenance, and no second Photoshop history step during read-only evidence enrichment.
+
 - Add Task 23 progressive form refinement / de-block-in as a durable, subject-agnostic stage-exit
   contract in the existing Art Director/Guard state. refinement_check records exact current-frame
   evidence for major-form modelling, secondary forms, edge hierarchy, material/light response,

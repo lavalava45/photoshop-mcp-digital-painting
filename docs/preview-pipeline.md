@@ -60,6 +60,37 @@ and removes Photoshop's temporary files.
 `materialize_path` must be an absolute path. Missing parent directories are
 created automatically. The tool does not modify the source document.
 
+## Guard multiscale visual review
+
+The compact-v2 Guard now resolves a deterministic minimum review profile before a visual pass:
+
+- **COMPOSITION** — mandatory whole-frame context, Guard target long edge 1600 px, no crop tax;
+- **OBJECT** — the same whole-frame context plus an exact source-document focus crop, target long
+  edge 1200 px;
+- **MICRO** — whole-frame context plus exact local evidence at target long edge 1600 px.
+
+The standalone `photoshop_get_preview` defaults above are unchanged. The 1600/1200 values are Guard
+policy for artistic review, not new global tool defaults. Existing local/detail VisualMicroPlan
+significance guarantees remain stronger where applicable: small/local/detail/micro work and
+`subtle_local` continue to use matching BEFORE/AFTER focus evidence rather than weakening the
+existing pixel-change contract.
+
+All review regions are expressed in source Photoshop document pixels. Guard preserves the semantic
+`requested_region` separately from the actual `effective_region`. Read-only escalation crops use a
+deterministic context pad (OBJECT 12%, minimum 24 px per side; MICRO 6%, minimum 12 px per side),
+clamped only at canvas edges. Preview downscaling never rewrites the source coordinates.
+
+If an overview/object review discovers a structured local problem that was not already covered by
+adequate evidence, compact `previous_observation.review_findings[]` may provide an exact region. The
+Guard then keeps the **same artistic operation pending**, captures at most two required crops in that
+review round, binds them to the same document id and whole-frame SHA, returns those image blocks, and
+asks for another observation for the same `previous_operation_id`. It does not replay the mutation or
+dispatch `next_pass` while that evidence debt remains open. A changed whole-frame SHA, document id or
+requested region requires fresh crop evidence.
+
+This extension is additive to `photoshop.guard.compact.v2`; it does not introduce a second preview
+renderer, controller, state store or closure protocol.
+
 ## Retiring direct-stdio preview helper
 
 The repository includes a small direct-stdio helper:

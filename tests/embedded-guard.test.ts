@@ -3849,6 +3849,191 @@ describe('embedded Photoshop Guard', () => {
     expect(secondBody.visual_review.delivery.delivered.map((item: any) => item.role)).toEqual(['after', 'after_crop']);
   });
 
+  it('escalates a structured local finding with read-only crop evidence for the same operation before allowing the next mutation', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-multiscale-escalation-'));
+    dirs.push(dir);
+    const { registry } = fakeRegistry(dir);
+    const before = jpegMeta(dir, 'multiscale-before.jpg', 25);
+    const after = jpegMeta(dir, 'multiscale-after.jpg', 180);
+    const micro = jpegMeta(dir, 'multiscale-micro.jpg', 205);
+    let previewCalls = 0;
+    let mutationCalls = 0;
+
+    registry.register('photoshop_get_preview', {
+      tool: {
+        name: 'photoshop_get_preview',
+        description: 'multiscale review preview fixture',
+        inputSchema: { type: 'object', properties: { document_id: { type: 'number' } } },
+      },
+      handler: async (args: any) => {
+        previewCalls += 1;
+        const whole = previewCalls === 1 ? before : after;
+        const focus = args.focus_region ? {
+          ...micro,
+          region: args.focus_region,
+          scale_x: 1,
+          scale_y: 1,
+        } : undefined;
+        return {
+          content: [{ type: 'text', text: JSON.stringify({
+            ...whole,
+            canvas_width: 400,
+            canvas_height: 300,
+            scale_x: whole.width / 400,
+            scale_y: whole.height / 300,
+            ...(focus ? { focus } : {}),
+          }) }],
+        };
+      },
+    });
+    registry.register('photoshop_set_layer_opacity', {
+      tool: {
+        name: 'photoshop_set_layer_opacity',
+        description: 'multiscale review mutation fixture',
+        inputSchema: {
+          type: 'object',
+          properties: { document_id: { type: 'number' }, opacity: { type: 'number' } },
+          required: ['opacity'],
+        },
+      },
+      handler: async () => {
+        mutationCalls += 1;
+        return { content: [{ type: 'text', text: JSON.stringify({ ok: true, summary: 'opacity changed' }) }] };
+      },
+    });
+
+    const runtime = runtimeFor(registry, dir);
+    runtime.artRun({
+      document_id: 42,
+      process_dir: 'processes/multiscale-review-process/run-01',
+      commentary_mode: 'technical',
+      painting_profile: 'simple_graphic',
+    });
+    const cycleTool = createGuardTools(runtime).find(def => def.tool.name === 'photoshop_guard_cycle_auto')!;
+
+    const firstPublicResult = await cycleTool.handler({
+      next_pass: {
+        request_key: 'multiscale-source-operation',
+        problem_id: 'global-tone-pass',
+        document_id: 42,
+        goal: 'Make one global visual change before local review',
+        stage: 'FORM',
+        scale: 'global',
+        actions: [{ id: 'opacity-pass', tool: 'photoshop_set_layer_opacity', args: { opacity: 70 } }],
+      },
+    });
+    const firstBody = JSON.parse((firstPublicResult.content[0] as any).text);
+    expect(firstBody.visual_review.review_profile).toMatchObject({ level: 'composition', require_region: false });
+    expect(mutationCalls).toBe(1);
+    expect(previewCalls).toBe(2);
+
+    const requested = { left: 120, top: 80, right: 180, bottom: 140 };
+    const escalatedPublicResult = await cycleTool.handler({
+      previous_operation_id: 'multiscale-source-operation',
+      previous_observation: {
+        observed: 'A small edge transition remains too uncertain to judge from the whole-frame overview.',
+        target: 'unresolved',
+        action: 'correct',
+        review_findings: [{
+          kind: 'edge_transition',
+          region_bounds: requested,
+          severity: 'must-fix',
+        }],
+      },
+      next_pass: {
+        request_key: 'multiscale-deferred-next',
+        problem_id: 'deferred-followup',
+        document_id: 42,
+        goal: 'This mutation must remain deferred until the original review closes',
+        stage: 'FORM',
+        scale: 'global',
+        actions: [{ id: 'deferred-opacity', tool: 'photoshop_set_layer_opacity', args: { opacity: 60 } }],
+      },
+    });
+    const escalatedBody = JSON.parse((escalatedPublicResult.content[0] as any).text);
+
+    expect(mutationCalls).toBe(1);
+    expect(previewCalls).toBe(3);
+    expect(escalatedBody.execution.operation_id).toBe('multiscale-source-operation');
+    expect(escalatedBody.closed_previous).toEqual({ closed: false });
+    expect(escalatedBody.review_escalation).toMatchObject({
+      operation_id: 'multiscale-source-operation',
+      read_only: true,
+      mutation_replayed: false,
+      next_mutation_dispatched: false,
+      captured_roles: ['micro_after_1'],
+    });
+    expect(escalatedBody.visual_review.review_state).toMatchObject({
+      operation_id: 'multiscale-source-operation',
+      required_review_level: 'micro',
+      state: 'awaiting_observation',
+    });
+    expect(escalatedBody.visual_review.review_evidence).toHaveLength(1);
+    expect(escalatedBody.visual_review.review_evidence[0]).toMatchObject({
+      role: 'micro_after_1',
+      finding_kind: 'edge_transition',
+      review_level: 'micro',
+      requested_region: requested,
+      document_id: 42,
+      bound_whole_sha256: after.sha256,
+      sha256: micro.sha256,
+      materialized_for_review: true,
+    });
+    expect(escalatedBody.visual_review.review_evidence[0].effective_region).toEqual({
+      left: 108,
+      top: 68,
+      right: 192,
+      bottom: 152,
+    });
+    expect(escalatedBody.visual_review.delivery.delivered).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'after', sha256: after.sha256, image_delivered_for_review: true }),
+      expect.objectContaining({ role: 'micro_after_1', sha256: micro.sha256, image_delivered_for_review: true }),
+    ]));
+    expect(runtime.store.read('multiscale-source-operation')?.verdict).toBeUndefined();
+
+    const status = runtime.store.statusCompact() as any;
+    const pending = status.pending_visual_verdict_details.find((item: any) => item.operation_id === 'multiscale-source-operation');
+    expect(pending.review_state.required_review_level).toBe('micro');
+    expect(pending.review_evidence[0]).toMatchObject({
+      requested_region: requested,
+      effective_region: { left: 108, top: 68, right: 192, bottom: 152 },
+      bound_whole_sha256: after.sha256,
+    });
+
+    const resumed = runtime.store.resume(42) as any;
+    expect(resumed.pending_visual_verdict).toMatchObject({
+      operation_id: 'multiscale-source-operation',
+      review_state: { required_review_level: 'micro' },
+    });
+
+    const closedAndContinued = await cycleTool.handler({
+      previous_operation_id: 'multiscale-source-operation',
+      previous_observation: {
+        observed: 'The escalated crop now makes the edge transition readable; the local target remains unresolved and needs a later correction.',
+        target: 'unresolved',
+        action: 'correct',
+      },
+      next_pass: {
+        request_key: 'multiscale-deferred-next',
+        problem_id: 'deferred-followup',
+        document_id: 42,
+        goal: 'Run the deferred mutation only after the original visual operation closes',
+        stage: 'FORM',
+        scale: 'global',
+        actions: [{ id: 'deferred-opacity', tool: 'photoshop_set_layer_opacity', args: { opacity: 60 } }],
+      },
+    });
+    const continuedBody = JSON.parse((closedAndContinued.content[0] as any).text);
+    expect(mutationCalls).toBe(2);
+    expect(continuedBody.closed_previous).toMatchObject({
+      closed: true,
+      operation_id: 'multiscale-source-operation',
+      verdict_recorded: true,
+    });
+    expect(runtime.store.read('multiscale-source-operation')?.pending_review).toBeUndefined();
+    expect(runtime.store.read('multiscale-source-operation')?.verdict).toBeTruthy();
+  });
+
   it('delivers completed async visual-review images through the existing job poll response', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'embedded-guard-async-review-delivery-'));
     dirs.push(dir);

@@ -18,6 +18,7 @@ import {
   alive,
   isRead as isGuardReadTool,
   parseTexts,
+  previewOf,
 } from './session-store.js';
 import { compactClosedPrevious, cycleEnvelope, executeLogicalOperation, preflightRejectionEnvelope } from './cycle.js';
 import { compileGuardCycle } from './cycle-compiler.js';
@@ -885,6 +886,65 @@ export class EmbeddedGuardRuntime {
         const previousRecordBeforeClosure = previousOperationId
           ? this.store.read(previousOperationId)
           : undefined;
+        const reviewFindings: unknown[] = cycleInput.previous_visual_verdict
+          && typeof cycleInput.previous_visual_verdict === 'object'
+          && !Array.isArray(cycleInput.previous_visual_verdict)
+          && Array.isArray((cycleInput.previous_visual_verdict as Record<string, unknown>).review_findings)
+          ? (cycleInput.previous_visual_verdict as Record<string, unknown>).review_findings as unknown[]
+          : [];
+        const reviewEscalation: any = previousOperationId
+          && previousRecordBeforeClosure?.visual
+          && !previousRecordBeforeClosure?.verdict
+          ? (this.store.planReviewEscalation as any)(previousOperationId, reviewFindings, { persist: false })
+          : null;
+        if (reviewEscalation?.required && previousOperationId) {
+          const persistedPlan: any = (this.store.planReviewEscalation as any)(previousOperationId, reviewFindings, { persist: true });
+          const wholeLongEdge = Math.max(
+            Number(previousRecordBeforeClosure?.preview?.width) || 0,
+            Number(previousRecordBeforeClosure?.preview?.height) || 0
+          ) || Number(previousRecordBeforeClosure?.visual_review_profile?.whole_max_dimension_px) || 1600;
+          for (const capture of persistedPlan.captures) {
+            const previewArgs = this.materializeArguments(
+              'photoshop_get_preview',
+              {
+                document_id: persistedPlan.document_id,
+                max_dimension_px: wholeLongEdge,
+                quality: 8,
+                focus_region: capture.effective_region,
+                focus_max_dimension_px: capture.focus_max_dimension_px,
+              },
+              `${previousOperationId}-review-${capture.role}`
+            );
+            const result = await this.invoke('photoshop_get_preview', previewArgs, 60_000, {
+              guardOperationId: previousOperationId,
+            });
+            const rawPreview = previewOf(result);
+            if (!rawPreview) throw new Error('Read-only review escalation did not return materialized preview evidence');
+            this.store.attachReviewEvidence(previousOperationId, capture, {
+              ...rawPreview,
+              document_id: persistedPlan.document_id,
+            });
+          }
+          const refreshed = this.store.read(previousOperationId);
+          const envelope = buildCycleEnvelope(this.store, refreshed, {
+            replay: false,
+            closed_previous: { closed: false },
+          });
+          return {
+            ...envelope,
+            review_escalation: {
+              protocol: 'photoshop.guard.review_escalation.v1',
+              operation_id: previousOperationId,
+              read_only: true,
+              mutation_replayed: false,
+              next_mutation_dispatched: false,
+              captured_roles: persistedPlan.captures.map((capture: { role: string }) => capture.role),
+              remaining_after_round: persistedPlan.remaining_after_round,
+              bound_whole_sha256: persistedPlan.bound_whole_sha256,
+            },
+            guard_transport: 'embedded_mcp',
+          };
+        }
         const closureSnapshot = previousOperationId
           ? this.store.snapshotClosureState(previousOperationId)
           : undefined;

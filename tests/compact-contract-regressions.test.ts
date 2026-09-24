@@ -67,6 +67,7 @@ function fixture() {
   const dark = jpegMeta(dir, 'dark.jpg', 30);
   const light = jpegMeta(dir, 'light.jpg', 210);
   let previewCalls = 0;
+  const previewArgs: Array<Record<string, unknown>> = [];
   let regionCalls = 0;
   let strokeCalls = 0;
 
@@ -75,9 +76,12 @@ function fixture() {
     registry.register(name, { ...definition, handler });
   };
 
-  registerReal('photoshop_get_preview', async () => ({
-    content: [{ type: 'text', text: JSON.stringify((previewCalls++ % 2) === 0 ? dark : light) }],
-  }));
+  registerReal('photoshop_get_preview', async (args) => {
+    previewArgs.push(structuredClone(args));
+    return {
+      content: [{ type: 'text', text: JSON.stringify((previewCalls++ % 2) === 0 ? dark : light) }],
+    };
+  });
   registerReal('photoshop_get_state', async () => ({
     content: [{ type: 'text', text: JSON.stringify({ ok: true, document: { id: 42 } }) }],
   }));
@@ -144,7 +148,7 @@ function fixture() {
     runtime,
     cycle,
     setArtRun,
-    counts: () => ({ previewCalls, regionCalls, strokeCalls }),
+    counts: () => ({ previewCalls, previewArgs: structuredClone(previewArgs), regionCalls, strokeCalls }),
   };
 }
 
@@ -209,6 +213,7 @@ describe('public compact Guard contract regressions', () => {
       },
     }));
 
+
     expect(result.preflight_rejection).toBeUndefined();
     expect(result.execution).toMatchObject({ phase: 'completed', failed: false });
     expect(counts().regionCalls).toBe(1);
@@ -235,6 +240,7 @@ describe('public compact Guard contract regressions', () => {
         actions: [strokeAction()],
       },
     }));
+
 
     expect(result.preflight_rejection?.errors.join('\n')).toMatch(/brush_preflight_required/);
     expect(counts().strokeCalls).toBe(0);
@@ -295,7 +301,139 @@ describe('public compact Guard contract regressions', () => {
     expect(result.execution).toMatchObject({ phase: 'completed', failed: false });
     expect(result.visual_review?.before).toBeTruthy();
     expect(result.visual_review?.after).toBeTruthy();
+    expect(result.visual_review?.review_profile).toMatchObject({
+      level: 'object',
+      require_region: true,
+      require_before_after: true,
+      focus_max_dimension_px: 1200,
+    });
     expect(counts().previewCalls).toBe(2);
+  });
+
+  it('keeps global review at composition level even when a semantic region is supplied', async () => {
+    const { cycle, setArtRun, counts } = fixture();
+    await setArtRun.handler({
+      document_id: 42,
+      process_dir: 'processes/global-composition-review-process/run-01',
+      painting_profile: 'simple_graphic',
+      commentary_mode: 'technical',
+    });
+
+    const result = await body(await cycle.handler({
+      next_pass: {
+        request_key: 'global-composition-review',
+        problem_id: 'global-balance',
+        document_id: 42,
+        goal: 'Adjust the global composition without paying a local crop tax',
+        stage: 'GLOBAL_BLOCK_IN',
+        scale: 'global',
+        region: 'whole-canvas',
+        region_bounds: { left: 20, top: 20, right: 220, bottom: 220 },
+        actions: [regionAction()],
+      },
+    }));
+
+    expect(result.visual_review?.review_profile).toMatchObject({
+      level: 'composition',
+      require_region: false,
+      require_before_after: false,
+      focus_max_dimension_px: null,
+    });
+    expect(counts().previewArgs.every(args => args.focus_region === undefined)).toBe(true);
+    expect(counts().previewArgs.some(args => args.max_dimension_px === 1600)).toBe(true);
+  });
+
+  it('prefetches OBJECT crop for a medium pass with exact region without forcing a fresh BEFORE pair', async () => {
+    const { cycle, setArtRun, counts } = fixture();
+    await setArtRun.handler({
+      document_id: 42,
+      process_dir: 'processes/object-review-process/run-01',
+      painting_profile: 'simple_graphic',
+      commentary_mode: 'technical',
+    });
+
+    const region = { left: 40, top: 50, right: 240, bottom: 260 };
+    const result = await body(await cycle.handler({
+      next_pass: {
+        request_key: 'object-review-medium',
+        problem_id: 'object-proportion',
+        document_id: 42,
+        goal: 'Refine one bounded object proportion',
+        stage: 'FORM',
+        scale: 'medium',
+        region: 'subject',
+        region_bounds: region,
+        actions: [strokeAction('object-review-pencil', 7, 'PENCIL')],
+      },
+    }));
+
+    expect(result.visual_review?.review_profile).toMatchObject({
+      level: 'object',
+      require_region: true,
+      require_before_after: false,
+      focus_max_dimension_px: 1200,
+    });
+    expect(counts().previewArgs.some(args =>
+      JSON.stringify(args.focus_region) === JSON.stringify(region)
+      && args.focus_max_dimension_px === 1200
+    )).toBe(true);
+  });
+
+  it('uses MICRO review at detail scale with the exact supplied region and never invents one', async () => {
+    const withRegion = fixture();
+    await withRegion.setArtRun.handler({
+      document_id: 42,
+      process_dir: 'processes/micro-review-process/run-01',
+      painting_profile: 'simple_graphic',
+      commentary_mode: 'technical',
+    });
+    const region = { left: 80, top: 70, right: 150, bottom: 140 };
+    const result = await body(await withRegion.cycle.handler({
+      next_pass: {
+        request_key: 'micro-review-detail',
+        problem_id: 'edge-detail',
+        document_id: 42,
+        goal: 'Refine one exact detail region',
+        stage: 'FORM',
+        scale: 'detail',
+        region: 'edge-detail',
+        region_bounds: region,
+        actions: [strokeAction('micro-pencil', 7, 'PENCIL')],
+      },
+    }));
+    expect(result.visual_review?.review_profile).toMatchObject({
+      level: 'micro',
+      require_region: true,
+      require_before_after: true,
+      focus_max_dimension_px: 1600,
+    });
+    expect(withRegion.counts().previewArgs.some(args =>
+      JSON.stringify(args.focus_region) === JSON.stringify(region)
+      && args.focus_max_dimension_px === 1600
+    )).toBe(true);
+
+    const withoutRegion = fixture();
+    await withoutRegion.setArtRun.handler({
+      document_id: 42,
+      process_dir: 'processes/micro-review-process/run-02',
+      painting_profile: 'simple_graphic',
+      commentary_mode: 'technical',
+    });
+    const rejected = await body(await withoutRegion.cycle.handler({
+      next_pass: {
+        request_key: 'micro-review-no-region',
+        problem_id: 'edge-detail-no-region',
+        document_id: 42,
+        goal: 'Do not guess a crop center when no exact detail region exists',
+        stage: 'FORM',
+        scale: 'detail',
+        region: 'unknown-detail',
+        actions: [strokeAction('micro-pencil-no-region', 7, 'PENCIL')],
+      },
+    }));
+    expect(rejected.preflight_rejection?.error_codes).toContain('compact_local_region_bounds_required');
+    expect(rejected.preflight_rejection?.errors.join('\n')).toMatch(/require next_pass\.region_bounds/);
+    expect(withoutRegion.counts().strokeCalls).toBe(0);
   });
 
   it('allows explicit REPLACE of the exact protected target but keeps ADD blocked', async () => {
