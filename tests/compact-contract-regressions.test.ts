@@ -138,7 +138,17 @@ function fixture() {
     uxpReadinessProbe: async () => structuredClone(readiness),
     uxpStateProbe: async () => ({
       ok: true,
-      data: { document: { id: 42 }, activeLayer: { id: 7, name: 'Paint' } },
+      data: {
+        document: {
+          id: 42,
+          instanceWitness: {
+            protocol: 'photoshop.uxp.document_instance_witness.v1',
+            session_id: 'compact-contract-fixture',
+            token: 'compact-contract-fixture:42',
+          },
+        },
+        activeLayer: { id: 7, name: 'Paint' },
+      },
     }),
   });
   const guard = createGuardTools(runtime);
