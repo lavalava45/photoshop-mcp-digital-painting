@@ -22,7 +22,7 @@ has been completed.
 | Roadmap item | Current status | Acceptance boundary |
 | --- | --- | --- |
 | P0-1 — repository verification integrity | **repo-pass** | `npm run verify:canonical` is green with source-only discovery; package, matrix-drift, compact-v2, lint, catalog-count, live-evidence-ledger and executable-topology gates are all wired and passing. |
-| P0-2 — final UXP migration live acceptance | **live-pending** | One current rebuilt real-Photoshop P1/P2/P3 trace with direct UXP route evidence, no focus/legacy replay, deliberate document mismatch and zero Guard debt. |
+| P0-2 — final UXP migration live acceptance | **live-pass** | Closed by the current rebuilt run-10 real-Photoshop P1/P2/P3 trace with direct UXP route evidence, no focus/legacy replay, deliberate document mismatch and zero Guard debt. |
 | Task 1 — reproduce/classify ImageGen → CoS failure | **live-pending** | Requires deterministic real-host trace; repository-only evidence cannot classify the host incident. |
 | Task 3 — CoS attribution/rebind survival | **live-pending** | Requires real-host continuation/rebind evidence across a non-CoS host-tool turn. |
 | Task 2 — sticky Photoshop route acceptance | **live-pending** | Requires the established-workflow Russian/English host corpus against the rebuilt serving child. |

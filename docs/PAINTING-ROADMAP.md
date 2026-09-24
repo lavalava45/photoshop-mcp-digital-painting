@@ -254,16 +254,31 @@ gaps found while producing it and must remain visible:
 - This does **not** yet prove that the historical accidental ImageGen route and the attribution
   failure are the same incident. Task 1 remains open until one deterministic same-conversation
   real-host trace captures the route transition itself.
-- A first attempt to recover the historical local chat transcript through the advertised CoS Core
-  `session` surface failed concretely with `McpServerError: Tool session not found`. Other Core
-  and Photoshop tools continued working, so this is a narrow session-record lookup/backend issue,
-  not evidence that Core or the Photoshop connector is unavailable.
-- **Next step in the new chat:** audit the Chat On Steroids fork/session-recording and attribution
-  path to determine (a) where `Unattributed` activity is persisted, (b) why the `session` tool is
-  present in the callable registry but its backend lookup returns `Tool session not found`, and
-  (c) whether the historical “ты случайно запустил imagegen” conversation can be recovered as exact
-  local evidence without invoking ImageGen again. Then use that evidence to design the minimal
-  deterministic real-host reproduction required below.
+- The earlier `session` result is now classified correctly: current CoS source intentionally
+  **retires the model-facing `session` lookup tool**, and its tests require it to be absent from the
+  current Core declaration. The host still exposing `session` in this conversation is stale plugin
+  schema; `McpServerError: Tool session not found` is therefore the expected backend result for that
+  stale declaration, not evidence that local recordings are missing or unreadable.
+- The active slot-A recording store was read directly and does contain the historical Photoshop
+  conversations, including repeated explicit “не пользуй imagegen … только COS / MCP Photoshop”
+  instructions. No exact local record has yet been found that proves the accidental native ImageGen
+  invocation itself, so Task 1 remains open rather than inferring that transition from adjacent
+  messages.
+- The current live attribution failure is now localized one layer further. The active ChatGPT tab
+  still carried the **pre-v2 boolean** `window.__cosUsageObserver`; current CoS source/slot-A bytes
+  contain observer v2. Re-injecting v2 into such an already-open document previously returned early
+  because the legacy observer had no disposal handle. The page therefore stopped publishing the
+  early exact `conversation_id + metadata.request_id` evidence while the MCP tunnel itself remained
+  healthy, and recorder calls expired after the 20 s request-evidence grace into `Unattributed`.
+- A focused CoS fork fix now upgrades that legacy boolean observer **in place**, wrapping its passive
+  fetch forwarder instead of forcing a ChatGPT reload. Regression coverage proves the upgraded tab
+  emits exact request-origin evidence; focused usage-observer/extension tests and TypeScript pass.
+  This is a repository-level Task-3 fix candidate; live acceptance still requires running that build
+  and proving a subsequent same-chat CoS call becomes exactly attributed without replaying any
+  Photoshop mutation.
+- **Next step:** package/activate the fixed CoS build through the A/B release lane, then run the
+  smallest read-only same-chat attribution smoke. If exact attribution is restored, continue Task 1
+  with the deterministic host-route trace; do not invoke ImageGen merely to manufacture evidence.
 
 The historical failure must be classified from one deterministic real-host trace, not from model
 prose. Capture one same-conversation sequence:
