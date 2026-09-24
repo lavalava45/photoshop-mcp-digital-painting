@@ -1026,6 +1026,7 @@ describe('embedded Photoshop Guard', () => {
       'global_change',
       'final_review',
     ]);
+    expect(artSchema.properties.whole_image_glance.properties.frame_sha256).toBeTruthy();
     expect(tools.some(definition => definition.tool.name === 'photoshop_guard_report')).toBe(false);
     expect(tools.some(definition => definition.tool.name === 'photoshop_guard_ack_operation')).toBe(false);
     expect(tools.some(definition => definition.tool.name === 'photoshop_guard_verdict')).toBe(false);
