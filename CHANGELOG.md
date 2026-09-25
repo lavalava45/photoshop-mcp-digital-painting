@@ -83,6 +83,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 2026-09-25: close P0-A Task 4 host-recovery wording/state semantics. CoS commit `b1ce9ed`
+  publishes one explicit three-state recovery contract to Core and Plugins model-facing initialize
+  instructions: **Tool not selected** means discover/use the existing connector; **Caller
+  unattributed** is identity/recording state rather than connector loss and must preserve successful
+  work; **Connector genuinely unavailable** may be claimed only after a concrete discovery,
+  readiness or tool-call failure. Selection/attribution repair may neither replay a successful
+  mutation nor silently switch an established workflow to another engine. The Photoshop MCP
+  instructions already provide the matching established-workflow order — existing CoS Photoshop
+  surface → `photoshop_guard_status` / `photoshop_guard_resume` → durable state → continue — and the
+  Task 3 live trace proves that resume preserved the existing Task21a art-run/anchor state without
+  replay. CoS validation for the change: **190 passed / 6 skipped** across the full MCP integration
+  and connector-instruction tests, plus TypeScript and diff hygiene.
+
 - 2026-09-25: close P0-A Task 3 real-host CoS attribution/rebind acceptance. On validated CoS
   `our-release / slot-b / 5d87e8d`, the live continuation first demonstrated the important three-way
   distinction directly: CoS calls could execute while still recorded as `unattributed`, so that state

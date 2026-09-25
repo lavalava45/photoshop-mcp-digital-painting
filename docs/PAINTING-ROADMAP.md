@@ -26,7 +26,7 @@ The remaining work should be executed in this order. Closed milestones are archi
 `docs/PAINTING-ROADMAP-HISTORY.md`; implementation evidence remains in `CHANGELOG.md` and the
 acceptance matrix.
 
-1. **P0-A — host routing / CoS attribution:** Task **3 is live-pass**; continue Tasks **1 → 2 → 4**.
+1. **P0-A — host routing / CoS attribution:** Tasks **3 and 4 are closed**; continue Tasks **1 → 2**.
 2. **P0-D — human critic calibration / stop-decision calibration:** Tasks **8 / 8a → 8b**, then
    close the residual human claims from Tasks **6, 11 and 13a.1A/13a.1C** from the same labelled
    evidence where possible.
@@ -233,6 +233,23 @@ conversation, so a stale process cannot invalidate the result.
 - failures are recorded as routing/visibility/attribution evidence rather than inferred from prose.
 
 ### Task 4 — Host recovery wording and three-state availability model
+
+**Status:** **closed 2026-09-25**.
+
+The CoS model-facing recovery contract now names the three states explicitly on both Core and
+Plugins initialization surfaces: `Tool not selected`, `Caller unattributed`, and `Connector
+genuinely unavailable`. `Unattributed` is explicitly an identity/recording state rather than
+connector loss; genuine unavailability may be claimed only after a concrete discovery/readiness/
+tool-call failure; successful mutations must never be replayed and an established workflow must not
+silently switch engines as a repair. CoS implementation commit: `b1ce9ed` (`fix: distinguish
+connector recovery states`). Full focused MCP validation: 190 passed / 6 skipped plus TypeScript.
+
+The Photoshop MCP side already supplies the workflow-specific recovery order retained below:
+existing CoS Photoshop surface → `photoshop_guard_status` / `photoshop_guard_resume` → durable state
+recovery → continue. Task 3 live evidence additionally proves this recovery preserved the existing
+Task21a art-run/anchor state without replay.
+
+The acceptance below is retained as a non-regression contract.
 
 **Priority:** after Tasks 1–3 provide real observability.
 
