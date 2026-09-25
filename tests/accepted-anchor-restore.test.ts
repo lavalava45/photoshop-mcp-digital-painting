@@ -52,7 +52,14 @@ function record(
   return {
     id,
     tool: 'photoshop_execute_visual_microplan',
-    args: { document_id: 42 },
+    args: {
+      document_id: 42,
+      steps: [{
+        id: 'guard_after_preview',
+        tool: 'photoshop_get_preview',
+        args: { max_dimension_px: 1000, quality: 8 },
+      }],
+    },
     summary: `Visual mutation ${id}`,
     purpose: 'Task 21a restore fixture.',
     hash: `hash-${id}`,
@@ -124,6 +131,7 @@ function restoreFixture(options: { staleAnchor?: boolean; parityMismatch?: boole
   const snapshot = anchorSnapshot(witness);
   const registry = new ToolRegistry();
   const undoCalls: Array<Record<string, unknown>> = [];
+  const previewCalls: Array<Record<string, unknown>> = [];
 
   registry.register('photoshop_get_preview', {
     tool: {
@@ -132,6 +140,7 @@ function restoreFixture(options: { staleAnchor?: boolean; parityMismatch?: boole
       inputSchema: { type: 'object', properties: { document_id: { type: 'number' }, materialize_path: { type: 'string' }, include_image: { type: 'boolean' }, max_dimension_px: { type: 'number' }, quality: { type: 'number' } } },
     },
     handler: async (args) => {
+      previewCalls.push(structuredClone(args));
       const target = typeof args.materialize_path === 'string'
         ? args.materialize_path
         : path.join(dir, 'fallback-preview.jpg');
@@ -245,7 +254,7 @@ function restoreFixture(options: { staleAnchor?: boolean; parityMismatch?: boole
   }));
   if (options.staleAnchor) writeFileSync(anchor.materialized_path, degraded.bytes);
 
-  return { dir, runtime, anchor, degraded, undoCalls };
+  return { dir, runtime, anchor, degraded, undoCalls, previewCalls };
 }
 
 describe('Task 21a one-action accepted-anchor recovery', () => {
@@ -288,6 +297,11 @@ describe('Task 21a one-action accepted-anchor recovery', () => {
 
     expect(f.undoCalls).toHaveLength(1);
     expect(f.undoCalls[0]).toMatchObject({ document_id: 42, steps: 5 });
+    expect(f.previewCalls.at(-1)).toMatchObject({
+      document_id: 42,
+      max_dimension_px: 1000,
+      quality: 8,
+    });
     expect(response.accepted_anchor_restore).toMatchObject({
       completed: true,
       anchor_operation_id: 'anchor-op',
@@ -303,6 +317,7 @@ describe('Task 21a one-action accepted-anchor recovery', () => {
       },
     });
     const restoreRecord = f.runtime.store.read('restore-anchor-request-01')!;
+    expect(restoreRecord.preview_args).toEqual({ max_dimension_px: 1000, quality: 8 });
     expect(restoreRecord.preview.sha256).toBe(f.anchor.sha256);
     expect(restoreRecord.report).toBeTruthy();
     expect(restoreRecord.operation_ack).toBeTruthy();

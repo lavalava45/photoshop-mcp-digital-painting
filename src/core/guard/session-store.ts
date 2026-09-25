@@ -4255,6 +4255,29 @@ export class SessionStore {
     const anchor = anchors.find(candidate => candidate.operation_id === anchorOperationId);
     return anchor?.restore_snapshot ? structuredClone(anchor.restore_snapshot) : undefined;
   }
+  anchorPreviewCaptureSpec(record) {
+    if (!record || typeof record !== 'object') return null;
+    const candidates = [];
+    if (record.preview_args && typeof record.preview_args === 'object' && !Array.isArray(record.preview_args)) {
+      candidates.push(record.preview_args);
+    }
+    if (record.tool === 'photoshop_execute_visual_microplan') {
+      const steps = Array.isArray(record.args?.steps) ? record.args.steps : [];
+      for (const step of [...steps].reverse()) {
+        if (step?.tool !== 'photoshop_get_preview') continue;
+        if (step.args && typeof step.args === 'object' && !Array.isArray(step.args)) candidates.push(step.args);
+        break;
+      }
+    }
+    for (const candidate of candidates) {
+      const maxDimension = Number(candidate.max_dimension_px);
+      const quality = Number(candidate.quality);
+      if (!Number.isSafeInteger(maxDimension) || maxDimension < 1) continue;
+      if (!Number.isSafeInteger(quality) || quality < 1 || quality > 12) continue;
+      return { max_dimension_px: maxDimension, quality };
+    }
+    return null;
+  }
   planAcceptedAnchorRestore(documentId, anchorOperationId, suppliedRecords, projectionContext) {
     if (!Number.isSafeInteger(documentId) || documentId <= 0) throw new Error('accepted_anchor_restore requires a positive document_id');
     const state = (projectionContext?.paintingState ?? this.paintingState()).documents?.[String(documentId)] ?? {};
@@ -4283,6 +4306,10 @@ export class SessionStore {
     const anchorRecord = records.find(record => record.id === anchorOperationId);
     if (!anchorRecord || !anchorRecord.visual || anchorRecord.preview?.sha256 !== anchor.sha256) {
       throw new Error('accepted_anchor_restore_anchor_record_missing: anchor is outside the current document incarnation or lacks exact visual evidence');
+    }
+    const anchorPreviewArgs = this.anchorPreviewCaptureSpec(anchorRecord);
+    if (!anchorPreviewArgs) {
+      throw new Error('accepted_anchor_restore_capture_spec_required: exact anchor preview capture parameters are unavailable');
     }
     const later = records.filter(record => Number(record.sequence ?? 0) > Number(anchorRecord.sequence ?? 0));
     for (const record of later) {
@@ -4316,6 +4343,7 @@ export class SessionStore {
       anchor_operation_id: anchor.operation_id,
       anchor_sha256: anchorSha,
       anchor_path: anchor.path,
+      anchor_preview_args: anchorPreviewArgs,
       required_undo_steps: requiredUndoSteps,
       history_operation_ids: historyRecords.map(record => record.id),
       restore_snapshot: structuredClone(anchor.restore_snapshot),
