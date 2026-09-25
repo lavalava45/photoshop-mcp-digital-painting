@@ -83,6 +83,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 2026-09-25: close P0-A Task 3 real-host CoS attribution/rebind acceptance. On validated CoS
+  `our-release / slot-b / 5d87e8d`, the live continuation first demonstrated the important three-way
+  distinction directly: CoS calls could execute while still recorded as `unattributed`, so that state
+  was not treated as connector loss; browser repair then restored exact request ownership without
+  replaying Photoshop work. A subsequent built-in non-CoS web read was followed by Core,
+  `photoshop_ping` and `photoshop_guard_resume(3766)` in the same chat; all CoS calls were recorded
+  with exact `request_id` attribution, and Guard resume recovered the pre-existing Task21a
+  document/run/anchor state and exact restored frame SHA with no mutation replay or pending
+  report/ack/verdict/uncertain debt. The anonymized live trace is hashed in
+  `docs/live-evidence-ledger.json`.
+
 - 2026-09-25: implement Task 21a one-action accepted-anchor recovery on the canonical compact Guard
   path. Art Director anchor promotion may opt into a pinned read-only restore snapshot containing
   normalized layer ordering/visibility/opacity/blend state, active-layer semantics and selection

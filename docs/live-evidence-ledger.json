@@ -134,6 +134,12 @@
       "bytes": 4848,
       "sha256": "e1c727d9d6544bf40a4b450fa48946797d3f2d4f39792ea2af9912f472014276",
       "claims": ["Task21a", "accepted-anchor-restore", "exact-state-recovery"]
+    },
+    {
+      "path": "processes/p0a-host-route-process/run-01/evidence/task3-rebind-live-acceptance.json",
+      "bytes": 2043,
+      "sha256": "f71c351455f6e9ca06fef8f4510cbbfdbe2d23e6920c8403e9dc3a4af7d2a527",
+      "claims": ["P0-A", "Task3", "cos-attribution-rebind", "guard-resume-no-replay"]
     }
   ]
 }

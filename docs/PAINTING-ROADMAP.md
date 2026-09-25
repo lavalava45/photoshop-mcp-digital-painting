@@ -26,7 +26,7 @@ The remaining work should be executed in this order. Closed milestones are archi
 `docs/PAINTING-ROADMAP-HISTORY.md`; implementation evidence remains in `CHANGELOG.md` and the
 acceptance matrix.
 
-1. **P0-A — host routing / CoS attribution:** Tasks **1 → 3 → 2 → 4**.
+1. **P0-A — host routing / CoS attribution:** Task **3 is live-pass**; continue Tasks **1 → 2 → 4**.
 2. **P0-D — human critic calibration / stop-decision calibration:** Tasks **8 / 8a → 8b**, then
    close the residual human claims from Tasks **6, 11 and 13a.1A/13a.1C** from the same labelled
    evidence where possible.
@@ -165,7 +165,18 @@ Classify the incident as one or more of:
 
 ### Task 3 — CoS attribution/rebind survival across non-CoS host-tool turns
 
-**Priority:** immediately after Task 1.
+**Status:** **closed / live-pass 2026-09-25**.
+
+Validated on CoS `our-release / slot-b / 5d87e8d`. Earlier calls in the same live continuation were
+correctly recorded as `unattributed` while connector execution remained available. After the
+browser-repair/legacy-observer upgrade took effect, a read-only Core smoke and Photoshop Guard status
+were both recorded with exact `request_id` attribution. A later built-in non-CoS web read was then
+followed by another Core read, `photoshop_ping` and `photoshop_guard_resume(3766)`; all CoS calls were
+again recorded as exact `request_id` ownership for the same chat. Guard resume recovered the existing
+Task21a document/run/anchor state and exact restored frame SHA with no mutation replay and no pending
+report/ack/verdict/uncertain debt. Hashed evidence is recorded in `docs/live-evidence-ledger.json`.
+
+The acceptance below is retained as a non-regression contract.
 
 This is an independent known failure class and is currently more actionable than adding more
 painting-side routing text. The likely implementation owner is the **Chat On Steroids host/rebind
@@ -194,7 +205,7 @@ status/resume read must recover the pre-existing run without repeating work.
 
 ### Task 2 — Real-host sticky Photoshop route acceptance
 
-**Priority:** after the Task 3 rebind path is trustworthy.
+**Priority:** next real-host routing acceptance after Task 1; Task 3 rebind is now proven.
 
 The repository already contains sticky-route metadata/instructions and a static routing corpus.
 The remaining work is **real ChatGPT + CoS host acceptance**, because repository tests cannot prove
