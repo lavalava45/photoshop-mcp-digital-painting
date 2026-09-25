@@ -22,9 +22,9 @@ implementation/live evidence belongs in `CHANGELOG.md` and the acceptance matrix
 
 ## Priority order
 
-The remaining work should be executed in this order. Closed milestones are archived in
-`docs/PAINTING-ROADMAP-HISTORY.md`; implementation evidence remains in `CHANGELOG.md` and the
-acceptance matrix.
+The remaining work should be executed in this order. Closed milestones and implementation history
+are consolidated in `CHANGELOG.md`; detailed acceptance evidence remains in the acceptance matrix,
+Git history and referenced test/live artifacts.
 
 1. **P0-A — host routing / CoS attribution:** Tasks **3 and 4 are closed**; continue Tasks **1 → 2**.
 2. **P0-D — human critic calibration / stop-decision calibration:** Tasks **8 / 8a → 8b**, then
@@ -53,8 +53,8 @@ Rationale:
 
 ## Active follow-ups inherited from closed P0-2 acceptance
 
-The closed P0-2 acceptance is archived in `docs/PAINTING-ROADMAP-HISTORY.md`. These concrete
-code/contract gaps were discovered while producing it and remain active:
+The closed P0-2 acceptance is archived in `CHANGELOG.md`. These concrete code/contract gaps were
+discovered while producing it and remain active:
 
 1. **Explicit document activation can foreground Photoshop.** Diagnostic `run-09` recorded one
    Photoshop foreground transition exactly at UXP `document.activate`. Either make
@@ -78,8 +78,8 @@ code/contract gaps were discovered while producing it and remain active:
 
 **Current handoff state — 2026-09-24**
 
-- Closed predecessor milestones are archived in `docs/PAINTING-ROADMAP-HISTORY.md`; the active
-  roadmap frontier is P0-A / Task 1.
+- Closed predecessor milestones are archived in `CHANGELOG.md`; the active roadmap frontier is
+  P0-A / Task 1.
 - Historical project evidence already proves one **real attribution failure with connector visibility
   preserved**: a CoS session was recorded as `Unattributed activity` with no conversation id while
   Photoshop reads, Guard status and Guard cycle remained callable. This is evidence for
@@ -551,7 +551,7 @@ before/after:
 ### Task 21 — Real-artwork artistic preference over anchors
 
 One-action Guard-owned accepted-anchor recovery is technically and live proven; Task 21a is archived
-in `docs/PAINTING-ROADMAP-HISTORY.md`. This Task 21 remains purely about whether the selected anchor
+in `CHANGELOG.md`. This Task 21 remains purely about whether the selected anchor
 is actually artistically preferable in a representative real artwork.
 
 Use a human comparison when a real run contains a meaningful current-vs-anchor tradeoff.
