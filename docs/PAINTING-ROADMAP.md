@@ -1,6 +1,6 @@
 # Painting Quality Roadmap
 
-Last updated: 2026-09-24
+Last updated: 2026-09-25
 
 This file is the canonical **forward-looking TODO** for the digital-painting project.
 Completed work belongs in `CHANGELOG.md`; detailed acceptance evidence remains in
@@ -12,34 +12,28 @@ ExtendScript/COM fallback that may be selected only before any UXP dispatch. Do 
 retired controller/daemon or raw-script bypass, and never add cross-backend replay after UXP
 dispatch/claim/uncertainty/failure.
 
-As of 2026-09-24, deterministic COMPOSITION / OBJECT / MICRO review selection and same-operation
-read-only crop escalation are baseline compact-v2 Guard behavior rather than a remaining roadmap
-item. A later global architecture/logic audit found residual correctness gaps around nested review
-coverage, durable evidence reuse and frame/recovery semantics; those gaps are tracked below without
-reopening the completed multiscale implementation itself. Future roadmap work must preserve
-whole-frame context, source-document crop coordinates, existing local BEFORE/AFTER significance
-evidence, stale-evidence rejection and no-mutation-replay semantics. The implementation/live
-evidence belongs in `CHANGELOG.md` and the acceptance matrix.
+As of 2026-09-25, deterministic COMPOSITION / OBJECT / MICRO review selection, same-operation
+read-only crop escalation and the later P0-B state/evidence/recovery correctness fixes are baseline
+compact-v2 Guard behavior rather than remaining roadmap items. Future roadmap work must preserve
+whole-frame context, broad semantic review coverage, source-document crop coordinates, exact
+materialized evidence identity, artistic-frame identity, document-incarnation isolation, bounded
+structural recovery, instance-scale anti-copy review and no-mutation-replay semantics. The
+implementation/live evidence belongs in `CHANGELOG.md` and the acceptance matrix.
 
 ## Priority order
 
-The remaining work should be executed in this order. **P0-0 is closed as a code-integrity block and
-is retained below only as a canonical architecture invariant. P0-1 is closed and recorded in
-`CHANGELOG.md` / the acceptance matrix.**
+The remaining work should be executed in this order. **P0-0, P0-1, P0-2 and the machine-enforceable
+P0-B correctness block are closed and recorded in `CHANGELOG.md` / the acceptance matrix. P0-0 and
+P0-B are retained below only as non-regression architecture contracts.**
 
-1. **P0-2 — final UXP migration live acceptance:** rerun the remaining real-Photoshop
-   **13a.6.1 / 13c.7** gate against the current rebuilt runtime.
-2. **P0-A — host routing / CoS attribution:** Tasks **1 → 3 → 2 → 4**.
-3. **P0-B — Guard state/evidence/review correctness:** close the residual
-   multiscale/recovery/frame/evidence defects found by the global audit **and** the reproduced
-   mechanical-patterning review failure before expanding recovery or critic authority.
-4. **P0-C — accepted-state recovery:** Task **21a**.
-5. **P0-D — human critic calibration / stop-decision calibration:** Tasks **8 / 8a → 8b**, then
+1. **P0-A — host routing / CoS attribution:** Tasks **1 → 3 → 2 → 4**.
+2. **P0-C — accepted-state recovery:** Task **21a**.
+3. **P0-D — human critic calibration / stop-decision calibration:** Tasks **8 / 8a → 8b**, then
    close the residual human claims from Tasks **6, 11 and 13a.1A/13a.1C** from the same labelled
    evidence where possible.
-6. **P1 — human artistic acceptance:** Task **23 human pack → 22 → 15d.3**,
+4. **P1 — human artistic acceptance:** Task **23 human pack → 22 → 15d.3**,
    then the real-artwork artistic-preference part of Task **21**.
-7. **Conditional / P2 only after evidence:** Task **5** if ordinary ChatGPT/CoS routing remains
+5. **Conditional / P2 only after evidence:** Task **5** if ordinary ChatGPT/CoS routing remains
    unreliable; Task **10** only if Task 8/8a demonstrates measurable decision-quality gain; Task
    **15c** remains optional exploration.
 
@@ -52,13 +46,14 @@ Rationale:
 - Repository verification is now deterministic: source-only Vitest discovery is fixed, production
   builds/packages exclude compiled tests, matrix-cited tests are drift-checked, CI runs the canonical
   gate, and gitignored live evidence has a committed hash ledger.
-- Final UXP live acceptance is therefore the next remaining gate.
-- Host routing comes next because losing the established Photoshop/CoS route can bypass the entire
+- Final UXP live acceptance is closed on the current rebuilt runtime.
+- Host routing is the first remaining external gate because losing the established Photoshop/CoS route can bypass the entire
   painting architecture regardless of its internal quality.
-- Guard state/evidence correctness comes before higher-level recovery/calibration because a review
-  system must not lose broad must-fix coverage, treat read-only observations as artistic frames,
-  accept declarative rollback, or reuse unverifiable crop evidence.
-- Accepted-state recovery comes next because a detected regression is only operationally useful if
+- Guard state/evidence correctness is now closed at the repository-contract level: broad must-fix
+  coverage, artistic-frame identity, restore proof, persisted crop bytes, document reincarnation,
+  exact whole-image boundaries, bounded structural recovery and mechanical-patterning review are
+  fail-closed regression contracts.
+- Accepted-state recovery is the next code block because a detected regression is only operationally useful if
   the ordinary Painter/Guard path can return to a known-good state without manual Photoshop-history
   arithmetic, mutation replay or an out-of-band file-open workaround.
 - Critic calibration comes after recovery because it gates any claim of perceptual reliability and any
@@ -417,7 +412,13 @@ Never repair binding by repainting or replaying a successful mutation.
 
 ---
 
-## P0-B — Guard state/evidence/review correctness
+## P0-B — Guard state/evidence/review correctness — **closed 2026-09-25**
+
+The machine-enforceable correctness block below is closed and retained as a non-regression contract.
+Repository acceptance is recorded in `docs/roadmap-final-acceptance-matrix.md`; implementation details
+and the 2026-09-25 canonical verification are recorded in `CHANGELOG.md`. Borderline perceptual
+judgement about whether a repeated pattern is artistically objectionable remains part of later human
+critic calibration rather than a code-completion gate for this block.
 
 The global audit found several runtime-semantic gaps that do not invalidate the existence of the
 multiscale/recovery machinery, but do weaken the correctness guarantees built on top of it. Close
@@ -595,8 +596,8 @@ creating a second review subsystem.
 - tool success, pixel delta, primitive count or a satisfied operation-local “objects were added”
   target cannot by themselves close the artistic review;
 - repository tests cover exact-copy, transform-only-copy, jitter-only-copy, structural-variation and
-  intentional-rhythm controls, while held-out human calibration covers whether borderline repeated
-  patterns are perceptually objectionable.
+  intentional-rhythm controls; held-out human calibration of borderline perceptual cases is tracked
+  under the later critic-calibration block rather than reopening this machine-correctness task.
 
 **Internal ordering inside P0-B:** close frame/evidence/incarnation/restore-proof invariants
 (P0-B.3/.4/.5/.6/.7) before making P0-B.2 recovery policy authoritative. P0-B.1 and P0-B.8 may

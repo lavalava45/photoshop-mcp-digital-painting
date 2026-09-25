@@ -266,7 +266,7 @@ describe('Guard session-store regressions', () => {
     expect(errors.join('\n')).toMatch(/stage_priority_gate/);
   });
 
-  it('requires a structural executable strategy change after an insufficient pass', () => {
+  it('allows one bounded same-strategy retry, then requires a structural executable strategy change', () => {
     const s = store();
     s.setArtRunState({
       document_id: 42,
@@ -309,7 +309,31 @@ describe('Guard session-store regressions', () => {
       scale: 'medium',
       replan: 'different words only',
     });
-    expect(same.join('\n')).toMatch(/visual_significance_gate/);
+    expect(same.join('\n')).not.toMatch(/artistic_recovery/);
+
+    writeProjectionRecord(s, {
+      id: 'insufficient-retry', documentId: 42, sequence: 2,
+      visual: true, report: true, ack: true, verdict: true,
+    });
+    const retry = s.read('insufficient-retry')!;
+    retry.tool = 'photoshop_execute_visual_microplan';
+    retry.problem_id = 'form-problem';
+    retry.stage = 'FORM';
+    retry.scale = 'medium';
+    retry.args = structuredClone(prior.args);
+    retry.verdict.verdict = 'neutral';
+    retry.verdict.target_resolved = 'no';
+    retry.verdict.significance.execution_effect = 'insufficient';
+    s.write(retry);
+
+    const exhaustedSame = s.collectPreflightErrors({
+      ...request('same-strategy-after-retry', 'photoshop_execute_visual_microplan', structuredClone(prior.args)),
+      problem_id: 'form-problem',
+      stage: 'FORM',
+      scale: 'medium',
+      replan: 'parameter or wording changes still do not make a distinct strategy',
+    });
+    expect(exhaustedSame.join('\n')).toMatch(/artistic_recovery:.*distinct structural strategy/);
 
     const changedArgs = structuredClone(prior.args);
     changedArgs.method_class = 'region';
@@ -323,7 +347,7 @@ describe('Guard session-store regressions', () => {
       stage: 'FORM',
       scale: 'medium',
     });
-    expect(changed.join('\n')).not.toMatch(/visual_significance_gate/);
+    expect(changed.join('\n')).not.toMatch(/artistic_recovery/);
   });
 
   it('recovers a completed document bootstrap from an exact command receipt and preserves the returned document id', () => {

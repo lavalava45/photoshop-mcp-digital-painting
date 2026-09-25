@@ -3153,7 +3153,6 @@ export class SessionStore {
       ? projectionContext.paintingState.documents?.[String(documentId)]
       : this.paintingState().documents?.[String(documentId)])
       ?? { document_id: documentId };
-    const metrics = this.workflowMetrics(documentId, all, projectionContext);
     const cadence = this.visualCadenceState(documentId, all, projectionContext);
     const activeJob = (projectionContext
       ? activeJobsForDocument(projectionContext.activeJobs, documentId)
@@ -3430,7 +3429,6 @@ export class SessionStore {
         throw new Error(`Visual barrier for document ${documentId} (${visualBarrier.planId}): ${detail}`);
       }
     });
-    const workflow = this.workflowMetrics(documentId, records, projectionContext);
     if (isVisual(request?.tool) && !rollbackMutation && problemId) {
       const recovery = this.artisticRecoveryForProblem(
         documentId,
@@ -4027,7 +4025,7 @@ export class SessionStore {
       current.source_index = Math.min(current.source_index, requirement.source_index);
     }
     const unresolved = merged.filter(requirement => !this.reviewEvidenceSatisfies(record, requirement));
-    const captures = unresolved.slice(0, 2).map((requirement) => {
+    const captures = unresolved.slice(0, 2).map((requirement, captureIndex) => {
       if (!Number.isFinite(canvasWidth) || canvasWidth <= 0 || !Number.isFinite(canvasHeight) || canvasHeight <= 0) {
         throw new Error('Review escalation requires current preview canvas dimensions');
       }
@@ -4039,7 +4037,7 @@ export class SessionStore {
       return {
         ...requirement,
         ...regions,
-        role: `${requirement.level}_after_${Number(requirement.source_index) + 1}`,
+        role: `${requirement.level}_after_${captureIndex + 1}`,
         focus_max_dimension_px: requirement.level === 'micro' ? 1600 : 1200,
       };
     });

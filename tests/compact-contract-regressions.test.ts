@@ -532,7 +532,10 @@ describe('public compact Guard contract regressions', () => {
       next_pass: {
         ...firstPass,
         request_key: 'silhouette-attempt-002',
-        actions: [regionAction('attempt-two')],
+        // The first materially-changing region strategy was explicitly judged
+        // unresolved. Recovery now requires the next attempt to be causally
+        // distinct rather than a parameter/id variant of the same geometry.
+        actions: [strokeAction('attempt-two', 7, 'PENCIL')],
       },
     }));
     expect(second.execution).toMatchObject({ phase: 'completed', failed: false });

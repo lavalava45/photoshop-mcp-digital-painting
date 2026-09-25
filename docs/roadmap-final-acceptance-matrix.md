@@ -1,6 +1,6 @@
 # Roadmap final acceptance matrix
 
-Date: 2026-09-24. Scope: current working tree plus preserved compact-v2 live evidence under `.photoshop-runtime/` and `processes/compact-v2-live-acceptance-process/`. The P1/P2/P3 catalog source migration is included in the current tree. The rebuilt child and current UXP companion revision are now loaded and verified; the multiscale visual-review live acceptance is complete, while unrelated post-migration acceptance items retain their individual statuses below.
+Date: 2026-09-25. Scope: current working tree plus preserved compact-v2 live evidence under `.photoshop-runtime/` and `processes/compact-v2-live-acceptance-process/`. The P1/P2/P3 catalog source migration is included in the current tree. The rebuilt child and UXP migration acceptance are verified; the machine-enforceable P0-B state/evidence/review correctness block is repository-complete, while unrelated host/live/human acceptance items retain their individual statuses below.
 
 This matrix re-checks the literal **Acceptance** bullets in `PAINTING-ROADMAP.md` for Tasks 6–23 and every 13a subpart. It supersedes status conclusions in `task14-21-evidence-audit.md`; that earlier audit remains useful only as historical evidence of what was missing at the time.
 
@@ -27,14 +27,14 @@ has been completed.
 | Task 3 — CoS attribution/rebind survival | **live-pending** | Requires real-host continuation/rebind evidence across a non-CoS host-tool turn. |
 | Task 2 — sticky Photoshop route acceptance | **live-pending** | Requires the established-workflow Russian/English host corpus against the rebuilt serving child. |
 | Task 4 — three-state host recovery model | **still-code-gap** | Apply any guidance/recovery changes justified by Tasks 1–3 and regression-test the three distinct states. |
-| P0-B.1 — nested broad-review coverage | **still-code-gap** | Preserve broad coverage separately from tighter inspection scale. |
-| P0-B.2 — authoritative bounded artistic recovery | **still-code-gap** | Production SessionStore/runtime must use the bounded policy with fail-closed evidence and structural strategy identity. |
-| P0-B.3 — artistic frame vs read-only observation | **still-code-gap** | Read-only captures must not advance artistic-frame identity. |
-| P0-B.4 — verified `reversed` state | **still-code-gap** | Reversal must prove exact restored image state rather than accept a declarative label. |
-| P0-B.5 — persisted crop evidence verification | **still-code-gap** | Reused crop bytes must exist and match recorded identity or be recaptured read-only. |
-| P0-B.6 — external document reincarnation | **still-code-gap** | Manual/external close-reopen with recycled numeric id must not inherit stale document state. |
-| P0-B.7 — exact-boundary whole-image glance | **still-code-gap** | Glance evidence must bind to the due trigger and exact artistic frame. |
-| P0-B.8 — mechanical-patterning/copy-geometry guard | **still-code-gap** | Instance-scale review and structural-variation evidence are required before repeated small-object passes can close. |
+| P0-B.1 — nested broad-review coverage | **repo-pass** | Dedup now unions semantic coverage while independently escalating inspection level; extreme nested OBJECT/MICRO coverage is regression-tested. |
+| P0-B.2 — authoritative bounded artistic recovery | **repo-pass** | Production SessionStore uses the bounded recovery policy; structural identity ignores parameter jitter, finite termination is tested, and false-alarm acceptance requires verified durable anchor/current-frame evidence. |
+| P0-B.3 — artistic frame vs read-only observation | **repo-pass** | Read-only preview observations no longer advance `current_frame`; restart preserves the last visual-mutation frame separately from observation evidence. |
+| P0-B.4 — verified `reversed` state | **repo-pass** | `reversed` now requires exact durable rollback-anchor bytes plus an exact matching current artistic frame; declarative labels alone fail closed. |
+| P0-B.5 — persisted crop evidence verification | **repo-pass** | Reused crop evidence must still exist as a file and SHA-match its recorded materialized bytes; deletion/replacement invalidates it across restart. |
+| P0-B.6 — external document reincarnation | **repo-pass** | The current UXP bridge exposes a live document-object witness; same numeric ids with a changed witness reset document-scoped state and block mutation before dispatch, while restart with the same witness preserves state. |
+| P0-B.7 — exact-boundary whole-image glance | **repo-pass** | Pending whole-image review binds to exact reason + operation id + artistic-frame SHA and rejects stale/mismatched evidence. |
+| P0-B.8 — mechanical-patterning/copy-geometry guard | **repo-pass** | Transform/scale/color/jitter-invariant geometry similarity raises bounded OBJECT crop debt for repeated organic/character motifs; structural-variation and explicit regular-rhythm controls are covered. Borderline artistic objection remains a later human-calibration question, not a code gap. |
 | Task 21a — one-action accepted-anchor restore | **still-code-gap** | Canonical Guard recovery request plus disposable live restore acceptance remain to be implemented/proved. |
 | Task 8b — STOP / FINALIZE calibration | **human-required** | Held-out human-labelled stop/continue corpus and predeclared thresholds are required. |
 | Task 22 — final target fidelity | **human-required** | Final perceptual/prompt-to-frame fidelity is a human artistic acceptance claim. |
@@ -47,13 +47,13 @@ has been completed.
 Current-tree verification performed for this audit, including Task 23 and P0-1:
 
 - `npm run verify:canonical`: **PASS**.
-- canonical `npm run test:acceptance`: **575/575 PASS** across exactly **62 source test files**;
+- canonical `npm run test:acceptance`: **594/594 PASS** across exactly **65 source test files**;
   `dist/**` is excluded even after a populated production build.
 - `npm run verify:acceptance-matrix`: **PASS**, with 13 cited test names resolving inside the same
-  62-file source inventory.
-- `npm run verify:pack`: **PASS**, with 177 packed `dist` JavaScript files and zero compiled test
+  65-file source inventory.
+- `npm run verify:pack`: **PASS**, with 179 packed `dist` JavaScript files and zero compiled test
   artifacts.
-- `npm run lint`: **PASS** with 0 errors (8 existing `no-explicit-any` warnings remain non-failing).
+- `npm run lint`: **PASS** with 0 errors (16 `no-explicit-any` warnings remain non-failing).
 - `npm run verify:painting-policy`: **PASS** (`kernel=12807`, `prompt=17812`).
 - `npm run verify:photoshop-prompts`, `verify:tool-counts`, `verify:compact-v2-contract` and
   `verify:live-evidence-ledger`: **PASS**.

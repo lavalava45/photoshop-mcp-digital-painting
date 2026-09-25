@@ -83,6 +83,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 2026-09-25: close the machine-enforceable P0-B Guard state/evidence/review correctness block.
+  Nested OBJECT/MICRO dedup now preserves the broad semantic coverage region while independently
+  escalating inspection level; read-only observations no longer replace artistic-frame identity;
+  whole-image glance debt binds to an exact due reason/operation/frame SHA; persisted crop evidence
+  is reusable only while its materialized file still exists and SHA-matches; declarative
+  `incomplete_hypothesis_resolution=reversed` now requires an exact durable-anchor restore; and the
+  UXP bridge exposes a live document-instance witness so recycled numeric ids reset stale
+  document-scoped state and block mutation before dispatch. `resolveArtisticRecovery()` is now the
+  production bounded recovery core: color/opacity/preset/primitive-count jitter does not count as a
+  new strategy, dependent recovery terminates finitely, and critic false-alarm dismissal requires
+  verified durable anchor + fresh current-frame evidence. Repeated organic/character geometry now
+  receives transform/scale/color/jitter-invariant mechanical-patterning analysis and routes through
+  the existing bounded OBJECT crop-evidence debt; explicit regular architectural rhythm remains
+  admissible. The 2026-09-25 canonical gate passes **594/594 tests across 65 source files**, with
+  compact-v2 audit, package, lint, painting-policy, prompt/catalog and live-evidence-ledger checks
+  also green. Borderline perceptual judgement remains assigned to later human critic calibration.
+
 - 2026-09-24: repair the canonical GitHub Actions path so clean runners execute the same verification
   gate as local development. The workflow now takes the pnpm version only from
   `package.json#packageManager` instead of declaring a second version in
