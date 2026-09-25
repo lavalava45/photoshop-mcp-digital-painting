@@ -93,10 +93,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `photoshop_undo`, captures the post-restore preview/state, and closes recovery only when the exact
   anchor SHA and registered state parity match. Missing/stale anchors and requests mixed with new
   actions fail before Photoshop dispatch; post-undo parity mismatch remains unclosed/fail-closed.
-  Repository acceptance now passes **601/601 tests across 66 source files**; build, package,
-  compact-v2 audit, lint, painting-policy, prompt/catalog and live-evidence-ledger gates are green.
-  The roadmap keeps Task 21a at `live-pending` until the designated disposable real-Photoshop run
-  proves the same behavior on the current rebuilt serving child.
+  Repository acceptance passes **601/601 tests across 66 source files**. The first disposable live
+  attempt correctly computed and executed `undo(2)` but exposed an evidence bug: restore recaptured
+  JPEG proof with a different size/quality profile than the registered anchor, so byte identity could
+  not be compared even though a read-only recapture with the anchor profile returned the exact anchor
+  SHA. Fix `7502987` now requires and reuses the registered anchor capture spec. Fresh real-Photoshop
+  `run-02` then passed end to end on document 3766: anchor SHA
+  `addeed28f4fe163ed62d6df6f857e26073f0e873a6b0c5299ac1d6bf01bb1dce`, two later visual/history
+  mutations, one model request containing only the anchor identity, Guard-computed `steps=2`, exact
+  restored SHA, matching layer/active-layer/selection state, no mutation replay, no model-supplied
+  history count and no remaining report/ack/verdict/uncertain debt. Task 21a is therefore live-pass
+  and has been archived out of the forward roadmap. Hashed evidence is recorded in
+  `docs/live-evidence-ledger.json`.
 
 - 2026-09-25: close the machine-enforceable P0-B Guard state/evidence/review correctness block.
   Nested OBJECT/MICRO dedup now preserves the broad semantic coverage region while independently

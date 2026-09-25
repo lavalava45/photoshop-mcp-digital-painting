@@ -1,6 +1,6 @@
 {
   "schema": "photoshop-mcp.live-evidence-ledger.v1",
-  "recorded_at": "2026-09-24",
+  "recorded_at": "2026-09-25",
   "purpose": "Committed hashes for small gitignored runtime/process evidence cited by roadmap-final-acceptance-matrix.md. Large PSD/JPEG payloads remain uncommitted.",
   "entries": [
     {
@@ -128,6 +128,12 @@
       "bytes": 4095,
       "sha256": "2eef8852174f96285f88de72da62b389dfefb9cc28b87193f887e479d2e23c08",
       "claims": ["P0-2", "13c.7", "document-target-fail-closed"]
+    },
+    {
+      "path": "processes/task21a-live-restore-process/run-02/evidence/task21a-live-acceptance.json",
+      "bytes": 4848,
+      "sha256": "e1c727d9d6544bf40a4b450fa48946797d3f2d4f39792ea2af9912f472014276",
+      "claims": ["Task21a", "accepted-anchor-restore", "exact-state-recovery"]
     }
   ]
 }

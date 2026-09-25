@@ -27,13 +27,12 @@ The remaining work should be executed in this order. Closed milestones are archi
 acceptance matrix.
 
 1. **P0-A — host routing / CoS attribution:** Tasks **1 → 3 → 2 → 4**.
-2. **P0-C — accepted-state recovery:** Task **21a**.
-3. **P0-D — human critic calibration / stop-decision calibration:** Tasks **8 / 8a → 8b**, then
+2. **P0-D — human critic calibration / stop-decision calibration:** Tasks **8 / 8a → 8b**, then
    close the residual human claims from Tasks **6, 11 and 13a.1A/13a.1C** from the same labelled
    evidence where possible.
-4. **P1 — human artistic acceptance:** Task **23 human pack → 22 → 15d.3**,
+3. **P1 — human artistic acceptance:** Task **23 human pack → 22 → 15d.3**,
    then the real-artwork artistic-preference part of Task **21**.
-5. **Conditional / P2 only after evidence:** Task **5** if ordinary ChatGPT/CoS routing remains
+4. **Conditional / P2 only after evidence:** Task **5** if ordinary ChatGPT/CoS routing remains
    unreliable; Task **10** only if Task 8/8a demonstrates measurable decision-quality gain; Task
    **15c** remains optional exploration.
 
@@ -41,11 +40,9 @@ Rationale:
 
 - Host routing is the first remaining external gate because losing the established Photoshop/CoS route can bypass the entire
   painting architecture regardless of its internal quality.
-- Accepted-state recovery remains the next recovery gate because a detected regression is only operationally useful if
-  the ordinary Painter/Guard path can return to a known-good state without manual Photoshop-history
-  arithmetic, mutation replay or an out-of-band file-open workaround.
-- Critic calibration comes after recovery because it gates any claim of perceptual reliability and any
-  broader critic authority; it also decides whether Task 10 should exist at all.
+- Accepted-state recovery is now closed and archived; critic calibration is the next painting-side
+  quality gate because it controls any claim of perceptual reliability and broader critic authority,
+  and it also decides whether Task 10 should exist at all.
 - Progressive refinement comes before final-target fidelity: Task 23 already has a machine-enforced
   de-block-in gate and a completed disposable real-Photoshop progression run; only its blinded human
   perceptual pack remains as the forward acceptance gate. Final target fidelity and the remaining
@@ -254,75 +251,6 @@ Never repair binding by repainting or replaying a successful mutation.
 - host/model guidance does not collapse “not selected” or “unattributed” into “unavailable”;
 - concrete failure evidence is surfaced when the connector is genuinely unavailable;
 - recovery preserves existing Guard/art-run state.
-
----
-
-## P0-C — Accepted-state recovery
-
-### Task 21a — One-action restore of an accepted anchor/checkpoint after regression
-
-**Priority:** after P0-B state/evidence correctness and before human critic authority is expanded.
-
-**2026-09-25 repository status:** implementation complete; disposable real-Photoshop acceptance
-below remains the closing gate. `next_pass.restore_anchor_operation_id` is now a single canonical
-Guard recovery request. Guard derives bounded undo depth from the durable current-incarnation
-journal, rejects stale/missing/ambiguous anchor history before dispatch, and closes a successful
-restore only after exact registered preview SHA plus normalized layer-order/visibility/opacity,
-active-layer and selection parity. The model never supplies an undo count and successful artistic
-mutations are not replayed. Repository acceptance is covered by `accepted-anchor-restore.test.ts`;
-the current canonical baseline is 601/601 tests across 66 source files.
-
-Low-level anchor/checkpoint persistence and exact restoration mechanisms already exist, but a real
-painting run exposed a remaining operational gap: after a regression, the ordinary Painter/Guard
-workflow may still require manual journal inspection and Photoshop-history-step arithmetic to return
-to a known-good state.
-
-The canonical recovery path should allow the model to reference a previously registered accepted
-anchor/checkpoint and request one bounded Guard-owned recovery action. Internal implementation may
-perform multiple Photoshop operations if required, but the host/model contract must remain one
-logical recovery request.
-
-The recovery path must not require:
-
-- manual counting of Photoshop history steps;
-- manual inspection of operation journals to derive undo counts;
-- replay of successful visual mutations;
-- direct/out-of-band file opening that bypasses Guard;
-- silent switching to another Photoshop document to satisfy a pinned target.
-
-**Acceptance**
-
-Run a disposable live acceptance with all of the following predeclared before the regression is
-introduced:
-
-1. register one accepted anchor/checkpoint with stable identity and exact whole-frame preview SHA;
-2. record the relevant layered document state needed for parity checking;
-3. perform at least two later visual mutations, including at least one multi-history-step/auto-chunked
-   mutation;
-4. a predeclared human-labelled fixture marks the later state as a regression relative to the
-   registered anchor; a critic may substitute only if that critic already has calibrated authority
-   for this decision class;
-5. from that degraded state, issue exactly one **logical Guard recovery request** referencing the
-   accepted anchor/checkpoint identity rather than a computed undo count.
-
-The task passes only if:
-
-- the recovery request is admitted through the canonical Guard path and is fail-closed on missing,
-  mismatched or stale anchor identity;
-- the visible composite after recovery has the exact registered anchor preview SHA;
-- the layered state matches the registered anchor for all contractually preserved properties,
-  including layer ordering/visibility/opacity, active-layer semantics and selection state where
-  applicable;
-- document targeting remains fail-closed and no hidden tab/document switch is used to make the
-  restore succeed;
-- no successful unrelated mutation is replayed;
-- no model-visible manual history-step arithmetic or journal-derived undo count is required;
-- Guard closes the recovery with no remaining preview/report/ack/verdict/reconciliation debt;
-- repeating the same recovery acceptance from the same degraded fixture produces the same restored
-  visual/state result.
-
-If exact anchor SHA cannot be restored by the proposed implementation, Task 21a remains open; do not
-weaken acceptance to a vague “looks similar” claim merely to close the task.
 
 ---
 
@@ -594,10 +522,9 @@ before/after:
 
 ### Task 21 — Real-artwork artistic preference over anchors
 
-Low-level hash/path-backed anchor restore is technically proven; Task 21a separately covers whether
-the ordinary Painter/Guard workflow can invoke that recovery as one bounded action after a real
-regression. This Task 21 remains purely about whether the selected anchor is actually artistically
-preferable in a representative real artwork.
+One-action Guard-owned accepted-anchor recovery is technically and live proven; Task 21a is archived
+in `docs/PAINTING-ROADMAP-HISTORY.md`. This Task 21 remains purely about whether the selected anchor
+is actually artistically preferable in a representative real artwork.
 
 Use a human comparison when a real run contains a meaningful current-vs-anchor tradeoff.
 

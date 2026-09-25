@@ -351,3 +351,85 @@ proceed in parallel because they are independent review-correctness defects; P0-
 before using repeated small-object/character passes as evidence for human artistic acceptance.
 
 ---
+
+### P0-C / Task 21a — One-action accepted-anchor recovery — closed 2026-09-25
+
+**Closure evidence:** repository acceptance passes in `tests/accepted-anchor-restore.test.ts`. The
+current-build disposable Photoshop acceptance is preserved under
+`processes/task21a-live-restore-process/run-02/`: document 3766 registered anchor
+`task21a-live2-anchor-01` at SHA
+`addeed28f4fe163ed62d6df6f857e26073f0e873a6b0c5299ac1d6bf01bb1dce`, then executed two later
+region mutations that produced two Photoshop history states. One compact request referencing only
+the anchor identity dispatched `photoshop_undo` with Guard-computed `steps=2`; the model supplied no
+undo count and no successful artistic mutation was replayed. The post-restore preview returned the
+exact anchor SHA, and normalized layer/active-layer/selection parity all matched. Global Guard debt
+was empty after closure. Run-01 is retained as a diagnostic precursor: it found that restore proof
+must inherit the anchor capture profile; fix `7502987` made that invariant explicit before accepted
+run-02. Hashed evidence is recorded in `docs/live-evidence-ledger.json`.
+
+### Task 21a — One-action restore of an accepted anchor/checkpoint after regression
+
+**Priority:** after P0-B state/evidence correctness and before human critic authority is expanded.
+
+**2026-09-25 final status:** repository implementation and disposable real-Photoshop acceptance are
+complete. `next_pass.restore_anchor_operation_id` is a single canonical
+Guard recovery request. Guard derives bounded undo depth from the durable current-incarnation
+journal, rejects stale/missing/ambiguous anchor history before dispatch, and closes a successful
+restore only after exact registered preview SHA plus normalized layer-order/visibility/opacity,
+active-layer and selection parity. The model never supplies an undo count and successful artistic
+mutations are not replayed. Repository acceptance is covered by `accepted-anchor-restore.test.ts`;
+the accepted live run is preserved under `processes/task21a-live-restore-process/run-02/`.
+
+Low-level anchor/checkpoint persistence and exact restoration mechanisms already exist, but a real
+painting run exposed a remaining operational gap: after a regression, the ordinary Painter/Guard
+workflow may still require manual journal inspection and Photoshop-history-step arithmetic to return
+to a known-good state.
+
+The canonical recovery path should allow the model to reference a previously registered accepted
+anchor/checkpoint and request one bounded Guard-owned recovery action. Internal implementation may
+perform multiple Photoshop operations if required, but the host/model contract must remain one
+logical recovery request.
+
+The recovery path must not require:
+
+- manual counting of Photoshop history steps;
+- manual inspection of operation journals to derive undo counts;
+- replay of successful visual mutations;
+- direct/out-of-band file opening that bypasses Guard;
+- silent switching to another Photoshop document to satisfy a pinned target.
+
+**Acceptance**
+
+Run a disposable live acceptance with all of the following predeclared before the regression is
+introduced:
+
+1. register one accepted anchor/checkpoint with stable identity and exact whole-frame preview SHA;
+2. record the relevant layered document state needed for parity checking;
+3. perform at least two later visual mutations, including at least one multi-history-step/auto-chunked
+   mutation;
+4. a predeclared human-labelled fixture marks the later state as a regression relative to the
+   registered anchor; a critic may substitute only if that critic already has calibrated authority
+   for this decision class;
+5. from that degraded state, issue exactly one **logical Guard recovery request** referencing the
+   accepted anchor/checkpoint identity rather than a computed undo count.
+
+The task passes only if:
+
+- the recovery request is admitted through the canonical Guard path and is fail-closed on missing,
+  mismatched or stale anchor identity;
+- the visible composite after recovery has the exact registered anchor preview SHA;
+- the layered state matches the registered anchor for all contractually preserved properties,
+  including layer ordering/visibility/opacity, active-layer semantics and selection state where
+  applicable;
+- document targeting remains fail-closed and no hidden tab/document switch is used to make the
+  restore succeed;
+- no successful unrelated mutation is replayed;
+- no model-visible manual history-step arithmetic or journal-derived undo count is required;
+- Guard closes the recovery with no remaining preview/report/ack/verdict/reconciliation debt;
+- repeating the same recovery acceptance from the same degraded fixture produces the same restored
+  visual/state result.
+
+If exact anchor SHA cannot be restored by the proposed implementation, Task 21a remains open; do not
+weaken acceptance to a vague “looks similar” claim merely to close the task.
+
+---
