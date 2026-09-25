@@ -167,6 +167,11 @@ function compactPassSchema(): Record<string, unknown> {
         description: 'Stable artistic problem identity shared across multiple distinct attempts at the same unresolved visual problem. Omit only when request_key intentionally also names the problem.',
       },
       document_id: { type: 'number', minimum: 1 },
+      restore_anchor_operation_id: {
+        type: 'string',
+        description:
+          'One-action accepted-state recovery. Supply a registered primary/alternative artistic anchor operation id instead of actions. Guard computes bounded undo depth internally, restores through the pinned Photoshop document, and verifies exact preview SHA plus registered layer/active-layer/selection parity before closing the recovery.',
+      },
       goal: {
         type: 'string',
         description: 'The single authoritative artistic goal for the pass.',
@@ -273,7 +278,7 @@ function compactPassSchema(): Record<string, unknown> {
         },
       },
     },
-    required: ['request_key', 'goal', 'actions'],
+      required: ['request_key', 'goal'],
     additionalProperties: false,
   };
 }
@@ -573,7 +578,7 @@ export function createGuardTools(runtime: EmbeddedGuardRuntime): ToolDefinition[
     {
       tool: cycleTool(
         'photoshop_guard_cycle_auto',
-        'Preferred normal entry point for local Photoshop creation/editing/painting/continuation. In an established workflow stay on this route unless the user explicitly changes execution mode. One Guard pass is NOT an entire artistic stage: a whole-canvas/recognition block-in may require several sequential passes. request_key identifies the unique execution attempt; problem_id identifies the stable artistic problem across attempts. Guard derives technical method/preview requirements from the actual actions. Start with next_pass={request_key,problem_id?,document_id,goal,region/protection,action_class?,actions}; after inspecting the returned frame continue/finalize with previous_operation_id + previous_observation and optionally another next_pass. Guard derives technical report, exact receipt acknowledgement and internal visual closure. Short work runs synchronously; longer work returns a durable job_id for photoshop_guard_job_poll.'
+        'Preferred normal entry point for local Photoshop creation/editing/painting/continuation and accepted-anchor recovery. In an established workflow stay on this route unless the user explicitly changes execution mode. One Guard pass is NOT an entire artistic stage: a whole-canvas/recognition block-in may require several sequential passes. request_key identifies the unique execution attempt; problem_id identifies the stable artistic problem across attempts. Guard derives technical method/preview requirements from the actual actions. Start ordinary work with next_pass={request_key,problem_id?,document_id,goal,region/protection,action_class?,actions}. To restore a registered accepted anchor, send next_pass={request_key,document_id,goal,restore_anchor_operation_id} with no actions; Guard computes bounded history internally and closes recovery only after exact preview/state parity. After inspecting ordinary returned frames continue/finalize with previous_operation_id + previous_observation and optionally another next_pass. Guard derives technical report, exact receipt acknowledgement and internal visual closure. Short work runs synchronously; longer work returns a durable job_id for photoshop_guard_job_poll.'
       ),
       handler: async (args) => {
         try { return json(await runtime.cycleAuto(compactCycleArgs(args))); }
@@ -969,6 +974,10 @@ export function createGuardTools(runtime: EmbeddedGuardRuntime): ToolDefinition[
                 operation_id: { type: 'string' },
                 rationale: { type: 'string' },
                 preserve_previous_as_alternative: { type: 'boolean' },
+                capture_restore_state: {
+                  type: 'boolean',
+                  description: 'When true on promote_primary/preserve_alternative, Guard records pinned layer/active-layer/selection state for later one-action exact anchor recovery.',
+                },
               },
               required: ['action', 'rationale'],
               additionalProperties: false,
@@ -1009,7 +1018,7 @@ export function createGuardTools(runtime: EmbeddedGuardRuntime): ToolDefinition[
         },
       },
       handler: async (args) => {
-        try { return json(runtime.artDirector(args)); }
+        try { return json(await runtime.artDirector(args)); }
         catch (error) { return json({ ok: false, code: 'guard_art_director_rejected', message: error instanceof Error ? error.message : String(error) }, true); }
       },
     },

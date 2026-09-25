@@ -214,6 +214,16 @@ const COMPOSITION_FREEDOMS = new Set(['fixed', 'constrained', 'free']);
 const FINAL_COMPARISON_CRITERIA = ['coherence', 'expressiveness', 'color', 'rhythm', 'detail_selectivity'];
 const INCOMPLETE_HYPOTHESIS_MAX_REVIEW_HORIZON = 8;
 const WHOLE_IMAGE_GLANCE_TRIGGERS = new Set(['stage_boundary', 'global_change', 'final_review']);
+const ANCHOR_RESTORE_NO_HISTORY_TOOLS = new Set([
+  'photoshop_set_brush',
+  'photoshop_set_foreground_color',
+  'photoshop_select_brush_preset',
+  'photoshop_select_layer_by_name',
+  'photoshop_set_active_document',
+  'photoshop_save_document',
+  'photoshop_export_as',
+  'photoshop_close_document',
+]);
 
 function parseBrushPreflight(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -3260,7 +3270,7 @@ export class SessionStore {
       'planner_directive_id', 'planner_task_id', 'painter_scope', 'change_domains',
       'affected_relations', 'affected_qualities', 'preservation_facts',
       'independent_region', 'addresses_primary_mismatch', 'addresses_problem_id',
-      'preview_args', 'visual_review_profile', 'artistic_commentary',
+      'preview_args', 'visual_review_profile', 'artistic_commentary', 'accepted_anchor_restore',
     ]);
 
     if (!stateOnly) {
@@ -3304,7 +3314,7 @@ export class SessionStore {
     const documentId = args.document_id;
     const documentState = (projectionContext?.paintingState ?? this.paintingState()).documents?.[String(documentId)];
     const rollbackMutation = isRollbackMutation(request);
-    if (documentState?.pending_rollback && request?.tool === 'photoshop_undo') {
+    if (documentState?.pending_rollback && request?.tool === 'photoshop_undo' && !request?.accepted_anchor_restore) {
       const remaining = positiveHistoryStepCount(documentState.pending_rollback.remaining_undo_steps)
         || positiveHistoryStepCount(documentState.pending_rollback.required_undo_steps)
         || 1;
@@ -4199,6 +4209,195 @@ export class SessionStore {
           : [],
       } : null,
     };
+  }
+  attachAnchorRestoreSnapshot(documentId, anchorOperationId, snapshot) {
+    if (!Number.isSafeInteger(documentId) || documentId <= 0) throw new Error('anchor restore snapshot requires a positive document_id');
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) throw new Error('anchor restore snapshot must be an object');
+    if (snapshot.protocol !== 'photoshop.guard.anchor_restore_snapshot.v1') throw new Error('anchor restore snapshot protocol mismatch');
+    if (snapshot.document_id !== documentId) throw new Error('anchor restore snapshot document_id mismatch');
+    return this.updatePaintingState(documentId, current => {
+      const alternatives = Array.isArray(current.alternative_artistic_anchors)
+        ? current.alternative_artistic_anchors
+        : [];
+      const candidates = [current.primary_artistic_anchor, ...alternatives].filter(Boolean);
+      const target = candidates.find(anchor => anchor.operation_id === anchorOperationId);
+      if (!target) throw new Error('anchor restore snapshot must reference the current primary or alternative artistic anchor');
+      if (!materializedEvidenceMatches(target)) throw new Error('anchor restore snapshot requires intact durable anchor preview bytes');
+      if (
+        current.current_frame?.operation_id !== anchorOperationId
+        || textOrUndefined(current.current_frame?.sha256)?.toLowerCase() !== textOrUndefined(target.sha256)?.toLowerCase()
+        || !materializedEvidenceMatches(current.current_frame)
+      ) {
+        throw new Error('anchor restore snapshot must be captured while the exact anchor frame is still current');
+      }
+      const nextSnapshot = structuredClone(snapshot);
+      const updateAnchor = anchor => anchor?.operation_id === anchorOperationId
+        ? { ...anchor, restore_snapshot: nextSnapshot }
+        : anchor;
+      return {
+        ...current,
+        primary_artistic_anchor: updateAnchor(current.primary_artistic_anchor),
+        alternative_artistic_anchors: alternatives.map(updateAnchor),
+        last_anchor_restore_snapshot: {
+          anchor_operation_id: anchorOperationId,
+          captured_at: snapshot.captured_at ?? new Date().toISOString(),
+          protocol: snapshot.protocol,
+        },
+      };
+    });
+  }
+  acceptedAnchorRestoreSnapshot(documentId, anchorOperationId) {
+    const state = this.paintingState().documents?.[String(documentId)] ?? {};
+    const anchors = [
+      state.primary_artistic_anchor,
+      ...(Array.isArray(state.alternative_artistic_anchors) ? state.alternative_artistic_anchors : []),
+    ].filter(Boolean);
+    const anchor = anchors.find(candidate => candidate.operation_id === anchorOperationId);
+    return anchor?.restore_snapshot ? structuredClone(anchor.restore_snapshot) : undefined;
+  }
+  planAcceptedAnchorRestore(documentId, anchorOperationId, suppliedRecords, projectionContext) {
+    if (!Number.isSafeInteger(documentId) || documentId <= 0) throw new Error('accepted_anchor_restore requires a positive document_id');
+    const state = (projectionContext?.paintingState ?? this.paintingState()).documents?.[String(documentId)] ?? {};
+    const anchors = [
+      state.primary_artistic_anchor,
+      ...(Array.isArray(state.alternative_artistic_anchors) ? state.alternative_artistic_anchors : []),
+    ].filter(Boolean);
+    const anchor = anchors.find(candidate => candidate.operation_id === anchorOperationId);
+    if (!anchor) throw new Error('accepted_anchor_restore_unknown_anchor: operation id is not a registered current artistic anchor');
+    if (!materializedEvidenceMatches(anchor)) throw new Error('accepted_anchor_restore_stale_anchor: durable anchor preview bytes are missing or SHA-mismatched');
+    if (!anchor.restore_snapshot || anchor.restore_snapshot.protocol !== 'photoshop.guard.anchor_restore_snapshot.v1') {
+      throw new Error('accepted_anchor_restore_snapshot_required: register exact layer/active-layer/selection state while the anchor frame is current');
+    }
+    if (anchor.restore_snapshot.document_id !== documentId) throw new Error('accepted_anchor_restore_snapshot_document_mismatch');
+    const currentWitness = normalizeDocumentInstanceWitness(state.document_instance?.host_witness);
+    const snapshotWitness = normalizeDocumentInstanceWitness(anchor.restore_snapshot.document_instance_witness);
+    if (snapshotWitness && currentWitness && !sameDocumentInstanceWitness(snapshotWitness, currentWitness)) {
+      throw new Error('accepted_anchor_restore_incarnation_mismatch: anchor snapshot belongs to a different live document instance');
+    }
+
+    const records = this.currentDocumentRecords(
+      documentId,
+      suppliedRecords ?? projectionContext?.records ?? this.records(),
+      projectionContext
+    );
+    const anchorRecord = records.find(record => record.id === anchorOperationId);
+    if (!anchorRecord || !anchorRecord.visual || anchorRecord.preview?.sha256 !== anchor.sha256) {
+      throw new Error('accepted_anchor_restore_anchor_record_missing: anchor is outside the current document incarnation or lacks exact visual evidence');
+    }
+    const later = records.filter(record => Number(record.sequence ?? 0) > Number(anchorRecord.sequence ?? 0));
+    for (const record of later) {
+      if (record.phase === 'uncertain' || record.execution === 'uncertain') {
+        throw new Error(`accepted_anchor_restore_uncertain_history: operation ${record.id} has uncertain execution`);
+      }
+      if (record.tool === 'photoshop_undo' || record.tool === 'photoshop_redo') {
+        throw new Error(`accepted_anchor_restore_ambiguous_history: later ${record.tool} operation ${record.id} makes bounded undo depth ambiguous`);
+      }
+      if (isDocumentBootstrap(record)) {
+        throw new Error('accepted_anchor_restore_incarnation_boundary: document bootstrap after anchor cannot be crossed by restore');
+      }
+    }
+    const historyRecords = later.filter(record => {
+      if (record.execution === 'not-executed' || record.failed === true) return false;
+      if (isRead(record.tool) || ANCHOR_RESTORE_NO_HISTORY_TOOLS.has(record.tool)) return false;
+      return true;
+    });
+    const requiredUndoSteps = historyRecords.reduce((sum, record) => sum + reportedHistorySteps(record), 0);
+    const currentSha = textOrUndefined(state.current_frame?.sha256)?.toLowerCase();
+    const anchorSha = textOrUndefined(anchor.sha256)?.toLowerCase();
+    if (requiredUndoSteps < 1) {
+      if (currentSha === anchorSha) {
+        throw new Error('accepted_anchor_restore_already_current: the exact accepted anchor frame is already current');
+      }
+      throw new Error('accepted_anchor_restore_no_proven_history: current state differs from the anchor but no bounded undoable history is proven');
+    }
+    return {
+      protocol: 'photoshop.guard.accepted_anchor_restore_plan.v1',
+      document_id: documentId,
+      anchor_operation_id: anchor.operation_id,
+      anchor_sha256: anchorSha,
+      anchor_path: anchor.path,
+      required_undo_steps: requiredUndoSteps,
+      history_operation_ids: historyRecords.map(record => record.id),
+      restore_snapshot: structuredClone(anchor.restore_snapshot),
+    };
+  }
+  finalizeAcceptedAnchorRestore(operationId, verification) {
+    const record = this.read(operationId);
+    if (!record?.accepted_anchor_restore || record.tool !== 'photoshop_undo') {
+      throw new Error('accepted_anchor_restore_finalize requires a Guard-owned anchor restore operation');
+    }
+    const contract = record.accepted_anchor_restore;
+    const documentId = record.args?.document_id;
+    if (!Number.isSafeInteger(documentId) || documentId <= 0) throw new Error('accepted_anchor_restore_finalize requires pinned document_id');
+    if (!record.preview || record.preview.sha256 !== contract.anchor_sha256 || !materializedEvidenceMatches(record.preview)) {
+      throw new Error('accepted_anchor_restore_sha_mismatch: post-restore preview does not exactly match the registered anchor SHA');
+    }
+    if (!verification || verification.protocol !== 'photoshop.guard.anchor_restore_verification.v1') {
+      throw new Error('accepted_anchor_restore verification protocol mismatch');
+    }
+    if (verification.document_id !== documentId || verification.matches !== true) {
+      throw new Error('accepted_anchor_restore_state_mismatch: layered/active-layer/selection parity was not proven');
+    }
+
+    this.recordTechnicalReport(operationId, {
+      did: `Restored accepted artistic anchor ${contract.anchor_operation_id}.`,
+      why: 'Return the pinned Photoshop document to the registered accepted state without replaying artistic mutations.',
+      result: 'Exact anchor preview SHA and registered layer/active-layer/selection state all match.',
+    });
+    const afterReport = this.read(operationId);
+    if (afterReport?.operation_receipt && !afterReport.operation_ack) {
+      this.ackOperation({ id: operationId, protocol: OPERATION_ACK_PROTOCOL, token: afterReport.operation_receipt.token });
+    }
+    const closed = this.read(operationId);
+    closed.verdict = {
+      verdict: 'neutral',
+      disposition: 'accept',
+      target_resolved: 'yes',
+      observed_change: 'Guard verified exact restoration of the registered accepted anchor state.',
+      regressions: [],
+      uncertainty: 'none observed',
+      global_readability: 'unknown',
+      primitive_footprint: 'none',
+      trend_signals: [],
+      recovery: {
+        protocol: 'photoshop.guard.accepted_anchor_restore.v1',
+        anchor_operation_id: contract.anchor_operation_id,
+        anchor_sha256: contract.anchor_sha256,
+        state_verification: structuredClone(verification),
+      },
+      at: new Date().toISOString(),
+    };
+    delete closed.pending_review;
+    this.write(closed);
+    this.clearVisualBarrier(documentId);
+    this.updatePaintingState(documentId, current => ({
+      ...current,
+      current_frame: {
+        operation_id: operationId,
+        sha256: record.preview.sha256,
+        path: record.preview.project_path ?? record.preview.materialized_path,
+        at: new Date().toISOString(),
+        accepted: true,
+        acceptance_scope: 'exact_registered_anchor_restore',
+      },
+      accepted_frame: {
+        operation_id: operationId,
+        sha256: record.preview.sha256,
+        path: record.preview.project_path ?? record.preview.materialized_path,
+        at: new Date().toISOString(),
+        accepted: true,
+        acceptance_scope: 'exact_registered_anchor_restore',
+      },
+      pending_rollback: undefined,
+      last_anchor_restore: {
+        restore_operation_id: operationId,
+        anchor_operation_id: contract.anchor_operation_id,
+        anchor_sha256: contract.anchor_sha256,
+        completed_at: new Date().toISOString(),
+        verification: structuredClone(verification),
+      },
+    }));
+    return this.read(operationId);
   }
   recordTechnicalReport(id, report) {
     const record = this.read(id);

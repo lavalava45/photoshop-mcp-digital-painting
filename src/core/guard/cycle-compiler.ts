@@ -37,6 +37,12 @@ export interface GuardCycleCompilerStore {
     brush_roles?: Array<Record<string, unknown>>;
     art_director?: Record<string, unknown> | null;
   };
+  planAcceptedAnchorRestore?(
+    documentId: number,
+    anchorOperationId: string,
+    suppliedRecords?: Array<Record<string, unknown>>,
+    projectionContext?: GuardProjectionContext
+  ): Record<string, unknown>;
   collectPreflightErrors(
     request: Record<string, unknown>,
     options?: {
@@ -398,11 +404,73 @@ function compileCompactPass(
   const requestKey = text(raw.request_key);
   const goal = text(raw.goal);
   const documentId = raw.document_id;
+  const restoreAnchorOperationId = text(raw.restore_anchor_operation_id);
   const actions = Array.isArray(raw.actions)
     ? structuredClone(raw.actions) as Array<Record<string, unknown>>
     : [];
-  if (!requestKey || !goal || !actions.length) {
+  if (!requestKey || !goal || (!restoreAnchorOperationId && !actions.length)) {
     return { violations };
+  }
+  if (restoreAnchorOperationId) {
+    if (!Number.isSafeInteger(documentId) || Number(documentId) <= 0) {
+      violations.push(violation(
+        'next_operation',
+        'accepted_anchor_restore_document_required',
+        'next_pass.document_id is required for accepted-anchor restore'
+      ));
+      return { violations };
+    }
+    if (actions.length) {
+      violations.push(violation(
+        'next_operation',
+        'accepted_anchor_restore_actions_forbidden',
+        'restore_anchor_operation_id is one logical Guard recovery request and cannot be combined with next_pass.actions'
+      ));
+      return { violations };
+    }
+    if (!store.planAcceptedAnchorRestore) {
+      violations.push(violation(
+        'next_operation',
+        'accepted_anchor_restore_unavailable',
+        'The current Guard runtime does not expose accepted-anchor restore planning'
+      ));
+      return { violations };
+    }
+    try {
+      const plan = store.planAcceptedAnchorRestore(Number(documentId), restoreAnchorOperationId);
+      return {
+        operation: {
+          request_key: requestKey,
+          goal,
+          problem_id: text(raw.problem_id) ?? `restore:${restoreAnchorOperationId}`,
+          tool: 'photoshop_undo',
+          args: {
+            document_id: Number(documentId),
+            steps: Number(plan.required_undo_steps),
+          },
+          summary: goal,
+          purpose: `Restore registered accepted artistic anchor ${restoreAnchorOperationId} without replaying later mutations.`,
+          significance_mode: 'normal',
+          preview_args: { max_dimension_px: 1600, quality: 10 },
+          accepted_anchor_restore: {
+            protocol: 'photoshop.guard.accepted_anchor_restore.v1',
+            anchor_operation_id: restoreAnchorOperationId,
+            anchor_sha256: plan.anchor_sha256,
+            anchor_path: plan.anchor_path,
+            required_undo_steps: plan.required_undo_steps,
+            history_operation_ids: plan.history_operation_ids,
+          },
+        },
+        violations,
+      };
+    } catch (error) {
+      violations.push(violation(
+        'next_operation',
+        'accepted_anchor_restore_rejected',
+        error instanceof Error ? error.message : String(error)
+      ));
+      return { violations };
+    }
   }
   const problemId = text(raw.problem_id) ?? text(raw.addresses_problem_id) ?? requestKey;
   const existingRequestRecord = store.read?.(requestKey);

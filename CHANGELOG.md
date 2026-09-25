@@ -83,6 +83,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 2026-09-25: implement Task 21a one-action accepted-anchor recovery on the canonical compact Guard
+  path. Art Director anchor promotion may opt into a pinned read-only restore snapshot containing
+  normalized layer ordering/visibility/opacity/blend state, active-layer semantics and selection
+  bounds. A later recovery uses only `next_pass.restore_anchor_operation_id`; Guard resolves the
+  registered primary/alternative anchor inside the current document incarnation, verifies its
+  durable preview bytes, rejects later ambiguous undo/redo history, derives the required undo depth
+  from recorded operation history (including multi-history mutations), dispatches one pinned
+  `photoshop_undo`, captures the post-restore preview/state, and closes recovery only when the exact
+  anchor SHA and registered state parity match. Missing/stale anchors and requests mixed with new
+  actions fail before Photoshop dispatch; post-undo parity mismatch remains unclosed/fail-closed.
+  Repository acceptance now passes **601/601 tests across 66 source files**; build, package,
+  compact-v2 audit, lint, painting-policy, prompt/catalog and live-evidence-ledger gates are green.
+  The roadmap keeps Task 21a at `live-pending` until the designated disposable real-Photoshop run
+  proves the same behavior on the current rebuilt serving child.
+
 - 2026-09-25: close the machine-enforceable P0-B Guard state/evidence/review correctness block.
   Nested OBJECT/MICRO dedup now preserves the broad semantic coverage region while independently
   escalating inspection level; read-only observations no longer replace artistic-frame identity;

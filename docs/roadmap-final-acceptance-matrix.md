@@ -35,7 +35,7 @@ has been completed.
 | P0-B.6 — external document reincarnation | **repo-pass** | The current UXP bridge exposes a live document-object witness; same numeric ids with a changed witness reset document-scoped state and block mutation before dispatch, while restart with the same witness preserves state. |
 | P0-B.7 — exact-boundary whole-image glance | **repo-pass** | Pending whole-image review binds to exact reason + operation id + artistic-frame SHA and rejects stale/mismatched evidence. |
 | P0-B.8 — mechanical-patterning/copy-geometry guard | **repo-pass** | Transform/scale/color/jitter-invariant geometry similarity raises bounded OBJECT crop debt for repeated organic/character motifs; structural-variation and explicit regular-rhythm controls are covered. Borderline artistic objection remains a later human-calibration question, not a code gap. |
-| Task 21a — one-action accepted-anchor restore | **still-code-gap** | Canonical Guard recovery request plus disposable live restore acceptance remain to be implemented/proved. |
+| Task 21a — one-action accepted-anchor restore | **live-pending** | Repository implementation is complete: one compact `restore_anchor_operation_id` request computes bounded undo depth internally, rejects missing/stale/ambiguous anchors before dispatch, requires exact registered preview SHA plus layer/active-layer/selection parity, and closes report/receipt/verdict debt internally. `accepted-anchor-restore.test.ts` covers multi-history restore, fail-closed controls, state mismatch and restart determinism. A disposable current-build real-Photoshop run remains the final gate. |
 | Task 8b — STOP / FINALIZE calibration | **human-required** | Held-out human-labelled stop/continue corpus and predeclared thresholds are required. |
 | Task 22 — final target fidelity | **human-required** | Final perceptual/prompt-to-frame fidelity is a human artistic acceptance claim. |
 | Task 5 — thin Photoshop-only host | **exploratory-non-gate** | Inactive contingency; activate only if Tasks 1–4 demonstrate unacceptable host routing after softer fixes or a hard allowlist is explicitly required. |
@@ -47,13 +47,13 @@ has been completed.
 Current-tree verification performed for this audit, including Task 23 and P0-1:
 
 - `npm run verify:canonical`: **PASS**.
-- canonical `npm run test:acceptance`: **594/594 PASS** across exactly **65 source test files**;
+- canonical `npm run test:acceptance`: **601/601 PASS** across exactly **66 source test files**;
   `dist/**` is excluded even after a populated production build.
 - `npm run verify:acceptance-matrix`: **PASS**, with 13 cited test names resolving inside the same
-  65-file source inventory.
+  66-file source inventory.
 - `npm run verify:pack`: **PASS**, with 179 packed `dist` JavaScript files and zero compiled test
   artifacts.
-- `npm run lint`: **PASS** with 0 errors (16 `no-explicit-any` warnings remain non-failing).
+- `npm run lint`: **PASS** with 0 errors (18 `no-explicit-any` warnings remain non-failing).
 - `npm run verify:painting-policy`: **PASS** (`kernel=12807`, `prompt=17812`).
 - `npm run verify:photoshop-prompts`, `verify:tool-counts`, `verify:compact-v2-contract` and
   `verify:live-evidence-ledger`: **PASS**.

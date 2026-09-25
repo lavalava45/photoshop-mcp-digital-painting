@@ -150,6 +150,128 @@ function safeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function firstResultBody(result: ToolResult): Record<string, unknown> {
+  const body = parseTexts(result).find((item: unknown) => item && typeof item === 'object' && !Array.isArray(item));
+  if (!body || result.isError === true || body.ok === false) {
+    throw new Error(`anchor_restore_state_read_failed: ${JSON.stringify(body ?? {})}`);
+  }
+  return body as Record<string, unknown>;
+}
+
+function recordOrEmpty(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function compactLayerState(raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const layer = raw as Record<string, unknown>;
+  return {
+    ...(typeof layer.id === 'number' ? { id: layer.id } : {}),
+    ...(typeof layer.name === 'string' ? { name: layer.name } : {}),
+    ...(typeof layer.path === 'string' ? { path: layer.path } : {}),
+    ...(typeof layer.depth === 'number' ? { depth: layer.depth } : {}),
+    ...(typeof layer.kind === 'string' ? { kind: layer.kind } : {}),
+    ...(typeof layer.typename === 'string' ? { typename: layer.typename } : {}),
+    ...(typeof layer.visible === 'boolean' ? { visible: layer.visible } : {}),
+    ...(typeof layer.opacity === 'number' ? { opacity: layer.opacity } : {}),
+    ...(typeof layer.blendMode === 'string' ? { blend_mode: layer.blendMode } : {}),
+  };
+}
+
+function compactActiveLayerState(raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const layer = raw as Record<string, unknown>;
+  return {
+    ...(typeof layer.id === 'number' ? { id: layer.id } : {}),
+    ...(typeof layer.name === 'string' ? { name: layer.name } : {}),
+    ...(typeof layer.kind === 'string' ? { kind: layer.kind } : {}),
+    ...(typeof layer.visible === 'boolean' ? { visible: layer.visible } : {}),
+    ...(typeof layer.opacity === 'number' ? { opacity: layer.opacity } : {}),
+    ...(typeof layer.blendMode === 'string' ? { blend_mode: layer.blendMode } : {}),
+    ...(typeof layer.locked === 'boolean' ? { locked: layer.locked } : {}),
+    ...(typeof layer.isBackground === 'boolean' ? { is_background: layer.isBackground } : {}),
+  };
+}
+
+function normalizedAnchorRestoreSnapshot(
+  documentId: number,
+  stateResult: ToolResult,
+  layersResult: ToolResult,
+  selectionResult: ToolResult
+): Record<string, unknown> {
+  const stateBody = firstResultBody(stateResult);
+  const layersBody = firstResultBody(layersResult);
+  const selectionBody = firstResultBody(selectionResult);
+  const state = recordOrEmpty(stateBody.details ?? stateBody);
+  const document = recordOrEmpty(state.document);
+  const layersDetails = recordOrEmpty(layersBody.details ?? layersBody);
+  const layersContext = recordOrEmpty(layersDetails.context);
+  const layersDocument = recordOrEmpty(layersContext.document);
+  const selectionDetails = recordOrEmpty(selectionBody.details ?? selectionBody);
+  const selectionContext = recordOrEmpty(selectionDetails.context);
+  const selectionDocument = recordOrEmpty(selectionContext.document);
+  const observedIds = [document.id, layersDocument.id, selectionDocument.id]
+    .filter(value => value !== undefined);
+  if (observedIds.some(value => value !== documentId)) {
+    throw new Error(`anchor_restore_state_document_mismatch: expected ${documentId}, observed ${observedIds.join(',')}`);
+  }
+  const layers = Array.isArray(layersDetails.layers)
+    ? layersDetails.layers.map(compactLayerState).filter((item): item is Record<string, unknown> => item !== null)
+    : [];
+  const selectionBounds = recordOrEmpty(selectionDetails.bounds);
+  const hasSelection = selectionDetails.has_selection === true;
+  const witness = document.instanceWitness && typeof document.instanceWitness === 'object' && !Array.isArray(document.instanceWitness)
+    ? structuredClone(document.instanceWitness)
+    : undefined;
+  return {
+    protocol: 'photoshop.guard.anchor_restore_snapshot.v1',
+    document_id: documentId,
+    captured_at: new Date().toISOString(),
+    ...(witness ? { document_instance_witness: witness } : {}),
+    layer_count: typeof layersDetails.layerCount === 'number' ? layersDetails.layerCount : layers.length,
+    layers,
+    active_layer: compactActiveLayerState(state.activeLayer),
+    selection: {
+      has_selection: hasSelection,
+      ...(hasSelection && Object.keys(selectionBounds).length ? { bounds: selectionBounds } : {}),
+    },
+  };
+}
+
+function anchorRestoreVerification(
+  expected: Record<string, unknown>,
+  actual: Record<string, unknown>
+): Record<string, unknown> {
+  const expectedComparable = {
+    layer_count: expected.layer_count,
+    layers: expected.layers,
+    active_layer: expected.active_layer,
+    selection: expected.selection,
+  };
+  const actualComparable = {
+    layer_count: actual.layer_count,
+    layers: actual.layers,
+    active_layer: actual.active_layer,
+    selection: actual.selection,
+  };
+  const expectedJson = JSON.stringify(expectedComparable);
+  const actualJson = JSON.stringify(actualComparable);
+  return {
+    protocol: 'photoshop.guard.anchor_restore_verification.v1',
+    document_id: expected.document_id,
+    matches: expectedJson === actualJson,
+    expected_sha256: createHash('sha256').update(expectedJson).digest('hex'),
+    actual_sha256: createHash('sha256').update(actualJson).digest('hex'),
+    layer_state_matches: JSON.stringify(expected.layers) === JSON.stringify(actual.layers)
+      && expected.layer_count === actual.layer_count,
+    active_layer_matches: JSON.stringify(expected.active_layer) === JSON.stringify(actual.active_layer),
+    selection_matches: JSON.stringify(expected.selection) === JSON.stringify(actual.selection),
+    verified_at: new Date().toISOString(),
+  };
+}
+
 function jsonError(code: string, message: string): ToolResult {
   return {
     isError: true,
@@ -482,10 +604,46 @@ export class EmbeddedGuardRuntime {
     };
   }
 
-  artDirector(input: Record<string, unknown>): Record<string, unknown> {
+  private async captureAnchorRestoreSnapshot(documentId: number): Promise<Record<string, unknown>> {
+    const stateResult = await this.invoke('photoshop_get_state', { document_id: documentId }, 30_000);
+    const layersResult = await this.invoke('photoshop_get_layers', { document_id: documentId }, 30_000);
+    const selectionResult = await this.invoke('photoshop_get_selection_bounds', { document_id: documentId }, 30_000);
+    return normalizedAnchorRestoreSnapshot(documentId, stateResult, layersResult, selectionResult);
+  }
+
+  async artDirector(input: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const document = this.store.setArtDirectorState(input);
+    const documentId = Number(input.document_id);
+    const anchorDecision = input.anchor_decision && typeof input.anchor_decision === 'object' && !Array.isArray(input.anchor_decision)
+      ? input.anchor_decision as Record<string, unknown>
+      : undefined;
+    let anchorRestoreSnapshot: Record<string, unknown> | undefined;
+    if (anchorDecision?.capture_restore_state === true) {
+      const action = typeof anchorDecision.action === 'string' ? anchorDecision.action : '';
+      if (action !== 'promote_primary' && action !== 'preserve_alternative') {
+        throw new Error('capture_restore_state is allowed only with promote_primary or preserve_alternative');
+      }
+      const operationId = typeof anchorDecision.operation_id === 'string' && anchorDecision.operation_id.trim()
+        ? anchorDecision.operation_id.trim()
+        : typeof (document as Record<string, any>)?.last_anchor_decision?.operation_id === 'string'
+          ? String((document as Record<string, any>).last_anchor_decision.operation_id)
+          : undefined;
+      if (!operationId) throw new Error('capture_restore_state requires an explicit or resolved anchor operation_id');
+      anchorRestoreSnapshot = await this.captureAnchorRestoreSnapshot(documentId);
+      this.store.attachAnchorRestoreSnapshot(documentId, operationId, anchorRestoreSnapshot);
+    }
     return {
       ok: true,
-      document: this.store.setArtDirectorState(input),
+      document: this.store.artRunState(documentId, undefined) ?? document,
+      ...(anchorRestoreSnapshot ? {
+        anchor_restore_snapshot: {
+          registered: true,
+          protocol: anchorRestoreSnapshot.protocol,
+          document_id: documentId,
+          layer_count: anchorRestoreSnapshot.layer_count,
+          selection: anchorRestoreSnapshot.selection,
+        },
+      } : {}),
       next: 'Use photoshop_guard_status/resume. Painter work is admitted only while the directive is active and bound to a permitted task.',
     };
   }
@@ -1179,7 +1337,38 @@ export class EmbeddedGuardRuntime {
           unknown_components: previewTimingUnknown,
         });
       }
-      const refreshedRecord = run.record?.id ? this.store.read(run.record.id) : run.record;
+      let refreshedRecord = run.record?.id ? this.store.read(run.record.id) : run.record;
+      let acceptedAnchorRestoreResult: Record<string, unknown> | undefined;
+      if (
+        refreshedRecord?.id
+        && refreshedRecord.accepted_anchor_restore
+        && refreshedRecord.execution !== 'not-executed'
+        && refreshedRecord.failed !== true
+      ) {
+        const restoreContract = refreshedRecord.accepted_anchor_restore as Record<string, unknown>;
+        const documentId = Number(refreshedRecord.args?.document_id);
+        const anchorOperationId = typeof restoreContract.anchor_operation_id === 'string'
+          ? restoreContract.anchor_operation_id
+          : '';
+        const expectedSnapshot = this.store.acceptedAnchorRestoreSnapshot(documentId, anchorOperationId);
+        if (!expectedSnapshot) {
+          throw new Error('accepted_anchor_restore_snapshot_missing_after_dispatch: durable anchor snapshot disappeared before verification');
+        }
+        const actualSnapshot = await this.captureAnchorRestoreSnapshot(documentId);
+        const verification = anchorRestoreVerification(expectedSnapshot, actualSnapshot);
+        refreshedRecord = this.store.finalizeAcceptedAnchorRestore(refreshedRecord.id, verification);
+        acceptedAnchorRestoreResult = {
+          protocol: 'photoshop.guard.accepted_anchor_restore.v1',
+          completed: true,
+          operation_id: refreshedRecord.id,
+          anchor_operation_id: anchorOperationId,
+          anchor_sha256: restoreContract.anchor_sha256,
+          exact_preview_sha_restored: refreshedRecord.preview?.sha256 === restoreContract.anchor_sha256,
+          state_verification: verification,
+          mutation_replayed: false,
+          model_supplied_undo_steps: false,
+        };
+      }
       const envelope = buildCycleEnvelope(this.store, refreshedRecord, {
         replay: run.replay,
         closed_previous: closedPrevious,
@@ -1194,6 +1383,7 @@ export class EmbeddedGuardRuntime {
       }
       return {
         ...envelope,
+        ...(acceptedAnchorRestoreResult ? { accepted_anchor_restore: acceptedAnchorRestoreResult } : {}),
         ...(compilerNormalizations.length ? { compiler_normalizations: compilerNormalizations } : {}),
         guard_transport: 'embedded_mcp',
       };

@@ -612,6 +612,15 @@ before using repeated small-object/character passes as evidence for human artist
 
 **Priority:** after P0-B state/evidence correctness and before human critic authority is expanded.
 
+**2026-09-25 repository status:** implementation complete; disposable real-Photoshop acceptance
+below remains the closing gate. `next_pass.restore_anchor_operation_id` is now a single canonical
+Guard recovery request. Guard derives bounded undo depth from the durable current-incarnation
+journal, rejects stale/missing/ambiguous anchor history before dispatch, and closes a successful
+restore only after exact registered preview SHA plus normalized layer-order/visibility/opacity,
+active-layer and selection parity. The model never supplies an undo count and successful artistic
+mutations are not replayed. Repository acceptance is covered by `accepted-anchor-restore.test.ts`;
+the current canonical baseline is 601/601 tests across 66 source files.
+
 Low-level anchor/checkpoint persistence and exact restoration mechanisms already exist, but a real
 painting run exposed a remaining operational gap: after a regression, the ordinary Painter/Guard
 workflow may still require manual journal inspection and Photoshop-history-step arithmetic to return
